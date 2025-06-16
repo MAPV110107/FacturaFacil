@@ -43,6 +43,9 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
   const taxAmount = invoice.taxAmount ?? 0;
   const totalAmount = invoice.totalAmount ?? 0;
   const taxRate = invoice.taxRate ?? 0;
+  const amountPaid = invoice.amountPaid ?? 0;
+  const amountDue = invoice.amountDue ?? 0;
+
 
   const taxableBase = subTotal - discountAmount;
   const isReturn = invoice.type === 'return';
@@ -85,7 +88,7 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
           {invoice.cashierNumber && <p>{formatLine("CAJA NRO:", invoice.cashierNumber)}</p>}
           {invoice.salesperson && <p>{formatLine("VENDEDOR:", invoice.salesperson)}</p>}
           {isReturn && invoice.originalInvoiceId && (
-            <p className="text-xs">{formatLine("REF. FACTURA:", invoices.find(inv => inv.id === invoice.originalInvoiceId)?.invoiceNumber || invoice.originalInvoiceId)}</p>
+            <p className="text-xs">{formatLine("REF. FACTURA:", invoicesData.find(inv => inv.id === invoice.originalInvoiceId)?.invoiceNumber || String(invoice.originalInvoiceId))}</p>
           )}
         </div>
         
@@ -133,28 +136,30 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
           <p className="font-bold text-sm">{formatLine(isReturn ? "TOTAL CRÉDITO:" : "TOTAL A PAGAR:", formatCurrency(totalAmount))}</p>
         </div>
         
-        {(payments.length > 0 || (invoice.amountPaid ?? 0) > 0) && !isReturn && <DottedLine />}
+        {(payments.length > 0) && <DottedLine />}
         
-        {payments.length > 0 && !isReturn && (
+        {payments.length > 0 && (
           <div className="mt-2 space-y-0.5">
-            <p className="font-semibold">FORMA DE PAGO:</p>
+            <p className="font-semibold">{isReturn ? "CRÉDITO EMITIDO VÍA:" : "FORMA DE PAGO:"}</p>
             {payments.map((p, idx) => (
               <p key={idx}>{formatLine(p.method.toUpperCase() + (p.reference ? ` (${p.reference})` : ''), formatCurrency(p.amount))}</p>
             ))}
           </div>
         )}
-         {(invoice.amountPaid ?? 0) > 0 && !payments.length && !isReturn && ( 
-            <div className="mt-2 space-y-0.5">
-                 <p className="font-semibold">{formatLine("TOTAL PAGADO:", formatCurrency(invoice.amountPaid))}</p>
-            </div>
-        )}
 
-        { (invoice.amountDue ?? 0) > 0 && !isReturn && (
+        {!isReturn && amountPaid > 0 && (
             <div className="mt-1">
-                 <p className="font-semibold">{formatLine("MONTO PENDIENTE:", formatCurrency(invoice.amountDue))}</p>
+                <DottedLine />
+                <p className="font-semibold">{formatLine("TOTAL PAGADO:", formatCurrency(amountPaid))}</p>
+                {amountDue < 0 && (
+                    <p className="font-semibold">{formatLine("VUELTO:", formatCurrency(Math.abs(amountDue)))}</p>
+                )}
+                {amountDue > 0 && (
+                    <p className="font-semibold">{formatLine("MONTO PENDIENTE:", formatCurrency(amountDue))}</p>
+                )}
             </div>
         )}
-
+        
         <DottedLine />
 
         <div className="text-center mt-3">
@@ -173,12 +178,6 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
   );
 }
 
-// Helper to find original invoice number - used for display on credit note.
-// This is a simplified approach assuming 'invoices' from localStorage is accessible or passed.
-// For a cleaner approach, this could be part of the data passed to InvoicePreview.
-// As it stands, this local 'invoices' variable won't work directly here.
-// The originalInvoiceId should be used to lookup the number from the main data source if needed.
-// For now, let's assume invoice.originalInvoiceId could be displayed, or we add originalInvoiceNumber to the Invoice type.
-// Simpler: invoice.notes already contains this for returns.
-const invoices: Invoice[] = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem("invoices") || "[]") : [];
-
+// Renamed 'invoices' to 'invoicesData' to avoid conflict if 'invoices' is used as a prop elsewhere.
+// This is used for looking up original invoice number for credit notes.
+const invoicesData: Invoice[] = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem("invoices") || "[]") : [];

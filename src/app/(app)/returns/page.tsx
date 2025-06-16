@@ -73,19 +73,21 @@ export default function ReturnsPage() {
     const newReturnInvoiceNumber = `NC-${Date.now().toString().slice(-6)}`;
 
     const returnInvoice: Invoice = {
-      ...foundInvoice, // Spread original invoice details
+      ...foundInvoice, 
       id: uuidv4(),
       invoiceNumber: newReturnInvoiceNumber,
       date: new Date().toISOString(),
       type: 'return',
       originalInvoiceId: foundInvoice.id,
-      // For a credit note, payment details might be different or not applicable in the same way
-      paymentMethods: [], // Or specific refund methods if applicable
-      amountPaid: 0, // Or the refunded amount
-      amountDue: 0,  // Typically zero for a credit note
+      paymentMethods: [{
+        method: 'Nota de Crédito Aplicada',
+        amount: foundInvoice.totalAmount, // The full amount of the original invoice
+        reference: `Ref. Factura Nro. ${foundInvoice.invoiceNumber}`,
+      }],
+      amountPaid: foundInvoice.totalAmount, 
+      amountDue: 0,  
       thankYouMessage: `Nota de Crédito aplicada a Factura Nro. ${foundInvoice.invoiceNumber}`,
       notes: `Esta nota de crédito anula o rectifica la factura Nro. ${foundInvoice.invoiceNumber}. ${foundInvoice.notes ? `Notas Originales: ${foundInvoice.notes}` : ''}`.trim(),
-       // Amounts remain positive as they represent the credited value
       subTotal: foundInvoice.subTotal,
       discountAmount: foundInvoice.discountAmount,
       taxAmount: foundInvoice.taxAmount,
@@ -102,8 +104,8 @@ export default function ReturnsPage() {
         </Button>
       ),
     });
-    setFoundInvoice(null); // Clear the found invoice form
-    setInvoiceIdInput(""); // Clear search input
+    setFoundInvoice(null); 
+    setInvoiceIdInput(""); 
   };
 
 
@@ -181,3 +183,4 @@ export default function ReturnsPage() {
     </div>
   );
 }
+
