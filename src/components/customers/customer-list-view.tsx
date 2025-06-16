@@ -1,6 +1,7 @@
+
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react"; // Added useEffect
 import useLocalStorage from "@/hooks/use-local-storage";
 import type { CustomerDetails } from "@/lib/types";
 import { CustomerDialog } from "./customer-dialog";
@@ -15,7 +16,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Trash2, UserRoundPlus, Users, Edit } from "lucide-react";
+import { Trash2, UserRoundPlus, Users, Edit } from "lucide-react"; 
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,6 +33,11 @@ export function CustomerListView() {
   const [customers, setCustomers] = useLocalStorage<CustomerDetails[]>("customers", []);
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
+  const [isClient, setIsClient] = useState(false); // State to track client-side mount
+
+  useEffect(() => {
+    setIsClient(true); // Set to true once component is mounted on the client
+  }, []);
 
   const handleSaveCustomer = (customer: CustomerDetails) => {
     setCustomers((prevCustomers) => {
@@ -85,7 +91,14 @@ export function CustomerListView() {
             className="max-w-sm"
           />
         </div>
-        {filteredCustomers.length === 0 ? (
+        
+        {!isClient ? (
+          <div className="text-center py-10 text-muted-foreground">
+            <Users className="mx-auto h-12 w-12 mb-4 animate-pulse" />
+            <p className="text-lg font-semibold">Cargando clientes...</p>
+            <p>Por favor espere.</p>
+          </div>
+        ) : filteredCustomers.length === 0 ? (
           <div className="text-center py-10 text-muted-foreground">
             <Users className="mx-auto h-12 w-12 mb-4" />
             <p className="text-lg font-semibold">No hay clientes</p>
@@ -174,3 +187,5 @@ const Input = React.forwardRef<
   );
 });
 Input.displayName = "Input";
+    
+    
