@@ -17,6 +17,8 @@ export const customerDetailsSchema = z.object({
   address: z.string().min(5, { message: "La dirección debe tener al menos 5 caracteres." }),
   phone: z.string().optional(),
   email: z.string().email({ message: "Debe ser un correo electrónico válido." }).optional().or(z.literal('')),
+  outstandingBalance: z.number().optional().default(0),
+  creditBalance: z.number().optional().default(0),
 });
 
 export const invoiceItemSchema = z.object({
@@ -38,6 +40,7 @@ export const invoiceFormSchema = z.object({
   date: z.date({ required_error: "La fecha es requerida."}),
   type: z.enum(['sale', 'return']).default('sale').optional(),
   originalInvoiceId: z.string().optional(),
+  isDebtPayment: z.boolean().optional().default(false),
   cashierNumber: z.string().optional(),
   salesperson: z.string().optional(),
   customerDetails: customerDetailsSchema.refine(data => data.id || (data.name && data.rif && data.address), {

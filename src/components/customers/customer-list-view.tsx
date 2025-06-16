@@ -1,7 +1,8 @@
 
 "use client";
 
-import React, { useState, useEffect } from "react"; // Added useEffect
+import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import useLocalStorage from "@/hooks/use-local-storage";
 import type { CustomerDetails } from "@/lib/types";
 import { CustomerDialog } from "./customer-dialog";
@@ -16,7 +17,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Trash2, UserRoundPlus, Users, Edit } from "lucide-react"; 
+import { Trash2, UserRoundPlus, Users, Edit, DollarSign } from "lucide-react"; 
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,28 +29,40 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { CURRENCY_SYMBOL } from "@/lib/constants";
+import { cn } from "@/lib/utils";
+
+const formatCurrency = (amount: number | undefined | null) => {
+  if (amount === undefined || amount === null) return `${CURRENCY_SYMBOL}0.00`;
+  return `${CURRENCY_SYMBOL}${amount.toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,')}`;
+};
 
 export function CustomerListView() {
   const [customers, setCustomers] = useLocalStorage<CustomerDetails[]>("customers", []);
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
-  const [isClient, setIsClient] = useState(false); // State to track client-side mount
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
-    setIsClient(true); // Set to true once component is mounted on the client
+    setIsClient(true);
   }, []);
 
   const handleSaveCustomer = (customer: CustomerDetails) => {
     setCustomers((prevCustomers) => {
       const existingIndex = prevCustomers.findIndex((c) => c.id === customer.id);
+      const customerWithDefaults = { // Ensure balances are numbers
+        ...customer,
+        outstandingBalance: customer.outstandingBalance || 0,
+        creditBalance: customer.creditBalance || 0,
+      };
       if (existingIndex > -1) {
         const updatedCustomers = [...prevCustomers];
-        updatedCustomers[existingIndex] = customer;
+        updatedCustomers[existingIndex] = customerWithDefaults;
         toast({ title: "Cliente Actualizado", description: `El cliente ${customer.name} ha sido actualizado.` });
         return updatedCustomers;
       }
       toast({ title: "Cliente Añadido", description: `El cliente ${customer.name} ha sido añadido.` });
-      return [...prevCustomers, customer];
+      return [...prevCustomers, customerWithDefaults];
     });
   };
 
@@ -112,7 +125,8 @@ export function CustomerListView() {
                   <TableHead>Nombre / Razón Social</TableHead>
                   <TableHead>RIF / C.I.</TableHead>
                   <TableHead className="hidden md:table-cell">Dirección</TableHead>
-                  <TableHead className="hidden md:table-cell">Teléfono</TableHead>
+                  <TableHead className="text-right">S. Pendiente</TableHead>
+                  <TableHead className="text-right">S. a Favor</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -121,9 +135,21 @@ export function CustomerListView() {
                   <TableRow key={customer.id}>
                     <TableCell className="font-medium">{customer.name}</TableCell>
                     <TableCell>{customer.rif}</TableCell>
-                    <TableCell className="hidden md:table-cell truncate max-w-xs">{customer.address}</TableCell>
-                    <TableCell className="hidden md:table-cell">{customer.phone || "-"}</TableCell>
-                    <TableCell className="text-right space-x-2">
+                    <TableCell className="hidden md:table-cell truncate max-w-xs" title={customer.address}>{customer.address}</TableCell>
+                    <TableCell className={cn("text-right", (customer.outstandingBalance ?? 0) > 0 ? "text-destructive font-semibold" : "text-muted-foreground")}>
+                      {formatCurrency(customer.outstandingBalance)}
+                    </TableCell>
+                    <TableCell className={cn("text-right", (customer.creditBalance ?? 0) > 0 ? "text-green-600 font-semibold" : "text-muted-foreground")}>
+                      {formatCurrency(customer.creditBalance)}
+                    </TableCell>
+                    <TableCell className="text-right space-x-1">
+                      {(customer.outstandingBalance ?? 0) > 0 && (
+                        <Button asChild variant="outline" size="sm" className="text-xs h-7 px-2 border-primary text-primary hover:bg-primary/10 hover:text-primary">
+                          <Link href={`/invoice/new?customerId=${customer.id}&debtPayment=true&amount=${customer.outstandingBalance}`}>
+                            <DollarSign className="mr-1 h-3 w-3" /> Saldar Deuda
+                          </Link>
+                        </Button>
+                      )}
                       <CustomerDialog
                         customer={customer}
                         onSave={handleSaveCustomer}
@@ -147,6 +173,7 @@ export function CustomerListView() {
                             <AlertDialogDescription>
                               Esta acción no se puede deshacer. Esto eliminará permanentemente al cliente
                               <span className="font-semibold"> {customer.name}</span>.
+                              Sus saldos pendientes o a favor no se verán afectados directamente aquí, pero el cliente será eliminado.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
@@ -172,8 +199,6 @@ export function CustomerListView() {
   );
 }
 
-// Minimal Input component, assuming shadcn/ui Input is available globally
-// If not, this would need to be defined or imported from shadcn
 const Input = React.forwardRef<
   HTMLInputElement,
   React.InputHTMLAttributes<HTMLInputElement>
@@ -187,5 +212,3 @@ const Input = React.forwardRef<
   );
 });
 Input.displayName = "Input";
-    
-    

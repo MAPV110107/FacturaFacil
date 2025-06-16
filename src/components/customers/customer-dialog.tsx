@@ -1,3 +1,4 @@
+
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -34,30 +35,28 @@ interface CustomerDialogProps {
   triggerButton?: React.ReactNode;
 }
 
+const defaultCustomerValues: Partial<CustomerDetails> = {
+  name: "",
+  rif: "",
+  address: "",
+  phone: "",
+  email: "",
+  outstandingBalance: 0,
+  creditBalance: 0,
+};
+
 export function CustomerDialog({ customer, onSave, triggerButton }: CustomerDialogProps) {
   const [open, setOpen] = useState(false);
   const isEditing = !!customer;
 
   const form = useForm<z.infer<typeof customerDetailsSchema>>({
     resolver: zodResolver(customerDetailsSchema),
-    defaultValues: customer || {
-      name: "",
-      rif: "",
-      address: "",
-      phone: "",
-      email: "",
-    },
+    defaultValues: customer ? { ...defaultCustomerValues, ...customer } : defaultCustomerValues,
   });
   
   React.useEffect(() => {
     if (open) {
-      form.reset(customer || {
-        name: "",
-        rif: "",
-        address: "",
-        phone: "",
-        email: "",
-      });
+      form.reset(customer ? { ...defaultCustomerValues, ...customer } : defaultCustomerValues);
     }
   }, [open, customer, form]);
 
@@ -65,11 +64,12 @@ export function CustomerDialog({ customer, onSave, triggerButton }: CustomerDial
   function onSubmit(values: z.infer<typeof customerDetailsSchema>) {
     const customerToSave: CustomerDetails = {
       id: customer?.id || Date.now().toString(), // Generate new ID or use existing
+      ...defaultCustomerValues, // ensure balance fields are present
       ...values,
     };
     onSave(customerToSave);
     setOpen(false);
-    form.reset();
+    form.reset(defaultCustomerValues);
   }
 
   return (
@@ -160,6 +160,7 @@ export function CustomerDialog({ customer, onSave, triggerButton }: CustomerDial
                 )}
               />
             </div>
+            {/* Balance fields are not typically edited directly in this dialog */}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                 Cancelar
