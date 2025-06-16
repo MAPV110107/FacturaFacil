@@ -83,6 +83,7 @@ export default function InvoiceHistoryPage() {
                   <TableHead>Nro. Documento</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Fecha</TableHead>
+                  <TableHead>Hora</TableHead>
                   <TableHead>Cliente</TableHead>
                   <TableHead className="text-right">Monto Total</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
@@ -102,6 +103,7 @@ export default function InvoiceHistoryPage() {
                       </span>
                     </TableCell>
                     <TableCell>{format(new Date(invoice.date), "PPP", { locale: es })}</TableCell>
+                    <TableCell>{format(new Date(invoice.date), "p", { locale: es })}</TableCell>
                     <TableCell className="truncate max-w-xs" title={invoice.customerDetails.name}>{invoice.customerDetails.name}</TableCell>
                     <TableCell className="text-right">{formatCurrency(invoice.totalAmount)}</TableCell>
                     <TableCell className="text-right space-x-1">
