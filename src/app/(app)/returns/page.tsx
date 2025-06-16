@@ -14,6 +14,7 @@ import type { Invoice, CompanyDetails } from '@/lib/types';
 import { InvoicePreview } from '@/components/invoice/invoice-preview';
 import { useToast } from "@/hooks/use-toast";
 import { DEFAULT_COMPANY_ID } from '@/lib/types';
+import { CURRENCY_SYMBOL } from '@/lib/constants'; // Added import
 import {
   AlertDialog,
   AlertDialogAction,
@@ -278,3 +279,5 @@ export default function ReturnsPage() {
     </div>
   );
 }
+
+    
