@@ -55,6 +55,7 @@ export function InvoiceEditor() {
     salesperson: "",
     discountAmount: 0,
     taxRate: TAX_RATE,
+    type: 'sale',
   });
 
   const form = useForm<InvoiceFormData>({
@@ -71,6 +72,8 @@ export function InvoiceEditor() {
       notes: "",
       taxRate: TAX_RATE,
       discountAmount: 0,
+      type: 'sale',
+      originalInvoiceId: undefined,
     },
   });
 
@@ -81,11 +84,13 @@ export function InvoiceEditor() {
 
       form.setValue("invoiceNumber", initialInvoiceNumber, { shouldDirty: false, shouldValidate: false });
       form.setValue("date", initialDate, { shouldDirty: false, shouldValidate: false });
+      form.setValue("type", "sale", { shouldDirty: false, shouldValidate: false });
       
       setLiveInvoicePreview(prev => ({
         ...prev,
         invoiceNumber: initialInvoiceNumber,
         date: initialDate.toISOString(),
+        type: 'sale',
       }));
     }
   }, [isClient, form]);
@@ -149,6 +154,7 @@ export function InvoiceEditor() {
         amountDue,
         thankYouMessage: values.thankYouMessage || DEFAULT_THANK_YOU_MESSAGE,
         notes: values.notes,
+        type: 'sale', // Invoices created here are always sales
       }));
     });
     return () => subscription.unsubscribe();
@@ -182,6 +188,7 @@ export function InvoiceEditor() {
             subTotal, discountAmount, taxRate: currentTaxRate, taxAmount, totalAmount, amountPaid, amountDue,
             thankYouMessage: values.thankYouMessage || DEFAULT_THANK_YOU_MESSAGE,
             notes: values.notes,
+            type: 'sale',
         }));
     }
   }, [isClient, form, calculateTotals, calculatePaymentSummary, companyDetails, customers]); 
@@ -211,6 +218,7 @@ export function InvoiceEditor() {
       id: uuidv4(),
       invoiceNumber: data.invoiceNumber,
       date: data.date.toISOString(),
+      type: 'sale', // Invoices created from editor are always sales
       companyDetails: companyDetails || defaultCompany,
       customerDetails: data.customerDetails as CustomerDetails, 
       cashierNumber: data.cashierNumber,
@@ -251,6 +259,8 @@ export function InvoiceEditor() {
       notes: "",
       taxRate: TAX_RATE,
       discountAmount: 0,
+      type: 'sale',
+      originalInvoiceId: undefined,
     });
     setSelectedCustomerId(undefined); 
      if(isClient) {
@@ -264,6 +274,7 @@ export function InvoiceEditor() {
             salesperson: "",
             subTotal: 0, taxRate: TAX_RATE, taxAmount: 0, totalAmount: 0, amountPaid: 0, amountDue: 0, discountAmount: 0,
             customerDetails: { name: "", rif: "", address: "" },
+            type: 'sale',
         });
      }
   }

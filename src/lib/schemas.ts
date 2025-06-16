@@ -36,6 +36,8 @@ export const paymentDetailsSchema = z.object({
 export const invoiceFormSchema = z.object({
   invoiceNumber: z.string().min(1, "El número de factura es requerido."),
   date: z.date({ required_error: "La fecha es requerida."}),
+  type: z.enum(['sale', 'return']).default('sale').optional(),
+  originalInvoiceId: z.string().optional(),
   cashierNumber: z.string().optional(),
   salesperson: z.string().optional(),
   customerDetails: customerDetailsSchema.refine(data => data.id || (data.name && data.rif && data.address), {

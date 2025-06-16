@@ -45,10 +45,22 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
   const taxRate = invoice.taxRate ?? 0;
 
   const taxableBase = subTotal - discountAmount;
+  const isReturn = invoice.type === 'return';
+  const documentTitle = isReturn ? "NOTA DE CRÉDITO" : "FACTURA";
 
   return (
-    <Card className={`w-full max-w-md mx-auto shadow-xl print-receipt ${className}`} data-invoice-preview-container>
-      <CardContent className="p-4 receipt-font text-xs">
+    <Card className={`w-full max-w-md mx-auto shadow-xl print-receipt relative ${className}`} data-invoice-preview-container>
+      {isReturn && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
+          <span 
+            className="text-6xl sm:text-7xl md:text-8xl font-bold text-destructive/15 transform -rotate-45 opacity-70 select-none"
+            style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.1)' }}
+          >
+            NOTA DE CRÉDITO
+          </span>
+        </div>
+      )}
+      <CardContent className="p-4 receipt-font text-xs relative z-10"> {/* Ensure content is above watermark */}
         <div className="text-center mb-1">
           <p className="font-bold text-lg my-1">{SENIAT_TEXT}</p>
         </div>
@@ -67,11 +79,14 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
         <DottedLine />
 
         <div className="mb-2">
-          <p>{formatLine("FACTURA NRO:", invoice.invoiceNumber || "S/N")}</p>
+          <p>{formatLine(`${documentTitle} NRO:`, invoice.invoiceNumber || "S/N")}</p>
           <p>{formatLine("FECHA:", actualInvoiceDate.toLocaleDateString('es-VE'))}</p>
           <p>{formatLine("HORA:", actualInvoiceDate.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }))}</p>
           {invoice.cashierNumber && <p>{formatLine("CAJA NRO:", invoice.cashierNumber)}</p>}
           {invoice.salesperson && <p>{formatLine("VENDEDOR:", invoice.salesperson)}</p>}
+          {isReturn && invoice.originalInvoiceId && (
+            <p className="text-xs">{formatLine("REF. FACTURA:", invoices.find(inv => inv.id === invoice.originalInvoiceId)?.invoiceNumber || invoice.originalInvoiceId)}</p>
+          )}
         </div>
         
         <DottedLine />
@@ -115,12 +130,12 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
           {taxAmount > 0 && (
             <p>{formatLine(`IVA (${(taxRate * 100).toFixed(0)}%):`, formatCurrency(taxAmount))}</p>
           )}
-          <p className="font-bold text-sm">{formatLine("TOTAL A PAGAR:", formatCurrency(totalAmount))}</p>
+          <p className="font-bold text-sm">{formatLine(isReturn ? "TOTAL CRÉDITO:" : "TOTAL A PAGAR:", formatCurrency(totalAmount))}</p>
         </div>
         
-        {(payments.length > 0 || (invoice.amountPaid ?? 0) > 0) && <DottedLine />}
+        {(payments.length > 0 || (invoice.amountPaid ?? 0) > 0) && !isReturn && <DottedLine />}
         
-        {payments.length > 0 && (
+        {payments.length > 0 && !isReturn && (
           <div className="mt-2 space-y-0.5">
             <p className="font-semibold">FORMA DE PAGO:</p>
             {payments.map((p, idx) => (
@@ -128,13 +143,13 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
             ))}
           </div>
         )}
-         {(invoice.amountPaid ?? 0) > 0 && !payments.length && ( 
+         {(invoice.amountPaid ?? 0) > 0 && !payments.length && !isReturn && ( 
             <div className="mt-2 space-y-0.5">
                  <p className="font-semibold">{formatLine("TOTAL PAGADO:", formatCurrency(invoice.amountPaid))}</p>
             </div>
         )}
 
-        { (invoice.amountDue ?? 0) > 0 && (
+        { (invoice.amountDue ?? 0) > 0 && !isReturn && (
             <div className="mt-1">
                  <p className="font-semibold">{formatLine("MONTO PENDIENTE:", formatCurrency(invoice.amountDue))}</p>
             </div>
@@ -143,7 +158,7 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
         <DottedLine />
 
         <div className="text-center mt-3">
-          <p>{invoice.thankYouMessage || "¡Gracias por su compra!"}</p>
+          <p>{invoice.thankYouMessage || (isReturn ? "Devolución procesada." : "¡Gracias por su compra!")}</p>
           {invoice.notes && <p className="text-xs italic mt-1">{invoice.notes}</p>}
         </div>
 
@@ -151,9 +166,19 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
       <div className="p-4 border-t no-print flex justify-end">
         <Button onClick={handlePrint} className="bg-accent hover:bg-accent/90 text-accent-foreground">
           <Printer className="mr-2 h-4 w-4" />
-          Imprimir Factura
+          Imprimir {documentTitle}
         </Button>
       </div>
     </Card>
   );
 }
+
+// Helper to find original invoice number - used for display on credit note.
+// This is a simplified approach assuming 'invoices' from localStorage is accessible or passed.
+// For a cleaner approach, this could be part of the data passed to InvoicePreview.
+// As it stands, this local 'invoices' variable won't work directly here.
+// The originalInvoiceId should be used to lookup the number from the main data source if needed.
+// For now, let's assume invoice.originalInvoiceId could be displayed, or we add originalInvoiceNumber to the Invoice type.
+// Simpler: invoice.notes already contains this for returns.
+const invoices: Invoice[] = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem("invoices") || "[]") : [];
+

@@ -36,6 +36,8 @@ export interface Invoice {
   id: string; // Unique ID for the invoice (e.g., timestamp or sequential number)
   invoiceNumber: string; // User-defined or auto-generated invoice number
   date: string; // ISO string date
+  type: 'sale' | 'return'; // Distinguishes between sales invoice and credit note
+  originalInvoiceId?: string; // For returns, links to the original sale invoice ID
   companyDetails: CompanyDetails;
   customerDetails: CustomerDetails;
   items: InvoiceItem[];

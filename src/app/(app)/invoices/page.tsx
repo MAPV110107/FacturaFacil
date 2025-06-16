@@ -15,13 +15,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Eye, History, FileText as PageIcon } from "lucide-react"; 
+import { Eye, History, FileText as PageIcon, Undo2 as ReturnIcon, FileText as SaleIcon } from "lucide-react"; 
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { CURRENCY_SYMBOL } from "@/lib/constants";
+import { cn } from "@/lib/utils";
 
 const formatCurrency = (amount: number | undefined | null) => {
-  if (amount === undefined || amount === null) return `${CURRENCY_SYMBOL}0.00`; // Ensure symbol is always prepended
+  if (amount === undefined || amount === null) return `${CURRENCY_SYMBOL}0.00`; 
   return `${CURRENCY_SYMBOL} ${amount.toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,')}`;
 };
 
@@ -34,7 +35,7 @@ export default function InvoiceHistoryPage() {
   }, []);
 
   const sortedInvoices = React.useMemo(() => {
-    if (!isClient) return []; // Avoid sorting on server or before client hydration
+    if (!isClient) return []; 
     return [...invoices].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [invoices, isClient]);
 
@@ -44,9 +45,9 @@ export default function InvoiceHistoryPage() {
         <div className="flex items-center space-x-3">
           <History className="h-8 w-8 text-primary" />
           <div>
-            <CardTitle className="text-2xl font-bold text-primary">Historial de Facturas</CardTitle>
+            <CardTitle className="text-2xl font-bold text-primary">Historial de Documentos</CardTitle>
             <CardDescription className="text-muted-foreground">
-              Consulte y gestione las facturas emitidas anteriormente.
+              Consulte y gestione las facturas y notas de crédito emitidas.
             </CardDescription>
           </div>
         </div>
@@ -61,7 +62,7 @@ export default function InvoiceHistoryPage() {
         ) : sortedInvoices.length === 0 ? (
           <div className="text-center py-10 text-muted-foreground">
             <PageIcon className="mx-auto h-12 w-12 mb-4" />
-            <p className="text-lg font-semibold">No hay facturas en el historial</p>
+            <p className="text-lg font-semibold">No hay documentos en el historial</p>
             <p>Cree su primera factura para verla aquí.</p>
           </div>
         ) : (
@@ -69,7 +70,8 @@ export default function InvoiceHistoryPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nro. Factura</TableHead>
+                  <TableHead>Nro. Documento</TableHead>
+                  <TableHead>Tipo</TableHead>
                   <TableHead>Fecha</TableHead>
                   <TableHead>Cliente</TableHead>
                   <TableHead className="text-right">Monto Total</TableHead>
@@ -78,8 +80,17 @@ export default function InvoiceHistoryPage() {
               </TableHeader>
               <TableBody>
                 {sortedInvoices.map((invoice) => (
-                  <TableRow key={invoice.id}>
+                  <TableRow key={invoice.id} className={cn(invoice.type === 'return' && "bg-destructive/5 hover:bg-destructive/10")}>
                     <TableCell className="font-medium">{invoice.invoiceNumber}</TableCell>
+                    <TableCell>
+                      <span className={cn(
+                        "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium",
+                        invoice.type === 'sale' ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+                      )}>
+                        {invoice.type === 'sale' ? <SaleIcon className="h-3 w-3 mr-1.5" /> : <ReturnIcon className="h-3 w-3 mr-1.5" />}
+                        {invoice.type === 'sale' ? 'Factura' : 'Nota de Crédito'}
+                      </span>
+                    </TableCell>
                     <TableCell>{format(new Date(invoice.date), "PPP", { locale: es })}</TableCell>
                     <TableCell className="truncate max-w-xs" title={invoice.customerDetails.name}>{invoice.customerDetails.name}</TableCell>
                     <TableCell className="text-right">{formatCurrency(invoice.totalAmount)}</TableCell>
@@ -87,7 +98,7 @@ export default function InvoiceHistoryPage() {
                       <Button asChild variant="ghost" size="icon" className="text-primary hover:text-primary/80 h-8 w-8 p-0">
                         <Link href={`/invoices/${invoice.id}`}>
                           <Eye className="h-4 w-4" />
-                          <span className="sr-only">Ver Factura</span>
+                          <span className="sr-only">Ver Documento</span>
                         </Link>
                       </Button>
                     </TableCell>
