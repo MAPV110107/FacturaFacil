@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { Invoice, InvoiceItem, CompanyDetails, CustomerDetails, PaymentDetails } from "@/lib/types";
@@ -43,8 +44,14 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
   return (
     <Card className={`w-full max-w-md mx-auto shadow-xl print-receipt ${className}`} data-invoice-preview-container>
       <CardContent className="p-4 receipt-font text-xs">
-        {/* Header Section */}
-        <div className="text-center mb-2">
+        {/* SENIAT Header */}
+        <div className="text-center mb-1">
+          <p className="font-bold text-lg my-1">{SENIAT_TEXT}</p>
+        </div>
+        <DottedLine />
+
+        {/* Company Header Section */}
+        <div className="text-center my-2">
           {c?.logoUrl && c.logoUrl !== 'https://placehold.co/150x50.png' && (
              // eslint-disable-next-line @next/next/no-img-element
             <img src={c.logoUrl} alt={`${c.name} logo`} className="max-h-12 mx-auto mb-2 object-contain print-only" data-ai-hint="company logo"/>
@@ -53,7 +60,6 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
           <p>RIF: {c?.rif || "J-00000000-0"}</p>
           <p className="truncate" title={c?.address}>{c?.address || "Dirección de la Empresa"}</p>
           {c?.phone && <p>Telf: {c.phone}</p>}
-          <p className="font-bold text-lg my-1">{SENIAT_TEXT}</p>
         </div>
 
         <DottedLine />
@@ -148,3 +154,4 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
     </Card>
   );
 }
+
