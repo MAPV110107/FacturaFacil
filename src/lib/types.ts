@@ -41,6 +41,7 @@ export interface Invoice {
   type: 'sale' | 'return'; // Distinguishes between sales invoice and credit note
   originalInvoiceId?: string; // For returns, links to the original sale invoice ID
   isDebtPayment?: boolean; // Flag to identify debt payment invoices
+  isCreditDeposit?: boolean; // Flag to identify credit deposit transactions
   companyDetails: CompanyDetails;
   customerDetails: CustomerDetails;
   items: InvoiceItem[];

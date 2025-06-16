@@ -16,13 +16,11 @@ interface InvoicePreviewProps {
 
 const formatCurrency = (amount: number | undefined | null) => {
   if (amount === undefined || amount === null) return `${CURRENCY_SYMBOL} 0.00`;
-  // For thermal printers, avoid thousands separators if they cause issues with width.
-  // Using a simpler format for currency, can be adjusted.
   return `${CURRENCY_SYMBOL}${amount.toFixed(2)}`;
 };
 
 const formatLine = (left: string, right: string, width: number = FISCAL_PRINTER_LINE_WIDTH): string => {
-  const sanitizedLeft = String(left || "").slice(0, width - Math.max(0, String(right || "").length) -1); // Ensure left doesn't overflow
+  const sanitizedLeft = String(left || "").slice(0, width - Math.max(0, String(right || "").length) -1);
   const sanitizedRight = String(right || "");
   const spaces = Math.max(0, width - sanitizedLeft.length - sanitizedRight.length);
   return `${sanitizedLeft}${' '.repeat(spaces)}${sanitizedRight}`;
@@ -53,9 +51,24 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
 
   const taxableBase = subTotal - discountAmount;
   const isReturn = invoice.type === 'return';
-  const documentTitle = isReturn ? "NOTA DE CRÉDITO" : "FACTURA";
+  const isDebtPayment = invoice.isDebtPayment ?? false;
+  const isCreditDeposit = invoice.isCreditDeposit ?? false;
+  
+  let documentTitle = "FACTURA";
+  let watermarkText = "";
 
-  // Attempt to get saved invoices from localStorage for original invoice number reference
+  if (isReturn) {
+    documentTitle = "NOTA DE CRÉDITO";
+    watermarkText = "NOTA DE CRÉDITO";
+  } else if (isDebtPayment) {
+    documentTitle = "RECIBO DE PAGO DE DEUDA";
+    // watermarkText = "PAGO DEUDA"; // Optional watermark
+  } else if (isCreditDeposit) {
+    documentTitle = "COMPROBANTE DE DEPÓSITO";
+    // watermarkText = "DEPÓSITO"; // Optional watermark
+  }
+
+
   let originalInvoiceNumber = null;
   if (isReturn && invoice.originalInvoiceId && typeof window !== 'undefined') {
     try {
@@ -72,17 +85,17 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
 
   return (
     <Card className={`w-full max-w-md mx-auto shadow-xl print-receipt relative ${className}`} data-invoice-preview-container>
-      {isReturn && (
+      {watermarkText && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 watermark-container">
           <span 
             className="text-6xl sm:text-7xl md:text-8xl font-bold text-destructive/10 transform -rotate-45 opacity-70 select-none watermark-text"
             style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.05)' }}
           >
-            NOTA DE CRÉDITO
+            {watermarkText}
           </span>
         </div>
       )}
-      <CardContent className={`p-4 receipt-font text-xs relative z-10`}> {/* Ensure content is above watermark */}
+      <CardContent className={`p-4 receipt-font text-xs relative z-10`}>
         <div className="text-center mb-1">
           <p className="font-bold text-lg my-1">{SENIAT_TEXT}</p>
         </div>
@@ -146,34 +159,34 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
           {discountAmount > 0 && (
             <p>{formatLine("DESCUENTO:", `-${formatCurrency(discountAmount)}`)}</p>
           )}
-           {taxAmount > 0 && ( // Show taxable base only if there is tax
+           {(taxAmount > 0 || isDebtPayment || isCreditDeposit) && ( // Show taxable base if there is tax or special modes
             <p>{formatLine(`BASE IMPONIBLE:`, formatCurrency(taxableBase))}</p>
           )}
-          {taxAmount > 0 && ( // Show tax only if there is tax
+          {taxAmount > 0 && !isDebtPayment && !isCreditDeposit && ( // Show tax only if there is tax and not special modes
             <p>{formatLine(`IVA (${(taxRate * 100).toFixed(0)}%):`, formatCurrency(taxAmount))}</p>
           )}
-          <p className="font-bold text-sm">{formatLine(isReturn ? "TOTAL CRÉDITO:" : "TOTAL A PAGAR:", formatCurrency(totalAmount))}</p>
+          <p className="font-bold text-sm">{formatLine(isReturn ? "TOTAL CRÉDITO:" : isDebtPayment ? "TOTAL ABONO:" : isCreditDeposit ? "TOTAL DEPÓSITO:" : "TOTAL A PAGAR:", formatCurrency(totalAmount))}</p>
         </div>
         
         {(payments.length > 0) && <DottedLine />}
         
         {payments.length > 0 && (
           <div className="mt-2 space-y-0.5">
-            <p className="font-semibold">{isReturn ? "CRÉDITO EMITIDO VÍA:" : "FORMA DE PAGO:"}</p>
+            <p className="font-semibold">{isReturn ? "CRÉDITO EMITIDO VÍA:" : isCreditDeposit ? "DEPÓSITO REALIZADO VÍA:" : "FORMA DE PAGO:"}</p>
             {payments.map((p, idx) => (
               <p key={idx}>{formatLine(p.method.toUpperCase() + (p.reference ? ` (${p.reference.slice(0,10)})` : ''), formatCurrency(p.amount))}</p>
             ))}
           </div>
         )}
 
-        {!isReturn && amountPaid > 0 && (
+        {!isReturn && !isCreditDeposit && amountPaid > 0 && ( // Don't show paid/due for credit deposit as it's a direct balance increase
             <div className="mt-1">
                 <DottedLine />
                 <p className="font-semibold">{formatLine("TOTAL PAGADO:", formatCurrency(amountPaid))}</p>
-                {amountDue < 0 && ( // Customer paid more
+                {amountDue < 0 && ( 
                     <p className="font-semibold">{formatLine("VUELTO:", formatCurrency(Math.abs(amountDue)))}</p>
                 )}
-                {amountDue > 0 && ( // Customer paid less
+                {amountDue > 0 && ( 
                     <p className="font-semibold">{formatLine("MONTO PENDIENTE:", formatCurrency(amountDue))}</p>
                 )}
             </div>
@@ -182,7 +195,7 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
         <DottedLine />
 
         <div className="text-center mt-3">
-          <p>{invoice.thankYouMessage || (isReturn ? "Devolución procesada." : "¡Gracias por su compra!")}</p>
+          <p>{invoice.thankYouMessage || (isReturn ? "Devolución procesada." : isDebtPayment ? "Abono registrado." : isCreditDeposit ? "Depósito registrado." : "¡Gracias por su compra!")}</p>
           {invoice.notes && <p className="text-xs italic mt-1">{invoice.notes}</p>}
         </div>
 

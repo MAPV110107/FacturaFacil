@@ -6,7 +6,7 @@ import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
 import { v4 as uuidv4 } from "uuid";
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'; // Added usePathname
 
 import useLocalStorage from "@/hooks/use-local-storage";
 import type { Invoice, CompanyDetails, CustomerDetails, InvoiceItem, PaymentDetails } from "@/lib/types";
@@ -21,7 +21,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { InvoicePreview } from "./invoice-preview";
 import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, Trash2, Users, FileText, DollarSign, Settings, Receipt, CalendarDays, Info, Save, Percent, Search, Ban } from "lucide-react";
+import { PlusCircle, Trash2, Users, FileText, DollarSign, Settings, Receipt, CalendarDays, Info, Save, Percent, Search, Ban, ArrowRight, HandCoins, PiggyBank } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Form, FormField, FormItem, FormControl, FormLabel, FormMessage } from "@/components/ui/form";
@@ -33,7 +33,6 @@ type InvoiceFormData = z.infer<typeof invoiceFormSchema>;
 const defaultCompany: CompanyDetails = { id: DEFAULT_COMPANY_ID, name: "", rif: "", address: "" };
 const defaultCustomer: CustomerDetails = { id: "", name: "", rif: "", address: "", phone: "", email: "", outstandingBalance: 0, creditBalance: 0 };
 
-// Helper debounce function
 const debounce = <F extends (...args: any[]) => any>(func: F, waitFor: number) => {
   let timeout: NodeJS.Timeout;
   return (...args: Parameters<F>): Promise<ReturnType<F>> =>
@@ -43,6 +42,7 @@ const debounce = <F extends (...args: any[]) => any>(func: F, waitFor: number) =
     });
 };
 
+type EditorMode = 'normal' | 'debtPayment' | 'creditDeposit';
 
 export function InvoiceEditor() {
   const [companyDetails] = useLocalStorage<CompanyDetails>("companyDetails", defaultCompany);
@@ -51,10 +51,11 @@ export function InvoiceEditor() {
   const { toast } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
   
   const [isClient, setIsClient] = useState(false);
-  const [isDebtPaymentMode, setIsDebtPaymentMode] = useState(false);
-  const [debtPaymentOriginalAmount, setDebtPaymentOriginalAmount] = useState(0);
+  const [editorMode, setEditorMode] = useState<EditorMode>('normal');
+  const [currentDebtOrCreditAmount, setCurrentDebtOrCreditAmount] = useState(0);
 
   const [customerRifInput, setCustomerRifInput] = useState("");
   const [isSearchingCustomer, setIsSearchingCustomer] = useState(false);
@@ -63,7 +64,7 @@ export function InvoiceEditor() {
   const [selectedCustomerIdForDropdown, setSelectedCustomerIdForDropdown] = useState<string | undefined>(undefined);
 
   const initialLivePreviewState: Partial<Invoice> = {
-    id: '', // Placeholder
+    id: '', 
     invoiceNumber: "",
     date: new Date(0).toISOString(), 
     type: 'sale',
@@ -83,6 +84,7 @@ export function InvoiceEditor() {
     thankYouMessage: DEFAULT_THANK_YOU_MESSAGE,
     notes: "",
     isDebtPayment: false,
+    isCreditDeposit: false,
   };
 
   const [liveInvoicePreview, setLiveInvoicePreview] = useState<Partial<Invoice>>(initialLivePreviewState);
@@ -95,6 +97,7 @@ export function InvoiceEditor() {
       type: 'sale',
       originalInvoiceId: undefined,
       isDebtPayment: false,
+      isCreditDeposit: false,
       cashierNumber: "",
       salesperson: "",
       customerDetails: { ...defaultCustomer },
@@ -123,58 +126,77 @@ export function InvoiceEditor() {
     return { amountPaid, amountDue };
   }, []);
 
-  const resetFormAndState = useCallback((debtPaymentParams: {isDebt: boolean, customerId?: string, amount?: number} = {isDebt: false}) => {
+  const resetFormAndState = useCallback((params: { mode?: EditorMode, customerId?: string, amount?: number } = {}) => {
+    const { mode = 'normal', customerId, amount = 0 } = params;
+    
     let initialInvoiceNumber = `FACT-${Date.now().toString().slice(-6)}`;
     const initialDate = new Date();
     let initialItemsArr = [{ id: uuidv4(), description: "", quantity: 1, unitPrice: 0 }];
     let initialCustomerState = { ...defaultCustomer };
-    let debtMode = false;
-    let debtAmount = 0;
+    let thankYouMsg = DEFAULT_THANK_YOU_MESSAGE;
+    let notesMsg = "";
+    let formTaxRate = TAX_RATE;
+    let formIsDebtPayment = false;
+    let formIsCreditDeposit = false;
 
-    if (debtPaymentParams.isDebt && debtPaymentParams.customerId && debtPaymentParams.amount) {
-      const debtCustomer = customers.find(c => c.id === debtPaymentParams.customerId);
-      if (debtCustomer) {
-        initialCustomerState = { ...debtCustomer };
-        initialInvoiceNumber = `PAGO-${Date.now().toString().slice(-6)}`;
-        initialItemsArr = [{ id: uuidv4(), description: "Abono a Deuda Pendiente", quantity: 1, unitPrice: debtPaymentParams.amount }];
-        debtMode = true;
-        debtAmount = debtPaymentParams.amount;
-        setSelectedCustomerIdForDropdown(debtCustomer.id);
-        setCustomerRifInput(debtCustomer.rif);
-        setCustomerSearchMessage(`Pagando deuda de: ${debtCustomer.name}`);
-        setShowNewCustomerFields(false);
+    const targetCustomer = customers.find(c => c.id === customerId);
+
+    if (mode === 'debtPayment' && targetCustomer && amount > 0) {
+      initialCustomerState = { ...targetCustomer };
+      initialInvoiceNumber = `PAGO-${Date.now().toString().slice(-6)}`;
+      initialItemsArr = [{ id: uuidv4(), description: "Abono a Deuda Pendiente", quantity: 1, unitPrice: amount }];
+      thankYouMsg = "Gracias por su abono.";
+      notesMsg = `Abono a deuda pendiente por ${CURRENCY_SYMBOL}${amount.toFixed(2)}`;
+      formTaxRate = 0;
+      formIsDebtPayment = true;
+      setSelectedCustomerIdForDropdown(targetCustomer.id);
+      setCustomerRifInput(targetCustomer.rif);
+      setCustomerSearchMessage(`Pagando deuda de: ${targetCustomer.name}`);
+      setShowNewCustomerFields(false);
+    } else if (mode === 'creditDeposit' && targetCustomer) {
+      initialCustomerState = { ...targetCustomer };
+      initialInvoiceNumber = `DEP-${Date.now().toString().slice(-6)}`;
+      initialItemsArr = [{ id: uuidv4(), description: "Depósito a Cuenta Cliente", quantity: 1, unitPrice: 0 }]; // User will input amount
+      thankYouMsg = "Gracias por su depósito.";
+      notesMsg = `Depósito a cuenta cliente.`;
+      formTaxRate = 0;
+      formIsCreditDeposit = true;
+      setSelectedCustomerIdForDropdown(targetCustomer.id);
+      setCustomerRifInput(targetCustomer.rif);
+      setCustomerSearchMessage(`Registrando depósito para: ${targetCustomer.name}`);
+      setShowNewCustomerFields(false);
+    } else { // Normal mode or invalid params for special modes
+      if (mode !== 'normal') { // If tried to enter special mode but failed (e.g. no customer)
+        toast({ variant: "destructive", title: "Acción no completada", description: "Debe seleccionar un cliente primero."});
       }
-    }
-    
-    setIsDebtPaymentMode(debtMode);
-    setDebtPaymentOriginalAmount(debtAmount);
-
-    const formValuesToReset = {
-      invoiceNumber: initialInvoiceNumber,
-      date: initialDate,
-      type: 'sale' as 'sale' | 'return',
-      isDebtPayment: debtMode,
-      originalInvoiceId: undefined,
-      cashierNumber: "",
-      salesperson: "",
-      customerDetails: initialCustomerState,
-      items: initialItemsArr,
-      paymentMethods: [{ method: "Efectivo", amount: 0, reference: "" }],
-      thankYouMessage: debtMode ? "Gracias por su abono." : DEFAULT_THANK_YOU_MESSAGE,
-      notes: debtMode ? `Abono a deuda pendiente por ${CURRENCY_SYMBOL}${debtAmount.toFixed(2)}` : "",
-      taxRate: debtMode ? 0 : TAX_RATE, 
-      discountAmount: 0,
-    };
-    form.reset(formValuesToReset);
-    
-    if (!debtMode) {
       setCustomerRifInput("");
       setShowNewCustomerFields(false);
       setCustomerSearchMessage(null);
       setSelectedCustomerIdForDropdown(undefined);
     }
     
-    // Directly update preview on reset
+    setEditorMode(mode);
+    setCurrentDebtOrCreditAmount(mode === 'debtPayment' ? amount : 0);
+
+    const formValuesToReset = {
+      invoiceNumber: initialInvoiceNumber,
+      date: initialDate,
+      type: 'sale' as 'sale' | 'return',
+      isDebtPayment: formIsDebtPayment,
+      isCreditDeposit: formIsCreditDeposit,
+      originalInvoiceId: undefined,
+      cashierNumber: "",
+      salesperson: "",
+      customerDetails: initialCustomerState,
+      items: initialItemsArr,
+      paymentMethods: [{ method: "Efectivo", amount: 0, reference: "" }],
+      thankYouMessage: thankYouMsg,
+      notes: notesMsg,
+      taxRate: formTaxRate, 
+      discountAmount: 0,
+    };
+    form.reset(formValuesToReset);
+        
     const currentItems = (formValuesToReset.items || []).map(item => ({
         ...item,
         quantity: item.quantity || 0,
@@ -187,8 +209,8 @@ export function InvoiceEditor() {
     const { amountPaid, amountDue } = calculatePaymentSummary(formValuesToReset.paymentMethods || [], totalAmount);
 
     setLiveInvoicePreview({
-      ...initialLivePreviewState, // Base state
-      id: '', // Placeholder for preview
+      ...initialLivePreviewState, 
+      id: '', 
       invoiceNumber: formValuesToReset.invoiceNumber,
       date: formValuesToReset.date ? formValuesToReset.date.toISOString() : new Date().toISOString(),
       type: 'sale',
@@ -208,31 +230,34 @@ export function InvoiceEditor() {
       thankYouMessage: formValuesToReset.thankYouMessage || DEFAULT_THANK_YOU_MESSAGE,
       notes: formValuesToReset.notes,
       isDebtPayment: !!formValuesToReset.isDebtPayment,
+      isCreditDeposit: !!formValuesToReset.isCreditDeposit,
     });
-
-  }, [form, customers, companyDetails, calculateTotals, calculatePaymentSummary]);
-
+    // Clear URL params if we entered a mode via button or are resetting to normal
+    if (pathname === '/invoice/new' && searchParams.toString() !== "") {
+      router.replace('/invoice/new', { scroll: false });
+    }
+  }, [form, customers, companyDetails, calculateTotals, calculatePaymentSummary, router, pathname, searchParams, toast]);
 
   useEffect(() => {
     setIsClient(true);
   }, []);
 
   useEffect(() => {
-    if (isClient && customers.length >= 0) { // Ensure customers are loaded
-      const customerId = searchParams.get('customerId');
-      const debtPayment = searchParams.get('debtPayment') === 'true';
-      const amountStr = searchParams.get('amount');
-      const amount = parseFloat(amountStr || '0');
+    if (isClient && customers.length >= 0 && editorMode === 'normal') { 
+      const customerIdParam = searchParams.get('customerId');
+      const debtPaymentParam = searchParams.get('debtPayment') === 'true';
+      const amountStrParam = searchParams.get('amount');
+      const amountParam = parseFloat(amountStrParam || '0');
 
-      if (debtPayment && customerId && amount > 0) {
-        resetFormAndState({isDebt: true, customerId, amount});
-      } else if (!form.getValues('invoiceNumber')) { // Only reset if form is not already populated (e.g. by previous debt payment)
-        resetFormAndState();
+      if (debtPaymentParam && customerIdParam && amountParam > 0) {
+        resetFormAndState({mode: 'debtPayment', customerId: customerIdParam, amount: amountParam});
+      } else if (!form.getValues('invoiceNumber')) { 
+        resetFormAndState({ mode: 'normal' });
       }
     }
-  }, [isClient, searchParams, resetFormAndState, customers]); // Added customers to dependencies
+  }, [isClient, searchParams, resetFormAndState, customers, editorMode, form]); // Added editorMode and form
 
-  const { fields: itemFields, append: appendItem, remove: removeItem } = useFieldArray({
+  const { fields: itemFields, append: appendItem, remove: removeItem, update: updateItem } = useFieldArray({
     control: form.control,
     name: "items",
   });
@@ -251,8 +276,8 @@ export function InvoiceEditor() {
             totalPrice: (item.quantity || 0) * (item.unitPrice || 0),
         })) as InvoiceItem[];
         
-        const currentTaxRate = values.taxRate ?? TAX_RATE;
-        const currentDiscountAmount = values.discountAmount || 0;
+        const currentTaxRate = values.isDebtPayment || values.isCreditDeposit ? 0 : (values.taxRate ?? TAX_RATE);
+        const currentDiscountAmount = values.isDebtPayment || values.isCreditDeposit ? 0 : (values.discountAmount || 0);
         const { subTotal, discountAmount, taxAmount, totalAmount } = calculateTotals(currentItems, currentTaxRate, currentDiscountAmount);
         const { amountPaid, amountDue } = calculatePaymentSummary(values.paymentMethods || [], totalAmount);
 
@@ -276,10 +301,11 @@ export function InvoiceEditor() {
             notes: values.notes,
             type: 'sale', 
             isDebtPayment: !!values.isDebtPayment,
+            isCreditDeposit: !!values.isCreditDeposit,
         }));
     };
     
-    const debouncedUpdatePreview = debounce(updatePreview, 300); // 300ms delay
+    const debouncedUpdatePreview = debounce(updatePreview, 300);
 
     const subscription = form.watch((values) => {
         debouncedUpdatePreview(values as InvoiceFormData);
@@ -291,7 +317,7 @@ export function InvoiceEditor() {
 
 
   const handleRifSearch = async () => {
-    if (isDebtPaymentMode) return; 
+    if (editorMode !== 'normal') return; 
     if (!customerRifInput.trim()) {
       setCustomerSearchMessage("Ingrese un RIF/Cédula para buscar.");
       setShowNewCustomerFields(false);
@@ -336,7 +362,10 @@ export function InvoiceEditor() {
   };
   
   const handleCustomerSelectFromDropdown = (customerId: string) => {
-    if (isDebtPaymentMode) return;
+    if (editorMode !== 'normal') {
+        toast({title: "Modo especial activo", description: "Cancele el modo especial actual para cambiar de cliente.", variant: "destructive"});
+        return;
+    }
     setSelectedCustomerIdForDropdown(customerId);
     const customer = customers.find((c) => c.id === customerId);
     if (customer) {
@@ -355,13 +384,31 @@ export function InvoiceEditor() {
       setCustomerSearchMessage("Ingrese los datos para un nuevo cliente o busque por RIF.");
     }
   };
+
+  const handleEnterDebtPaymentMode = () => {
+    const customer = form.getValues("customerDetails");
+    if (customer && customer.id && (customer.outstandingBalance ?? 0) > 0) {
+      resetFormAndState({ mode: 'debtPayment', customerId: customer.id, amount: customer.outstandingBalance });
+    } else {
+      toast({ variant: "destructive", title: "Sin Deuda Pendiente", description: "El cliente seleccionado no tiene deuda pendiente o no hay cliente seleccionado." });
+    }
+  };
+
+  const handleEnterCreditDepositMode = () => {
+    const customer = form.getValues("customerDetails");
+    if (customer && customer.id) {
+      resetFormAndState({ mode: 'creditDeposit', customerId: customer.id });
+    } else {
+      toast({ variant: "destructive", title: "Cliente no seleccionado", description: "Por favor, seleccione o busque un cliente primero." });
+    }
+  };
   
   function onSubmit(data: InvoiceFormData) {
     let customerToSaveOnInvoice = data.customerDetails;
     let customerWasModified = false;
     let newCustomerJustAdded: CustomerDetails | null = null;
 
-    if (showNewCustomerFields && !data.customerDetails.id && !isDebtPaymentMode) { 
+    if (showNewCustomerFields && !data.customerDetails.id && editorMode === 'normal') { 
       if (data.customerDetails.name && data.customerDetails.rif && data.customerDetails.address) {
         const newCustomer: CustomerDetails = {
           ...data.customerDetails,
@@ -392,8 +439,10 @@ export function InvoiceEditor() {
       ...item,
       totalPrice: item.quantity * item.unitPrice,
     }));
-    const currentDiscountAmount = data.discountAmount || 0;
-    const currentTaxRate = isDebtPaymentMode ? 0 : data.taxRate; 
+
+    const currentTaxRate = data.isDebtPayment || data.isCreditDeposit ? 0 : (data.taxRate ?? TAX_RATE);
+    const currentDiscountAmount = data.isDebtPayment || data.isCreditDeposit ? 0 : (data.discountAmount || 0);
+    
     const { subTotal, discountAmount, taxAmount, totalAmount } = calculateTotals(finalItems, currentTaxRate, currentDiscountAmount);
     const { amountPaid, amountDue } = calculatePaymentSummary(data.paymentMethods, totalAmount);
 
@@ -402,7 +451,8 @@ export function InvoiceEditor() {
       invoiceNumber: data.invoiceNumber,
       date: data.date.toISOString(),
       type: 'sale', 
-      isDebtPayment: isDebtPaymentMode,
+      isDebtPayment: editorMode === 'debtPayment',
+      isCreditDeposit: editorMode === 'creditDeposit',
       companyDetails: companyDetails || defaultCompany,
       customerDetails: customerToSaveOnInvoice, 
       cashierNumber: data.cashierNumber,
@@ -421,7 +471,6 @@ export function InvoiceEditor() {
     };
     
     setSavedInvoices(prevInvoices => [...prevInvoices, fullInvoiceData]);
-    // setLiveInvoicePreview(fullInvoiceData); // Preview is already live
     
     let currentCustomersList = [...customers];
     if (customerWasModified && newCustomerJustAdded) { 
@@ -434,27 +483,29 @@ export function InvoiceEditor() {
         StoredCustomer.outstandingBalance = StoredCustomer.outstandingBalance || 0;
         StoredCustomer.creditBalance = StoredCustomer.creditBalance || 0;
 
-        if (isDebtPaymentMode) {
+        if (editorMode === 'debtPayment') {
             StoredCustomer.outstandingBalance = Math.max(0, StoredCustomer.outstandingBalance - amountPaid);
-        } else { 
+        } else if (editorMode === 'creditDeposit') {
+            StoredCustomer.creditBalance += amountPaid;
+        } else { // Normal invoice
             if (amountDue > 0) {
                 StoredCustomer.outstandingBalance += amountDue;
-            } else if (amountDue < 0) {
+            } else if (amountDue < 0) { // Overpayment in normal invoice
                 StoredCustomer.creditBalance += Math.abs(amountDue);
             }
         }
         currentCustomersList[customerIndex] = StoredCustomer;
         setCustomers(currentCustomersList);
     } else if (!customerWasModified && customerToSaveOnInvoice.id) {
-        // This case handles if an existing customer was selected, and their balance needs update
-        // but they weren't part of `newCustomerJustAdded`
         const existingCustomerIndexGlobal = customers.findIndex(c => c.id === customerToSaveOnInvoice.id);
         if(existingCustomerIndexGlobal !== -1) {
             const StoredCustomer = {...customers[existingCustomerIndexGlobal]};
             StoredCustomer.outstandingBalance = StoredCustomer.outstandingBalance || 0;
             StoredCustomer.creditBalance = StoredCustomer.creditBalance || 0;
-            if (isDebtPaymentMode) {
+            if (editorMode === 'debtPayment') {
                 StoredCustomer.outstandingBalance = Math.max(0, StoredCustomer.outstandingBalance - amountPaid);
+            } else if (editorMode === 'creditDeposit') {
+                 StoredCustomer.creditBalance += amountPaid;
             } else {
                 if (amountDue > 0) StoredCustomer.outstandingBalance += amountDue;
                 else if (amountDue < 0) StoredCustomer.creditBalance += Math.abs(amountDue);
@@ -465,9 +516,13 @@ export function InvoiceEditor() {
         }
     }
     
+    let toastTitle = "Factura Guardada";
+    if (editorMode === 'debtPayment') toastTitle = "Abono a Deuda Registrado";
+    if (editorMode === 'creditDeposit') toastTitle = "Depósito a Cuenta Registrado";
+
     toast({
-      title: isDebtPaymentMode ? "Abono Registrado" : "Factura Guardada",
-      description: `El documento Nro. ${data.invoiceNumber} ha sido ${isDebtPaymentMode ? 'registrado como abono y' : ''} guardado.`,
+      title: toastTitle,
+      description: `El documento Nro. ${data.invoiceNumber} ha sido guardado.`,
        action: (
         <Button variant="outline" size="sm" onClick={() => router.push(`/invoices/${fullInvoiceData.id}`)}>
           Ver Documento <ArrowRight className="ml-2 h-4 w-4" />
@@ -475,27 +530,27 @@ export function InvoiceEditor() {
       ),
     });
     
-    // router.replace('/invoice/new', { shallow: true }); // Attempt to clear query params more gently
-    // For full reset and param clearing:
-    const currentPath = router.pathname; // This is not available in App router, use usePathname
-    // router.push(currentPath, undefined, { shallow: true }); // Needs correct usage for App Router
-    // A more reliable way to reset for new invoice without params affecting:
-    router.replace('/invoice/new'); 
-    // This will trigger the useEffect for searchParams again, which will call resetFormAndState without debt params
-    // If router.replace immediately is an issue, then direct resetFormAndState() without params is needed.
-    resetFormAndState(); // Reset for a completely new invoice
+    resetFormAndState({ mode: 'normal' });
   }
 
   const previewCompanyDetails = companyDetails;
+  
+  const getEditorTitle = () => {
+    if (editorMode === 'debtPayment') return "Registrar Abono a Deuda";
+    if (editorMode === 'creditDeposit') return "Registrar Depósito a Cuenta Cliente";
+    return "Crear Nueva Factura";
+  };
 
   if (!isClient) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-muted-foreground">
         <FileText className="h-16 w-16 mb-4 animate-pulse text-primary" />
-        <p className="text-xl font-semibold">Cargando editor de facturas...</p>
+        <p className="text-xl font-semibold">Cargando editor...</p>
       </div>
     );
   }
+
+  const currentCustomerForActions = form.getValues("customerDetails");
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
@@ -505,7 +560,7 @@ export function InvoiceEditor() {
             <CardHeader>
               <CardTitle className="text-xl flex items-center text-primary">
                 <FileText className="mr-2 h-5 w-5" />
-                {isDebtPaymentMode ? "Registrar Abono a Deuda" : "Detalles de la Factura"}
+                {getEditorTitle()}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -607,11 +662,11 @@ export function InvoiceEditor() {
                       onChange={(e) => setCustomerRifInput(e.target.value)}
                       onBlur={handleRifSearch}
                       onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleRifSearch(); }}}
-                      disabled={isDebtPaymentMode}
+                      disabled={editorMode !== 'normal'}
                     />
                   </FormControl>
                 </FormItem>
-                <Button type="button" onClick={handleRifSearch} disabled={isSearchingCustomer || isDebtPaymentMode} className="w-full sm:w-auto">
+                <Button type="button" onClick={handleRifSearch} disabled={isSearchingCustomer || editorMode !== 'normal'} className="w-full sm:w-auto">
                   <Search className="mr-2 h-4 w-4" /> {isSearchingCustomer ? "Buscando..." : "Buscar"}
                 </Button>
               </div>
@@ -622,35 +677,35 @@ export function InvoiceEditor() {
                 <FormField control={form.control} name="customerDetails.rif" render={({ field }) => (
                     <FormItem>
                         <FormLabel>RIF/CI (verificado/ingresado)</FormLabel>
-                        <FormControl><Input {...field} readOnly={isDebtPaymentMode || (!showNewCustomerFields && !!form.getValues("customerDetails.id"))} placeholder="RIF del cliente" /></FormControl>
+                        <FormControl><Input {...field} readOnly={editorMode !== 'normal' || (!showNewCustomerFields && !!form.getValues("customerDetails.id"))} placeholder="RIF del cliente" /></FormControl>
                         <FormMessage />
                     </FormItem>
                 )} />
                 <FormField control={form.control} name="customerDetails.name" render={({ field }) => (
                     <FormItem>
                         <FormLabel>Nombre/Razón Social</FormLabel>
-                        <FormControl><Input {...field} placeholder="Nombre del cliente" readOnly={isDebtPaymentMode || (!showNewCustomerFields && !!form.getValues("customerDetails.id") && !isSearchingCustomer && !selectedCustomerIdForDropdown)} /></FormControl>
+                        <FormControl><Input {...field} placeholder="Nombre del cliente" readOnly={editorMode !== 'normal' || (!showNewCustomerFields && !!form.getValues("customerDetails.id") && !isSearchingCustomer && !selectedCustomerIdForDropdown)} /></FormControl>
                         <FormMessage />
                     </FormItem>
                 )} />
                 <FormField control={form.control} name="customerDetails.address" render={({ field }) => (
                     <FormItem>
                         <FormLabel>Dirección Fiscal</FormLabel>
-                        <FormControl><Textarea {...field} placeholder="Dirección del cliente" readOnly={isDebtPaymentMode || (!showNewCustomerFields && !!form.getValues("customerDetails.id") && !isSearchingCustomer && !selectedCustomerIdForDropdown)} /></FormControl>
+                        <FormControl><Textarea {...field} placeholder="Dirección del cliente" readOnly={editorMode !== 'normal' || (!showNewCustomerFields && !!form.getValues("customerDetails.id") && !isSearchingCustomer && !selectedCustomerIdForDropdown)} /></FormControl>
                         <FormMessage />
                     </FormItem>
                 )} />
                 <FormField control={form.control} name="customerDetails.phone" render={({ field }) => (
                     <FormItem>
                         <FormLabel>Teléfono (Opcional)</FormLabel>
-                        <FormControl><Input {...field} placeholder="Teléfono del cliente" readOnly={isDebtPaymentMode || (!showNewCustomerFields && !!form.getValues("customerDetails.id") && !isSearchingCustomer && !selectedCustomerIdForDropdown)} /></FormControl>
+                        <FormControl><Input {...field} placeholder="Teléfono del cliente" readOnly={editorMode !== 'normal' || (!showNewCustomerFields && !!form.getValues("customerDetails.id") && !isSearchingCustomer && !selectedCustomerIdForDropdown)} /></FormControl>
                         <FormMessage />
                     </FormItem>
                 )} />
                 <FormField control={form.control} name="customerDetails.email" render={({ field }) => (
                     <FormItem>
                         <FormLabel>Email (Opcional)</FormLabel>
-                        <FormControl><Input {...field} type="email" placeholder="Email del cliente" readOnly={isDebtPaymentMode || (!showNewCustomerFields && !!form.getValues("customerDetails.id") && !isSearchingCustomer && !selectedCustomerIdForDropdown)} /></FormControl>
+                        <FormControl><Input {...field} type="email" placeholder="Email del cliente" readOnly={editorMode !== 'normal' || (!showNewCustomerFields && !!form.getValues("customerDetails.id") && !isSearchingCustomer && !selectedCustomerIdForDropdown)} /></FormControl>
                         <FormMessage />
                     </FormItem>
                 )} />
@@ -658,7 +713,7 @@ export function InvoiceEditor() {
 
               <FormItem className="mt-4">
                 <FormLabel>O seleccionar de la lista:</FormLabel>
-                <Select onValueChange={handleCustomerSelectFromDropdown} value={selectedCustomerIdForDropdown || ""} disabled={isDebtPaymentMode}>
+                <Select onValueChange={handleCustomerSelectFromDropdown} value={selectedCustomerIdForDropdown || ""} disabled={editorMode !== 'normal'}>
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccionar cliente existente" />
@@ -674,6 +729,27 @@ export function InvoiceEditor() {
                 </Select>
                  <FormMessage>{form.formState.errors.customerDetails && typeof form.formState.errors.customerDetails !== 'string' && (form.formState.errors.customerDetails as any)?.message}</FormMessage>
               </FormItem>
+
+              {editorMode === 'normal' && currentCustomerForActions?.id && (
+                <div className="pt-4 mt-4 border-t space-y-2 sm:space-y-0 sm:flex sm:gap-2">
+                  {(currentCustomerForActions.outstandingBalance ?? 0) > 0 && (
+                     <Button type="button" variant="outline" onClick={handleEnterDebtPaymentMode} className="w-full sm:w-auto">
+                        <HandCoins className="mr-2 h-4 w-4" /> Cobrar Deuda Pendiente ({CURRENCY_SYMBOL}{(currentCustomerForActions.outstandingBalance ?? 0).toFixed(2)})
+                    </Button>
+                  )}
+                   <Button type="button" variant="outline" onClick={handleEnterCreditDepositMode} className="w-full sm:w-auto">
+                        <PiggyBank className="mr-2 h-4 w-4" /> Registrar Abono a Cuenta
+                    </Button>
+                </div>
+              )}
+               {editorMode !== 'normal' && (
+                 <div className="pt-4 mt-4 border-t">
+                    <Button type="button" variant="outline" onClick={() => resetFormAndState({mode: 'normal'})} className="w-full">
+                        <Ban className="mr-2 h-4 w-4" /> Cancelar Modo Especial / Nueva Factura
+                    </Button>
+                 </div>
+               )}
+
             </CardContent>
           </Card>
 
@@ -690,7 +766,7 @@ export function InvoiceEditor() {
                     render={({ field: f }) => (
                       <FormItem>
                         <FormLabel>Descripción</FormLabel>
-                        <FormControl><Input {...f} placeholder="Artículo o Servicio" readOnly={isDebtPaymentMode} /></FormControl>
+                        <FormControl><Input {...f} placeholder="Artículo o Servicio" readOnly={editorMode !== 'normal'} /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -702,7 +778,7 @@ export function InvoiceEditor() {
                       <FormItem>
                         <FormLabel>Cantidad</FormLabel>
                         <FormControl><Input {...f} type="number" step="0.01" placeholder="1" 
-                         onChange={e => f.onChange(parseFloat(e.target.value) || 0)} readOnly={isDebtPaymentMode} /></FormControl>
+                         onChange={e => f.onChange(parseFloat(e.target.value) || 0)} readOnly={editorMode !== 'normal'} /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -714,27 +790,29 @@ export function InvoiceEditor() {
                       <FormItem>
                         <FormLabel>Precio Unit. ({CURRENCY_SYMBOL})</FormLabel>
                         <FormControl><Input {...f} type="number" step="0.01" placeholder="0.00" 
-                         onChange={e => f.onChange(parseFloat(e.target.value) || 0)} readOnly={isDebtPaymentMode} /></FormControl>
+                         onChange={e => f.onChange(parseFloat(e.target.value) || 0)} readOnly={editorMode === 'debtPayment'} /></FormControl> {/* Editable for credit deposit */}
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                  <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(index)} className="text-destructive hover:text-destructive/80" disabled={isDebtPaymentMode || itemFields.length <= 1}>
+                  <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(index)} className="text-destructive hover:text-destructive/80" disabled={editorMode !== 'normal' || itemFields.length <= 1}>
                     <Trash2 className="h-5 w-5" />
                   </Button>
                 </div>
               ))}
               <FormMessage>{form.formState.errors.items && typeof form.formState.errors.items === 'object' && !Array.isArray(form.formState.errors.items) ? (form.formState.errors.items as any).message : null}</FormMessage>
                <FormMessage>{form.formState.errors.items && Array.isArray(form.formState.errors.items) && form.formState.errors.items.length ===0 && (form.formState.errors.items as any)?.message ? (form.formState.errors.items as any).message : null}</FormMessage>
-              {!isDebtPaymentMode && (
+              {editorMode === 'normal' && (
                 <Button type="button" variant="outline" onClick={() => appendItem({ id: uuidv4(), description: "", quantity: 1, unitPrice: 0 })}>
                   <PlusCircle className="mr-2 h-4 w-4" /> Añadir Artículo
                 </Button>
               )}
-              {isDebtPaymentMode && (
+              {editorMode !== 'normal' && (
                 <div className="flex items-center p-3 rounded-md bg-accent/10 text-accent-foreground border border-accent/30">
                   <Info className="h-5 w-5 mr-2" />
-                  <p className="text-sm">Está registrando un abono a una deuda. No se pueden añadir más artículos.</p>
+                  <p className="text-sm">
+                    {editorMode === 'debtPayment' ? "Está registrando un abono a una deuda. No se pueden añadir más artículos." : "Está registrando un depósito a cuenta. Ingrese el monto en 'Precio Unit.'"}
+                  </p>
                 </div>
               )}
             </CardContent>
@@ -821,7 +899,8 @@ export function InvoiceEditor() {
                               Monto de Descuento ({CURRENCY_SYMBOL}) (Opcional)
                             </FormLabel>
                             <FormControl><Input {...field} type="number" step="0.01" placeholder="0.00" 
-                             onChange={e => field.onChange(parseFloat(e.target.value) || 0)} disabled={isDebtPaymentMode} /></FormControl>
+                             onChange={e => field.onChange(parseFloat(e.target.value) || 0)} disabled={editorMode !== 'normal'} /></FormControl>
+                             {editorMode !== 'normal' && <p className="text-xs text-muted-foreground mt-1">Los descuentos no aplican en este modo.</p>}
                             <FormMessage />
                         </FormItem>
                     )}
@@ -833,8 +912,8 @@ export function InvoiceEditor() {
                         <FormItem>
                             <FormLabel>Tasa de IVA (ej. 0.16 para 16%)</FormLabel>
                             <FormControl><Input {...field} type="number" step="0.01" placeholder="0.16" 
-                             onChange={e => field.onChange(parseFloat(e.target.value) || 0)} readOnly={isDebtPaymentMode} /></FormControl>
-                             {isDebtPaymentMode && <p className="text-xs text-muted-foreground mt-1">El IVA no aplica a pagos de deuda.</p>}
+                             onChange={e => field.onChange(parseFloat(e.target.value) || 0)} readOnly={editorMode !== 'normal'} /></FormControl>
+                             {editorMode !== 'normal' && <p className="text-xs text-muted-foreground mt-1">El IVA no aplica en este modo.</p>}
                             <FormMessage />
                         </FormItem>
                     )}
@@ -865,16 +944,10 @@ export function InvoiceEditor() {
              <CardFooter className="flex-col items-stretch gap-3">
                 <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
                     <Save className="mr-2 h-4 w-4" /> 
-                    {isDebtPaymentMode ? "Guardar Abono" : "Guardar y Generar Factura"}
+                    {editorMode === 'debtPayment' && "Guardar Abono a Deuda"}
+                    {editorMode === 'creditDeposit' && "Guardar Depósito a Cuenta"}
+                    {editorMode === 'normal' && "Guardar y Generar Factura"}
                 </Button>
-                {isDebtPaymentMode && (
-                    <Button type="button" variant="outline" onClick={() => {
-                        resetFormAndState(); // Resets to a normal invoice state
-                        // router.replace('/invoice/new', undefined); // Clear query params if any were present
-                    }}>
-                        <Ban className="mr-2 h-4 w-4" /> Cancelar Modo Abono de Deuda
-                    </Button>
-                )}
             </CardFooter>
           </Card>
         </form>
@@ -885,7 +958,7 @@ export function InvoiceEditor() {
           <CardHeader>
             <CardTitle className="text-xl flex items-center text-primary">
               <Info className="mr-2 h-5 w-5" />
-              Previsualización de {isDebtPaymentMode ? "Abono" : "Factura"}
+              Previsualización de {editorMode === 'debtPayment' ? "Abono" : editorMode === 'creditDeposit' ? "Depósito" : "Factura"}
             </CardTitle>
             <CardDescription>Así se verá su documento. Use el botón de abajo para imprimir.</CardDescription>
           </CardHeader>
