@@ -10,7 +10,7 @@ import { v4 as uuidv4 } from "uuid";
 import useLocalStorage from "@/hooks/use-local-storage";
 import type { Invoice, CompanyDetails, CustomerDetails, InvoiceItem, PaymentDetails } from "@/lib/types";
 import { DEFAULT_COMPANY_ID } from "@/lib/types";
-import { invoiceFormSchema } from "@/lib/schemas"; // Import the main schema
+import { invoiceFormSchema } from "@/lib/schemas"; 
 import { CURRENCY_SYMBOL, DEFAULT_THANK_YOU_MESSAGE, TAX_RATE } from "@/lib/constants";
 
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { InvoicePreview } from "./invoice-preview";
 import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, Trash2, Users, FileText, DollarSign, Settings, Receipt, CalendarDays, Info, Save, Percent } from "lucide-react";
+import { PlusCircle, Trash2, Users, FileText, DollarSign, Settings, Receipt, CalendarDays, Info, Save, Percent, Search } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Form, FormField, FormItem, FormControl, FormLabel, FormMessage } from "@/components/ui/form";
@@ -31,19 +31,22 @@ import { es } from "date-fns/locale";
 type InvoiceFormData = z.infer<typeof invoiceFormSchema>;
 
 const defaultCompany: CompanyDetails = { id: DEFAULT_COMPANY_ID, name: "", rif: "", address: "" };
+const defaultCustomer: CustomerDetails = { id: "", name: "", rif: "", address: "", phone: "", email: "" };
 
 export function InvoiceEditor() {
   const [companyDetails] = useLocalStorage<CompanyDetails>("companyDetails", defaultCompany);
-  const [customers] = useLocalStorage<CustomerDetails[]>("customers", []);
+  const [customers, setCustomers] = useLocalStorage<CustomerDetails[]>("customers", []);
   const [savedInvoices, setSavedInvoices] = useLocalStorage<Invoice[]>("invoices", []);
   const { toast } = useToast();
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string | undefined>(undefined);
   
   const [isClient, setIsClient] = useState(false);
 
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
+  const [customerRifInput, setCustomerRifInput] = useState("");
+  const [isSearchingCustomer, setIsSearchingCustomer] = useState(false);
+  const [customerSearchMessage, setCustomerSearchMessage] = useState<string | null>(null);
+  const [showNewCustomerFields, setShowNewCustomerFields] = useState(false);
+  const [selectedCustomerIdForDropdown, setSelectedCustomerIdForDropdown] = useState<string | undefined>(undefined);
+
 
   const [liveInvoicePreview, setLiveInvoicePreview] = useState<Partial<Invoice>>({
     items: [],
@@ -56,6 +59,7 @@ export function InvoiceEditor() {
     discountAmount: 0,
     taxRate: TAX_RATE,
     type: 'sale',
+    customerDetails: defaultCustomer,
   });
 
   const form = useForm<InvoiceFormData>({
@@ -65,7 +69,7 @@ export function InvoiceEditor() {
       date: undefined, 
       cashierNumber: "",
       salesperson: "",
-      customerDetails: { name: "", rif: "", address: "" },
+      customerDetails: defaultCustomer,
       items: [{ id: uuidv4(), description: "", quantity: 1, unitPrice: 0 }],
       paymentMethods: [{ method: "Efectivo", amount: 0, reference: "" }],
       thankYouMessage: DEFAULT_THANK_YOU_MESSAGE,
@@ -82,9 +86,9 @@ export function InvoiceEditor() {
       const initialInvoiceNumber = `FACT-${Date.now().toString().slice(-6)}`;
       const initialDate = new Date();
 
-      form.setValue("invoiceNumber", initialInvoiceNumber, { shouldDirty: false, shouldValidate: false });
-      form.setValue("date", initialDate, { shouldDirty: false, shouldValidate: false });
-      form.setValue("type", "sale", { shouldDirty: false, shouldValidate: false });
+      form.setValue("invoiceNumber", initialInvoiceNumber, { shouldDirty: true, shouldValidate: false });
+      form.setValue("date", initialDate, { shouldDirty: true, shouldValidate: false });
+      form.setValue("type", "sale", { shouldDirty: true, shouldValidate: false });
       
       setLiveInvoicePreview(prev => ({
         ...prev,
@@ -154,7 +158,7 @@ export function InvoiceEditor() {
         amountDue,
         thankYouMessage: values.thankYouMessage || DEFAULT_THANK_YOU_MESSAGE,
         notes: values.notes,
-        type: 'sale', // Invoices created here are always sales
+        type: 'sale', 
       }));
     });
     return () => subscription.unsubscribe();
@@ -182,7 +186,7 @@ export function InvoiceEditor() {
             date: values.date ? values.date.toISOString() : (prev.date || new Date(0).toISOString()),
             cashierNumber: values.cashierNumber,
             salesperson: values.salesperson,
-            customerDetails: values.customerDetails as CustomerDetails,
+            customerDetails: values.customerDetails as CustomerDetails || defaultCustomer,
             items: currentItems, 
             paymentMethods: payments as PaymentDetails[],
             subTotal, discountAmount, taxRate: currentTaxRate, taxAmount, totalAmount, amountPaid, amountDue,
@@ -194,17 +198,93 @@ export function InvoiceEditor() {
   }, [isClient, form, calculateTotals, calculatePaymentSummary, companyDetails, customers]); 
 
 
-  const handleCustomerSelect = (customerId: string) => {
-    setSelectedCustomerId(customerId);
+  const handleRifSearch = async () => {
+    if (!customerRifInput.trim()) {
+      setCustomerSearchMessage("Ingrese un RIF/Cédula para buscar.");
+      setShowNewCustomerFields(false);
+      form.reset({ ...form.getValues(), customerDetails: defaultCustomer });
+      setSelectedCustomerIdForDropdown(undefined);
+      return;
+    }
+    setIsSearchingCustomer(true);
+    setCustomerSearchMessage("Buscando cliente...");
+  
+    const searchTerm = customerRifInput.toUpperCase().replace(/[^0-9JVEPGF]/gi, '');
+    
+    let foundCustomer = customers.find(c => 
+      c.rif.toUpperCase().replace(/[^0-9JVEPGF]/gi, '') === searchTerm
+    );
+  
+    if (!foundCustomer && /^[0-9]+$/.test(searchTerm)) { // If only numbers, try with V- and E-
+      const ciWithV = `V-${searchTerm}`;
+      const ciWithE = `E-${searchTerm}`;
+      foundCustomer = customers.find(c => c.rif.toUpperCase() === ciWithV || c.rif.toUpperCase() === ciWithE);
+    }
+  
+    if (foundCustomer) {
+      form.setValue("customerDetails", foundCustomer, { shouldValidate: true });
+      setCustomerSearchMessage(`Cliente encontrado: ${foundCustomer.name}`);
+      setShowNewCustomerFields(false);
+      setSelectedCustomerIdForDropdown(foundCustomer.id);
+    } else {
+      form.resetField("customerDetails.name");
+      form.resetField("customerDetails.address");
+      form.resetField("customerDetails.phone");
+      form.resetField("customerDetails.email");
+      form.setValue("customerDetails.id", ""); // Explicitly set ID to empty for new customer
+      form.setValue("customerDetails.rif", customerRifInput.toUpperCase()); // Set the searched RIF
+      setCustomerSearchMessage("Cliente no encontrado. Complete los datos para registrarlo.");
+      setShowNewCustomerFields(true);
+      setSelectedCustomerIdForDropdown(undefined);
+    }
+    setIsSearchingCustomer(false);
+  };
+  
+  const handleCustomerSelectFromDropdown = (customerId: string) => {
+    setSelectedCustomerIdForDropdown(customerId);
     const customer = customers.find((c) => c.id === customerId);
     if (customer) {
       form.setValue("customerDetails", customer, { shouldValidate: true });
+      setCustomerRifInput(customer.rif); 
+      setShowNewCustomerFields(false); 
+      setCustomerSearchMessage(`Cliente seleccionado: ${customer.name}`);
     } else {
-      form.setValue("customerDetails", { id: undefined, name: "", rif: "", address: "", phone: "", email: "" }, { shouldValidate: true });
+      // Should not happen if list is correct, but as a fallback, enable new customer entry
+      form.reset({ ...form.getValues(), customerDetails: defaultCustomer });
+      form.setValue("customerDetails.id","");
+      setCustomerRifInput("");
+      setShowNewCustomerFields(true);
+      setCustomerSearchMessage("Ingrese los datos para un nuevo cliente o busque por RIF.");
     }
   };
   
   function onSubmit(data: InvoiceFormData) {
+    let customerToSaveOnInvoice = data.customerDetails;
+
+    if (showNewCustomerFields && !data.customerDetails.id) {
+      if (data.customerDetails.name && data.customerDetails.rif && data.customerDetails.address) {
+        const newCustomer: CustomerDetails = {
+          ...data.customerDetails,
+          id: uuidv4(), 
+        };
+        setCustomers(prevCustomers => [...prevCustomers, newCustomer]);
+        customerToSaveOnInvoice = newCustomer; 
+        toast({ title: "Nuevo Cliente Registrado", description: `Cliente ${newCustomer.name} añadido al sistema.` });
+      } else {
+        toast({ variant: "destructive", title: "Datos Incompletos del Cliente", description: "Por favor, complete nombre, RIF y dirección para el nuevo cliente." });
+        form.setError("customerDetails.name", {type: "manual", message: "Nombre requerido"});
+        form.setError("customerDetails.address", {type: "manual", message: "Dirección requerida"});
+        return; 
+      }
+    }
+    
+    if (!customerToSaveOnInvoice || !customerToSaveOnInvoice.rif) {
+        toast({ variant: "destructive", title: "Cliente no especificado", description: "Por favor, busque o ingrese los datos del cliente."});
+        form.setError("customerDetails.rif", {type: "manual", message: "RIF/Cédula del cliente es requerido"});
+        return;
+    }
+
+
     const finalItems = data.items.map(item => ({
       ...item,
       totalPrice: item.quantity * item.unitPrice,
@@ -218,9 +298,9 @@ export function InvoiceEditor() {
       id: uuidv4(),
       invoiceNumber: data.invoiceNumber,
       date: data.date.toISOString(),
-      type: 'sale', // Invoices created from editor are always sales
+      type: 'sale', 
       companyDetails: companyDetails || defaultCompany,
-      customerDetails: data.customerDetails as CustomerDetails, 
+      customerDetails: customerToSaveOnInvoice, 
       cashierNumber: data.cashierNumber,
       salesperson: data.salesperson,
       items: finalItems,
@@ -252,7 +332,7 @@ export function InvoiceEditor() {
       date: newDate,
       cashierNumber: "",
       salesperson: "",
-      customerDetails: { name: "", rif: "", address: "" },
+      customerDetails: defaultCustomer,
       items: [{ id: uuidv4(), description: "", quantity: 1, unitPrice: 0 }],
       paymentMethods: [{ method: "Efectivo", amount: 0, reference: "" }],
       thankYouMessage: DEFAULT_THANK_YOU_MESSAGE,
@@ -262,7 +342,12 @@ export function InvoiceEditor() {
       type: 'sale',
       originalInvoiceId: undefined,
     });
-    setSelectedCustomerId(undefined); 
+    
+    setCustomerRifInput("");
+    setShowNewCustomerFields(false);
+    setCustomerSearchMessage(null);
+    setSelectedCustomerIdForDropdown(undefined);
+
      if(isClient) {
         setLiveInvoicePreview({
             items: [{ id: uuidv4(), description: "", quantity: 1, unitPrice: 0, totalPrice: 0}],
@@ -273,7 +358,7 @@ export function InvoiceEditor() {
             cashierNumber: "",
             salesperson: "",
             subTotal: 0, taxRate: TAX_RATE, taxAmount: 0, totalAmount: 0, amountPaid: 0, amountDue: 0, discountAmount: 0,
-            customerDetails: { name: "", rif: "", address: "" },
+            customerDetails: defaultCustomer,
             type: 'sale',
         });
      }
@@ -384,45 +469,83 @@ export function InvoiceEditor() {
               <CardTitle className="text-xl flex items-center text-primary"><Users className="mr-2 h-5 w-5" />Información del Cliente</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <FormField
-                control={form.control}
-                name="customerDetails.id"
-                render={({ field }) => (
-                  <FormItem>
-                  <FormLabel>Cliente</FormLabel>
-                  <Select onValueChange={handleCustomerSelect} value={selectedCustomerId || ""}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar cliente existente o ingresar nuevo" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="new_customer">--- Ingresar Nuevo Cliente ---</SelectItem>
-                      {customers.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name} ({c.rif})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage /> 
-                  </FormItem>
-                )}
-              />
+              <div className="flex flex-col sm:flex-row gap-2 items-end">
+                <FormItem className="flex-grow">
+                  <FormLabel htmlFor="customerRifInput">RIF/Cédula del Cliente</FormLabel>
+                  <FormControl>
+                    <Input
+                      id="customerRifInput"
+                      placeholder="Ingrese RIF/Cédula y presione Enter o Busque"
+                      value={customerRifInput}
+                      onChange={(e) => setCustomerRifInput(e.target.value)}
+                      onBlur={handleRifSearch}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleRifSearch(); }}}
+                    />
+                  </FormControl>
+                </FormItem>
+                <Button type="button" onClick={handleRifSearch} disabled={isSearchingCustomer} className="w-full sm:w-auto">
+                  <Search className="mr-2 h-4 w-4" /> {isSearchingCustomer ? "Buscando..." : "Buscar"}
+                </Button>
+              </div>
+
+              {customerSearchMessage && <p className={`text-sm mt-2 ${form.formState.errors.customerDetails ? 'text-destructive' : ''}`}>{customerSearchMessage}</p>}
               
-              {(selectedCustomerId === "new_customer" || !selectedCustomerId || customers.length === 0) && (
-                <div className="space-y-3 pt-3 border-t mt-3">
-                    <FormField control={form.control} name="customerDetails.name" render={({ field }) => (
-                        <FormItem><FormLabel>Nombre/Razón Social</FormLabel><FormControl><Input {...field} placeholder="Nombre del nuevo cliente" /></FormControl><FormMessage /></FormItem>
-                    )} />
-                    <FormField control={form.control} name="customerDetails.rif" render={({ field }) => (
-                        <FormItem><FormLabel>RIF/CI</FormLabel><FormControl><Input {...field} placeholder="RIF del nuevo cliente" /></FormControl><FormMessage /></FormItem>
-                    )} />
-                    <FormField control={form.control} name="customerDetails.address" render={({ field }) => (
-                        <FormItem><FormLabel>Dirección</FormLabel><FormControl><Textarea {...field} placeholder="Dirección del nuevo cliente" /></FormControl><FormMessage /></FormItem>
-                    )} />
-                </div>
-              )}
+              <div className="space-y-3 pt-3 border-t mt-3">
+                <FormField control={form.control} name="customerDetails.rif" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>RIF/CI (verificado/ingresado)</FormLabel>
+                        <FormControl><Input {...field} readOnly placeholder="RIF del cliente" /></FormControl>
+                        <FormMessage />
+                    </FormItem>
+                )} />
+                <FormField control={form.control} name="customerDetails.name" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Nombre/Razón Social</FormLabel>
+                        <FormControl><Input {...field} placeholder="Nombre del cliente" disabled={!showNewCustomerFields && !!form.getValues("customerDetails.id") && !isSearchingCustomer} /></FormControl>
+                        <FormMessage />
+                    </FormItem>
+                )} />
+                <FormField control={form.control} name="customerDetails.address" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Dirección Fiscal</FormLabel>
+                        <FormControl><Textarea {...field} placeholder="Dirección del cliente" disabled={!showNewCustomerFields && !!form.getValues("customerDetails.id") && !isSearchingCustomer} /></FormControl>
+                        <FormMessage />
+                    </FormItem>
+                )} />
+                <FormField control={form.control} name="customerDetails.phone" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Teléfono (Opcional)</FormLabel>
+                        <FormControl><Input {...field} placeholder="Teléfono del cliente" disabled={!showNewCustomerFields && !!form.getValues("customerDetails.id") && !isSearchingCustomer} /></FormControl>
+                        <FormMessage />
+                    </FormItem>
+                )} />
+                <FormField control={form.control} name="customerDetails.email" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Email (Opcional)</FormLabel>
+                        <FormControl><Input {...field} type="email" placeholder="Email del cliente" disabled={!showNewCustomerFields && !!form.getValues("customerDetails.id") && !isSearchingCustomer} /></FormControl>
+                        <FormMessage />
+                    </FormItem>
+                )} />
+              </div>
+
+              <FormItem className="mt-4">
+                <FormLabel>O seleccionar de la lista:</FormLabel>
+                <Select onValueChange={handleCustomerSelectFromDropdown} value={selectedCustomerIdForDropdown || ""}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar cliente existente" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {customers.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name} ({c.rif})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                 <FormMessage>{form.formState.errors.customerDetails && typeof form.formState.errors.customerDetails !== 'string' && form.formState.errors.customerDetails.message}</FormMessage>
+              </FormItem>
             </CardContent>
           </Card>
 
@@ -474,6 +597,7 @@ export function InvoiceEditor() {
                 </div>
               ))}
               <FormMessage>{form.formState.errors.items && typeof form.formState.errors.items === 'object' && !Array.isArray(form.formState.errors.items) ? (form.formState.errors.items as any).message : null}</FormMessage>
+               <FormMessage>{form.formState.errors.items && Array.isArray(form.formState.errors.items) && form.formState.errors.items.length ===0 && (form.formState.errors.items as any).message ? (form.formState.errors.items as any).message : null}</FormMessage>
               <Button type="button" variant="outline" onClick={() => appendItem({ id: uuidv4(), description: "", quantity: 1, unitPrice: 0 })}>
                 <PlusCircle className="mr-2 h-4 w-4" /> Añadir Artículo
               </Button>
@@ -622,3 +746,4 @@ export function InvoiceEditor() {
     </div>
   );
 }
+
