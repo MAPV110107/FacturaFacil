@@ -268,6 +268,7 @@ export default function ReturnsPage() {
                   <SelectContent>
                     <SelectItem value="Efectivo">Efectivo</SelectItem>
                     <SelectItem value="Transferencia Bancaria">Transferencia Bancaria</SelectItem>
+                    <SelectItem value="Pago Móvil">Pago Móvil</SelectItem>
                     <SelectItem value="Reverso Tarjeta Débito/Crédito">Reverso Tarjeta Débito/Crédito</SelectItem>
                     <SelectItem value="Crédito a Cuenta Cliente">Crédito a Cuenta Cliente</SelectItem>
                     <SelectItem value="Otro">Otro</SelectItem>
