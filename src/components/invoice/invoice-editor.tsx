@@ -4,44 +4,29 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import type { z } from "zod";
 import { v4 as uuidv4 } from "uuid";
 
 import useLocalStorage from "@/hooks/use-local-storage";
 import type { Invoice, CompanyDetails, CustomerDetails, InvoiceItem, PaymentDetails } from "@/lib/types";
 import { DEFAULT_COMPANY_ID } from "@/lib/types";
-import { invoiceItemSchema, paymentDetailsSchema, customerDetailsSchema as partialCustomerSchema } from "@/lib/schemas";
+import { invoiceFormSchema } from "@/lib/schemas"; // Import the main schema
 import { CURRENCY_SYMBOL, DEFAULT_THANK_YOU_MESSAGE, TAX_RATE } from "@/lib/constants";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { InvoicePreview } from "./invoice-preview";
 import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, Trash2, Users, FileText, DollarSign, Settings, Receipt, CalendarDays, Info, Save } from "lucide-react";
+import { PlusCircle, Trash2, Users, FileText, DollarSign, Settings, Receipt, CalendarDays, Info, Save, Percent } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Form, FormField, FormItem, FormControl, FormLabel, FormMessage } from "@/components/ui/form";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-
-const invoiceFormSchema = z.object({
-  invoiceNumber: z.string().min(1, "El número de factura es requerido."),
-  date: z.date({ required_error: "La fecha es requerida."}),
-  customerDetails: partialCustomerSchema.refine(data => data.id || (data.name && data.rif && data.address), {
-    message: "Debe seleccionar un cliente existente o ingresar los datos de un nuevo cliente.",
-    path: ["name"], 
-  }),
-  items: z.array(invoiceItemSchema).min(1, "Debe añadir al menos un artículo a la factura."),
-  paymentMethods: z.array(paymentDetailsSchema).min(1, "Debe añadir al menos un método de pago."),
-  thankYouMessage: z.string().optional(),
-  notes: z.string().optional(),
-  taxRate: z.number().min(0).max(1).default(TAX_RATE),
-});
 
 type InvoiceFormData = z.infer<typeof invoiceFormSchema>;
 
@@ -64,21 +49,28 @@ export function InvoiceEditor() {
     items: [],
     paymentMethods: [],
     thankYouMessage: DEFAULT_THANK_YOU_MESSAGE,
-    date: new Date(0).toISOString(), // SSR-safe: Use a fixed epoch date
-    invoiceNumber: "" // SSR-safe: Initialize as empty
+    date: new Date(0).toISOString(), 
+    invoiceNumber: "",
+    cashierNumber: "",
+    salesperson: "",
+    discountAmount: 0,
+    taxRate: TAX_RATE,
   });
 
   const form = useForm<InvoiceFormData>({
     resolver: zodResolver(invoiceFormSchema),
     defaultValues: {
-      invoiceNumber: "", // SSR-safe
-      date: undefined, // SSR-safe, Calendar will show placeholder
+      invoiceNumber: "", 
+      date: undefined, 
+      cashierNumber: "",
+      salesperson: "",
       customerDetails: { name: "", rif: "", address: "" },
       items: [{ id: uuidv4(), description: "", quantity: 1, unitPrice: 0 }],
       paymentMethods: [{ method: "Efectivo", amount: 0, reference: "" }],
       thankYouMessage: DEFAULT_THANK_YOU_MESSAGE,
       notes: "",
       taxRate: TAX_RATE,
+      discountAmount: 0,
     },
   });
 
@@ -90,7 +82,6 @@ export function InvoiceEditor() {
       form.setValue("invoiceNumber", initialInvoiceNumber, { shouldDirty: false, shouldValidate: false });
       form.setValue("date", initialDate, { shouldDirty: false, shouldValidate: false });
       
-      // Update preview state immediately after setting form values for client
       setLiveInvoicePreview(prev => ({
         ...prev,
         invoiceNumber: initialInvoiceNumber,
@@ -110,11 +101,14 @@ export function InvoiceEditor() {
     name: "paymentMethods",
   });
 
-  const calculateTotals = useCallback((items: InvoiceItem[], taxRate: number) => {
+  const calculateTotals = useCallback((items: InvoiceItem[], taxRateValue: number, discountAmountValue: number) => {
     const subTotal = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
-    const taxAmount = subTotal * taxRate;
-    const totalAmount = subTotal + taxAmount;
-    return { subTotal, taxAmount, totalAmount };
+    const actualDiscountAmount = discountAmountValue || 0;
+    const taxableAmount = subTotal - actualDiscountAmount;
+    const actualTaxRate = taxRateValue || 0;
+    const taxAmount = taxableAmount * actualTaxRate;
+    const totalAmount = taxableAmount + taxAmount;
+    return { subTotal, discountAmount: actualDiscountAmount, taxAmount, totalAmount };
   }, []);
   
   const calculatePaymentSummary = useCallback((payments: PaymentDetails[], totalAmount: number) => {
@@ -125,7 +119,6 @@ export function InvoiceEditor() {
 
   useEffect(() => {
     const subscription = form.watch((values, { name, type }) => {
-      // Ensure values are defined before processing
       const currentItems = (values.items || []).map(item => ({
         ...item,
         quantity: item.quantity || 0,
@@ -133,17 +126,23 @@ export function InvoiceEditor() {
         totalPrice: (item.quantity || 0) * (item.unitPrice || 0),
       })) as InvoiceItem[];
       
-      const { subTotal, taxAmount, totalAmount } = calculateTotals(currentItems, values.taxRate ?? TAX_RATE);
+      const currentTaxRate = values.taxRate ?? TAX_RATE;
+      const currentDiscountAmount = values.discountAmount || 0;
+      const { subTotal, discountAmount, taxAmount, totalAmount } = calculateTotals(currentItems, currentTaxRate, currentDiscountAmount);
       const { amountPaid, amountDue } = calculatePaymentSummary(values.paymentMethods || [], totalAmount);
 
       setLiveInvoicePreview(prev => ({
         ...prev,
         invoiceNumber: values.invoiceNumber,
         date: values.date ? values.date.toISOString() : (prev.date || new Date(0).toISOString()),
+        cashierNumber: values.cashierNumber,
+        salesperson: values.salesperson,
         customerDetails: values.customerDetails as CustomerDetails,
         items: currentItems,
         paymentMethods: values.paymentMethods as PaymentDetails[],
         subTotal,
+        discountAmount,
+        taxRate: currentTaxRate,
         taxAmount,
         totalAmount,
         amountPaid,
@@ -157,8 +156,6 @@ export function InvoiceEditor() {
 
 
    useEffect(() => {
-    // This effect ensures liveInvoicePreview is updated when form values (potentially from localStorage via selected customer) are ready.
-    // Run only on client after initial hydration and form setup.
     if (isClient) {
         const values = form.getValues();
         const currentItems = (values.items || []).map(item => ({
@@ -167,8 +164,9 @@ export function InvoiceEditor() {
             unitPrice: item.unitPrice || 0,
             totalPrice: (item.quantity || 0) * (item.unitPrice || 0),
         })) as InvoiceItem[];
-        const taxRate = values.taxRate ?? TAX_RATE;
-        const { subTotal, taxAmount, totalAmount } = calculateTotals(currentItems, taxRate);
+        const currentTaxRate = values.taxRate ?? TAX_RATE;
+        const currentDiscountAmount = values.discountAmount || 0;
+        const { subTotal, discountAmount, taxAmount, totalAmount } = calculateTotals(currentItems, currentTaxRate, currentDiscountAmount);
         const payments = values.paymentMethods || [];
         const {amountPaid, amountDue} = calculatePaymentSummary(payments, totalAmount);
 
@@ -176,15 +174,17 @@ export function InvoiceEditor() {
             ...prev, 
             invoiceNumber: values.invoiceNumber || prev.invoiceNumber,
             date: values.date ? values.date.toISOString() : (prev.date || new Date(0).toISOString()),
+            cashierNumber: values.cashierNumber,
+            salesperson: values.salesperson,
             customerDetails: values.customerDetails as CustomerDetails,
             items: currentItems, 
             paymentMethods: payments as PaymentDetails[],
-            subTotal, taxAmount, totalAmount, amountPaid, amountDue,
+            subTotal, discountAmount, taxRate: currentTaxRate, taxAmount, totalAmount, amountPaid, amountDue,
             thankYouMessage: values.thankYouMessage || DEFAULT_THANK_YOU_MESSAGE,
             notes: values.notes,
         }));
     }
-  }, [isClient, form, calculateTotals, calculatePaymentSummary, companyDetails, customers]); // Add relevant dependencies
+  }, [isClient, form, calculateTotals, calculatePaymentSummary, companyDetails, customers]); 
 
 
   const handleCustomerSelect = (customerId: string) => {
@@ -193,7 +193,6 @@ export function InvoiceEditor() {
     if (customer) {
       form.setValue("customerDetails", customer, { shouldValidate: true });
     } else {
-      // Reset to new customer input fields, keeping other form data
       form.setValue("customerDetails", { id: undefined, name: "", rif: "", address: "", phone: "", email: "" }, { shouldValidate: true });
     }
   };
@@ -203,18 +202,24 @@ export function InvoiceEditor() {
       ...item,
       totalPrice: item.quantity * item.unitPrice,
     }));
-    const { subTotal, taxAmount, totalAmount } = calculateTotals(finalItems, data.taxRate);
+    const currentDiscountAmount = data.discountAmount || 0;
+    const currentTaxRate = data.taxRate;
+    const { subTotal, discountAmount, taxAmount, totalAmount } = calculateTotals(finalItems, currentTaxRate, currentDiscountAmount);
     const { amountPaid, amountDue } = calculatePaymentSummary(data.paymentMethods, totalAmount);
 
     const fullInvoiceData: Invoice = {
       id: uuidv4(),
       invoiceNumber: data.invoiceNumber,
       date: data.date.toISOString(),
-      companyDetails: companyDetails || defaultCompany, // companyDetails from useLocalStorage
+      companyDetails: companyDetails || defaultCompany,
       customerDetails: data.customerDetails as CustomerDetails, 
+      cashierNumber: data.cashierNumber,
+      salesperson: data.salesperson,
       items: finalItems,
       paymentMethods: data.paymentMethods,
       subTotal,
+      discountAmount,
+      taxRate: currentTaxRate,
       taxAmount,
       totalAmount,
       amountPaid,
@@ -224,7 +229,6 @@ export function InvoiceEditor() {
     };
     
     setSavedInvoices(prevInvoices => [...prevInvoices, fullInvoiceData]);
-    // Set liveInvoicePreview to the saved invoice to ensure preview matches what was saved
     setLiveInvoicePreview(fullInvoiceData); 
     
     toast({
@@ -232,22 +236,23 @@ export function InvoiceEditor() {
       description: `La factura Nro. ${data.invoiceNumber} ha sido guardada en el historial y generada.`,
     });
 
-    // Reset form for next invoice, ensuring client-side values are re-initialized
     const newInvoiceNumber = isClient ? `FACT-${Date.now().toString().slice(-6)}` : "";
     const newDate = isClient ? new Date() : undefined;
 
     form.reset({
       invoiceNumber: newInvoiceNumber,
       date: newDate,
+      cashierNumber: "",
+      salesperson: "",
       customerDetails: { name: "", rif: "", address: "" },
       items: [{ id: uuidv4(), description: "", quantity: 1, unitPrice: 0 }],
       paymentMethods: [{ method: "Efectivo", amount: 0, reference: "" }],
       thankYouMessage: DEFAULT_THANK_YOU_MESSAGE,
       notes: "",
       taxRate: TAX_RATE,
+      discountAmount: 0,
     });
     setSelectedCustomerId(undefined); 
-    // also reset live preview for the new form
      if(isClient) {
         setLiveInvoicePreview({
             items: [{ id: uuidv4(), description: "", quantity: 1, unitPrice: 0, totalPrice: 0}],
@@ -255,19 +260,17 @@ export function InvoiceEditor() {
             thankYouMessage: DEFAULT_THANK_YOU_MESSAGE,
             date: newDate?.toISOString() || new Date(0).toISOString(),
             invoiceNumber: newInvoiceNumber,
-            subTotal: 0, taxAmount: 0, totalAmount: 0, amountPaid: 0, amountDue: 0,
+            cashierNumber: "",
+            salesperson: "",
+            subTotal: 0, taxRate: TAX_RATE, taxAmount: 0, totalAmount: 0, amountPaid: 0, amountDue: 0, discountAmount: 0,
             customerDetails: { name: "", rif: "", address: "" },
         });
      }
   }
 
-  // Determine company details for preview, ensuring it's SSR-safe initially.
-  // The updated useLocalStorage hook should handle this, so companyDetails is initialValue on SSR.
   const previewCompanyDetails = companyDetails;
 
-
   if (!isClient) {
-    // Render a loading state or minimal version for SSR / pre-hydration
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-muted-foreground">
         <FileText className="h-16 w-16 mb-4 animate-pulse text-primary" />
@@ -334,6 +337,34 @@ export function InvoiceEditor() {
                   )}
                 />
               </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="cashierNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel htmlFor="cashierNumber">Número de Caja (Opcional)</FormLabel>
+                      <FormControl>
+                        <Input id="cashierNumber" {...field} placeholder="Ej: 01" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="salesperson"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel htmlFor="salesperson">Vendedor (Opcional)</FormLabel>
+                      <FormControl>
+                        <Input id="salesperson" {...field} placeholder="Ej: Ana Pérez" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
             </CardContent>
           </Card>
 
@@ -344,7 +375,7 @@ export function InvoiceEditor() {
             <CardContent className="space-y-4">
               <FormField
                 control={form.control}
-                name="customerDetails.id" // Not directly used in schema but helps manage selection
+                name="customerDetails.id"
                 render={({ field }) => (
                   <FormItem>
                   <FormLabel>Cliente</FormLabel>
@@ -363,7 +394,7 @@ export function InvoiceEditor() {
                       ))}
                     </SelectContent>
                   </Select>
-                  <FormMessage /> {/* For general customer selection error if any */}
+                  <FormMessage /> 
                   </FormItem>
                 )}
               />
@@ -509,6 +540,21 @@ export function InvoiceEditor() {
                 <CardTitle className="text-xl flex items-center text-primary"><Settings className="mr-2 h-5 w-5" />Configuración Adicional</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+                 <FormField
+                    control={form.control}
+                    name="discountAmount"
+                    render={({ field }) => (
+                        <FormItem>
+                            <FormLabel className="flex items-center">
+                              <Percent className="mr-2 h-4 w-4 text-muted-foreground" />
+                              Monto de Descuento ({CURRENCY_SYMBOL}) (Opcional)
+                            </FormLabel>
+                            <FormControl><Input {...field} type="number" step="0.01" placeholder="0.00" 
+                             onChange={e => field.onChange(parseFloat(e.target.value) || 0)} /></FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
                 <FormField
                     control={form.control}
                     name="taxRate"
@@ -560,10 +606,8 @@ export function InvoiceEditor() {
             <CardDescription>Así se verá su factura. Use el botón de abajo para imprimir.</CardDescription>
           </CardHeader>
         </Card>
-        {/* Pass previewCompanyDetails which is hydration-safe */}
         <InvoicePreview invoice={liveInvoicePreview} companyDetails={previewCompanyDetails} className="print-receipt" />
       </div>
     </div>
   );
 }
-

@@ -1,3 +1,4 @@
+
 export interface CompanyDetails {
   id: string; // Typically a single instance, so 'default' or a fixed ID
   name: string;
@@ -38,12 +39,16 @@ export interface Invoice {
   companyDetails: CompanyDetails;
   customerDetails: CustomerDetails;
   items: InvoiceItem[];
-  subTotal: number;
-  taxAmount: number; // Could be 0 if not applicable or included in price
-  totalAmount: number;
+  subTotal: number; // Sum of item.totalPrice
+  discountAmount?: number; // Optional discount amount
+  taxRate: number; // Tax rate applied (e.g., 0.16 for 16%)
+  taxAmount: number; // Calculated on (subTotal - discountAmount) * taxRate
+  totalAmount: number; // (subTotal - discountAmount) + taxAmount
   amountPaid: number;
   amountDue: number;
   paymentMethods: PaymentDetails[];
+  cashierNumber?: string;
+  salesperson?: string;
   notes?: string;
   thankYouMessage: string;
 }

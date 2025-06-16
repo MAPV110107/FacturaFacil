@@ -1,3 +1,4 @@
+
 import { z } from "zod";
 
 export const companyDetailsSchema = z.object({
@@ -29,4 +30,22 @@ export const paymentDetailsSchema = z.object({
   method: z.string().min(1, { message: "El método de pago es requerido." }),
   amount: z.number().min(0.01, { message: "El monto debe ser mayor que 0." }),
   reference: z.string().optional(),
+});
+
+
+export const invoiceFormSchema = z.object({
+  invoiceNumber: z.string().min(1, "El número de factura es requerido."),
+  date: z.date({ required_error: "La fecha es requerida."}),
+  cashierNumber: z.string().optional(),
+  salesperson: z.string().optional(),
+  customerDetails: customerDetailsSchema.refine(data => data.id || (data.name && data.rif && data.address), {
+    message: "Debe seleccionar un cliente existente o ingresar los datos de un nuevo cliente.",
+    path: ["name"],
+  }),
+  items: z.array(invoiceItemSchema).min(1, "Debe añadir al menos un artículo a la factura."),
+  paymentMethods: z.array(paymentDetailsSchema).min(1, "Debe añadir al menos un método de pago."),
+  thankYouMessage: z.string().optional(),
+  notes: z.string().optional(),
+  taxRate: z.number().min(0).max(1).default(0.16), // Example: 0.16 for 16%
+  discountAmount: z.number().min(0, "El descuento no puede ser negativo.").optional(),
 });
