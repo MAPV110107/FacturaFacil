@@ -47,19 +47,24 @@ export function InvoiceEditor() {
   const [showNewCustomerFields, setShowNewCustomerFields] = useState(false);
   const [selectedCustomerIdForDropdown, setSelectedCustomerIdForDropdown] = useState<string | undefined>(undefined);
 
-
   const [liveInvoicePreview, setLiveInvoicePreview] = useState<Partial<Invoice>>({
-    items: [],
-    paymentMethods: [],
-    thankYouMessage: DEFAULT_THANK_YOU_MESSAGE,
-    date: new Date(0).toISOString(), 
     invoiceNumber: "",
+    date: new Date(0).toISOString(), 
     cashierNumber: "",
     salesperson: "",
+    customerDetails: { ...defaultCustomer },
+    items: [],
+    paymentMethods: [],
+    subTotal: 0,
     discountAmount: 0,
     taxRate: TAX_RATE,
+    taxAmount: 0,
+    totalAmount: 0,
+    amountPaid: 0,
+    amountDue: 0,
+    thankYouMessage: DEFAULT_THANK_YOU_MESSAGE,
+    notes: "",
     type: 'sale',
-    customerDetails: defaultCustomer,
   });
 
   const form = useForm<InvoiceFormData>({
@@ -67,35 +72,50 @@ export function InvoiceEditor() {
     defaultValues: {
       invoiceNumber: "", 
       date: undefined, 
+      type: 'sale',
+      originalInvoiceId: undefined,
       cashierNumber: "",
       salesperson: "",
-      customerDetails: defaultCustomer,
+      customerDetails: { ...defaultCustomer },
       items: [{ id: uuidv4(), description: "", quantity: 1, unitPrice: 0 }],
       paymentMethods: [{ method: "Efectivo", amount: 0, reference: "" }],
       thankYouMessage: DEFAULT_THANK_YOU_MESSAGE,
       notes: "",
       taxRate: TAX_RATE,
       discountAmount: 0,
-      type: 'sale',
-      originalInvoiceId: undefined,
     },
   });
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   useEffect(() => {
     if (isClient) {
       const initialInvoiceNumber = `FACT-${Date.now().toString().slice(-6)}`;
       const initialDate = new Date();
 
-      form.setValue("invoiceNumber", initialInvoiceNumber, { shouldDirty: true, shouldValidate: false });
-      form.setValue("date", initialDate, { shouldDirty: true, shouldValidate: false });
-      form.setValue("type", "sale", { shouldDirty: true, shouldValidate: false });
-      
-      setLiveInvoicePreview(prev => ({
-        ...prev,
+      form.reset({
         invoiceNumber: initialInvoiceNumber,
-        date: initialDate.toISOString(),
+        date: initialDate,
         type: 'sale',
-      }));
+        originalInvoiceId: undefined,
+        cashierNumber: "",
+        salesperson: "",
+        customerDetails: { ...defaultCustomer }, // Use a fresh copy
+        items: [{ id: uuidv4(), description: "", quantity: 1, unitPrice: 0 }],
+        paymentMethods: [{ method: "Efectivo", amount: 0, reference: "" }],
+        thankYouMessage: DEFAULT_THANK_YOU_MESSAGE,
+        notes: "",
+        taxRate: TAX_RATE,
+        discountAmount: 0,
+      });
+      
+      // Reset local state related to customer search as well
+      setCustomerRifInput("");
+      setShowNewCustomerFields(false);
+      setCustomerSearchMessage(null);
+      setSelectedCustomerIdForDropdown(undefined);
     }
   }, [isClient, form]);
 
@@ -164,45 +184,11 @@ export function InvoiceEditor() {
     return () => subscription.unsubscribe();
   }, [form, calculateTotals, calculatePaymentSummary]);
 
-
-   useEffect(() => {
-    if (isClient) {
-        const values = form.getValues();
-        const currentItems = (values.items || []).map(item => ({
-            ...item,
-            quantity: item.quantity || 0,
-            unitPrice: item.unitPrice || 0,
-            totalPrice: (item.quantity || 0) * (item.unitPrice || 0),
-        })) as InvoiceItem[];
-        const currentTaxRate = values.taxRate ?? TAX_RATE;
-        const currentDiscountAmount = values.discountAmount || 0;
-        const { subTotal, discountAmount, taxAmount, totalAmount } = calculateTotals(currentItems, currentTaxRate, currentDiscountAmount);
-        const payments = values.paymentMethods || [];
-        const {amountPaid, amountDue} = calculatePaymentSummary(payments, totalAmount);
-
-        setLiveInvoicePreview(prev => ({ 
-            ...prev, 
-            invoiceNumber: values.invoiceNumber || prev.invoiceNumber,
-            date: values.date ? values.date.toISOString() : (prev.date || new Date(0).toISOString()),
-            cashierNumber: values.cashierNumber,
-            salesperson: values.salesperson,
-            customerDetails: values.customerDetails as CustomerDetails || defaultCustomer,
-            items: currentItems, 
-            paymentMethods: payments as PaymentDetails[],
-            subTotal, discountAmount, taxRate: currentTaxRate, taxAmount, totalAmount, amountPaid, amountDue,
-            thankYouMessage: values.thankYouMessage || DEFAULT_THANK_YOU_MESSAGE,
-            notes: values.notes,
-            type: 'sale',
-        }));
-    }
-  }, [isClient, form, calculateTotals, calculatePaymentSummary, companyDetails, customers]); 
-
-
   const handleRifSearch = async () => {
     if (!customerRifInput.trim()) {
       setCustomerSearchMessage("Ingrese un RIF/Cédula para buscar.");
       setShowNewCustomerFields(false);
-      form.reset({ ...form.getValues(), customerDetails: defaultCustomer });
+      form.reset({ ...form.getValues(), customerDetails: { ...defaultCustomer } });
       setSelectedCustomerIdForDropdown(undefined);
       return;
     }
@@ -215,14 +201,14 @@ export function InvoiceEditor() {
       c.rif.toUpperCase().replace(/[^0-9JVEPGF]/gi, '') === searchTerm
     );
   
-    if (!foundCustomer && /^[0-9]+$/.test(searchTerm)) { // If only numbers, try with V- and E-
+    if (!foundCustomer && /^[0-9]+$/.test(searchTerm)) { 
       const ciWithV = `V-${searchTerm}`;
       const ciWithE = `E-${searchTerm}`;
       foundCustomer = customers.find(c => c.rif.toUpperCase() === ciWithV || c.rif.toUpperCase() === ciWithE);
     }
   
     if (foundCustomer) {
-      form.setValue("customerDetails", foundCustomer, { shouldValidate: true });
+      form.setValue("customerDetails", { ...foundCustomer }, { shouldValidate: true });
       setCustomerSearchMessage(`Cliente encontrado: ${foundCustomer.name}`);
       setShowNewCustomerFields(false);
       setSelectedCustomerIdForDropdown(foundCustomer.id);
@@ -231,8 +217,8 @@ export function InvoiceEditor() {
       form.resetField("customerDetails.address");
       form.resetField("customerDetails.phone");
       form.resetField("customerDetails.email");
-      form.setValue("customerDetails.id", ""); // Explicitly set ID to empty for new customer
-      form.setValue("customerDetails.rif", customerRifInput.toUpperCase()); // Set the searched RIF
+      form.setValue("customerDetails.id", ""); 
+      form.setValue("customerDetails.rif", customerRifInput.toUpperCase()); 
       setCustomerSearchMessage("Cliente no encontrado. Complete los datos para registrarlo.");
       setShowNewCustomerFields(true);
       setSelectedCustomerIdForDropdown(undefined);
@@ -244,13 +230,12 @@ export function InvoiceEditor() {
     setSelectedCustomerIdForDropdown(customerId);
     const customer = customers.find((c) => c.id === customerId);
     if (customer) {
-      form.setValue("customerDetails", customer, { shouldValidate: true });
+      form.setValue("customerDetails", { ...customer }, { shouldValidate: true });
       setCustomerRifInput(customer.rif); 
       setShowNewCustomerFields(false); 
       setCustomerSearchMessage(`Cliente seleccionado: ${customer.name}`);
     } else {
-      // Should not happen if list is correct, but as a fallback, enable new customer entry
-      form.reset({ ...form.getValues(), customerDetails: defaultCustomer });
+      form.reset({ ...form.getValues(), customerDetails: { ...defaultCustomer } });
       form.setValue("customerDetails.id","");
       setCustomerRifInput("");
       setShowNewCustomerFields(true);
@@ -283,7 +268,6 @@ export function InvoiceEditor() {
         form.setError("customerDetails.rif", {type: "manual", message: "RIF/Cédula del cliente es requerido"});
         return;
     }
-
 
     const finalItems = data.items.map(item => ({
       ...item,
@@ -330,17 +314,17 @@ export function InvoiceEditor() {
     form.reset({
       invoiceNumber: newInvoiceNumber,
       date: newDate,
+      type: 'sale',
+      originalInvoiceId: undefined,
       cashierNumber: "",
       salesperson: "",
-      customerDetails: defaultCustomer,
+      customerDetails: { ...defaultCustomer },
       items: [{ id: uuidv4(), description: "", quantity: 1, unitPrice: 0 }],
       paymentMethods: [{ method: "Efectivo", amount: 0, reference: "" }],
       thankYouMessage: DEFAULT_THANK_YOU_MESSAGE,
       notes: "",
       taxRate: TAX_RATE,
       discountAmount: 0,
-      type: 'sale',
-      originalInvoiceId: undefined,
     });
     
     setCustomerRifInput("");
@@ -348,17 +332,24 @@ export function InvoiceEditor() {
     setCustomerSearchMessage(null);
     setSelectedCustomerIdForDropdown(undefined);
 
-     if(isClient) {
+     if(isClient) { // Ensure live preview is also reset correctly
         setLiveInvoicePreview({
-            items: [{ id: uuidv4(), description: "", quantity: 1, unitPrice: 0, totalPrice: 0}],
-            paymentMethods: [{ method: "Efectivo", amount: 0, reference: "" }],
-            thankYouMessage: DEFAULT_THANK_YOU_MESSAGE,
-            date: newDate?.toISOString() || new Date(0).toISOString(),
             invoiceNumber: newInvoiceNumber,
+            date: newDate?.toISOString() || new Date(0).toISOString(),
             cashierNumber: "",
             salesperson: "",
-            subTotal: 0, taxRate: TAX_RATE, taxAmount: 0, totalAmount: 0, amountPaid: 0, amountDue: 0, discountAmount: 0,
-            customerDetails: defaultCustomer,
+            customerDetails: { ...defaultCustomer },
+            items: [{ id: uuidv4(), description: "", quantity: 1, unitPrice: 0, totalPrice: 0}],
+            paymentMethods: [{ method: "Efectivo", amount: 0, reference: "" }],
+            subTotal: 0, 
+            discountAmount: 0,
+            taxRate: TAX_RATE, 
+            taxAmount: 0, 
+            totalAmount: 0, 
+            amountPaid: 0, 
+            amountDue: 0,
+            thankYouMessage: DEFAULT_THANK_YOU_MESSAGE,
+            notes: "",
             type: 'sale',
         });
      }
@@ -494,7 +485,7 @@ export function InvoiceEditor() {
                 <FormField control={form.control} name="customerDetails.rif" render={({ field }) => (
                     <FormItem>
                         <FormLabel>RIF/CI (verificado/ingresado)</FormLabel>
-                        <FormControl><Input {...field} readOnly placeholder="RIF del cliente" /></FormControl>
+                        <FormControl><Input {...field} readOnly={!showNewCustomerFields && !!form.getValues("customerDetails.id")} placeholder="RIF del cliente" /></FormControl>
                         <FormMessage />
                     </FormItem>
                 )} />
@@ -746,4 +737,3 @@ export function InvoiceEditor() {
     </div>
   );
 }
-
