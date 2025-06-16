@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation"; // Import useRouter
 import useLocalStorage from "@/hooks/use-local-storage";
 import type { Invoice } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -15,7 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Eye, History, FileText as PageIcon, Undo2 as ReturnIcon, FileText as SaleIcon } from "lucide-react"; 
+import { Eye, History, FileText as PageIcon, Undo2 as ReturnIcon, FileText as SaleIcon, Undo2 } from "lucide-react"; 
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { CURRENCY_SYMBOL } from "@/lib/constants";
@@ -29,6 +30,7 @@ const formatCurrency = (amount: number | undefined | null) => {
 export default function InvoiceHistoryPage() {
   const [invoices] = useLocalStorage<Invoice[]>("invoices", []);
   const [isClient, setIsClient] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     setIsClient(true);
@@ -36,8 +38,16 @@ export default function InvoiceHistoryPage() {
 
   const sortedInvoices = React.useMemo(() => {
     if (!isClient) return []; 
-    return [...invoices].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    // Ensure 'invoices' is always an array before sorting
+    const validInvoices = Array.isArray(invoices) ? invoices : [];
+    return [...validInvoices].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [invoices, isClient]);
+
+  const canProcessReturn = (invoiceId: string) => {
+    if (!isClient) return false;
+    const validInvoices = Array.isArray(invoices) ? invoices : [];
+    return !validInvoices.some(inv => inv.type === 'return' && inv.originalInvoiceId === invoiceId);
+  };
 
   return (
     <Card className="shadow-lg">
@@ -94,13 +104,25 @@ export default function InvoiceHistoryPage() {
                     <TableCell>{format(new Date(invoice.date), "PPP", { locale: es })}</TableCell>
                     <TableCell className="truncate max-w-xs" title={invoice.customerDetails.name}>{invoice.customerDetails.name}</TableCell>
                     <TableCell className="text-right">{formatCurrency(invoice.totalAmount)}</TableCell>
-                    <TableCell className="text-right">
-                      <Button asChild variant="ghost" size="icon" className="text-primary hover:text-primary/80 h-8 w-8 p-0">
+                    <TableCell className="text-right space-x-1">
+                      <Button asChild variant="ghost" size="icon" className="text-primary hover:text-primary/80 h-8 w-8 p-0" title="Ver Documento">
                         <Link href={`/invoices/${invoice.id}`}>
                           <Eye className="h-4 w-4" />
                           <span className="sr-only">Ver Documento</span>
                         </Link>
                       </Button>
+                      {invoice.type === 'sale' && canProcessReturn(invoice.id) && (
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="text-amber-600 hover:text-amber-700 h-8 w-8 p-0" 
+                          onClick={() => router.push(`/returns?invoiceId=${invoice.id}`)}
+                          title="Procesar Devolución"
+                        >
+                          <Undo2 className="h-4 w-4" />
+                          <span className="sr-only">Procesar Devolución</span>
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

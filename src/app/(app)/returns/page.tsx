@@ -1,9 +1,9 @@
 
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { v4 as uuidv4 } from "uuid";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -14,29 +14,53 @@ import type { Invoice, CompanyDetails } from '@/lib/types';
 import { InvoicePreview } from '@/components/invoice/invoice-preview';
 import { useToast } from "@/hooks/use-toast";
 import { DEFAULT_COMPANY_ID } from '@/lib/types';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function ReturnsPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  
   const [invoiceIdInput, setInvoiceIdInput] = useState('');
   const [foundInvoice, setFoundInvoice] = useState<Invoice | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [invoices, setInvoices] = useLocalStorage<Invoice[]>("invoices", []);
-   const [companyDetails] = useLocalStorage<CompanyDetails>(
+  const [companyDetails] = useLocalStorage<CompanyDetails>(
     "companyDetails",
     { id: DEFAULT_COMPANY_ID, name: "", rif: "", address: "" }
   );
   const { toast } = useToast();
-  const router = useRouter();
+  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
+  const [isClient, setIsClient] = useState(false);
 
-  const handleSearchInvoice = () => {
+  useEffect(() => {
+    setIsClient(true);
+    const queryInvoiceId = searchParams.get('invoiceId');
+    if (queryInvoiceId) {
+      setInvoiceIdInput(queryInvoiceId);
+    }
+  }, [searchParams]);
+
+  const handleSearchInvoice = useCallback(() => {
     setErrorMessage(null);
     setFoundInvoice(null);
     if (!invoiceIdInput.trim()) {
       setErrorMessage("Por favor, ingrese un número de factura o ID.");
       return;
     }
-    let invoice = invoices.find(inv => inv.invoiceNumber.toLowerCase() === invoiceIdInput.trim().toLowerCase() && inv.type === 'sale');
+    
+    const validInvoices = Array.isArray(invoices) ? invoices : [];
+    let invoice = validInvoices.find(inv => inv.invoiceNumber.toLowerCase() === invoiceIdInput.trim().toLowerCase() && inv.type === 'sale');
     if (!invoice) {
-        invoice = invoices.find(inv => inv.id === invoiceIdInput.trim() && inv.type === 'sale');
+        invoice = validInvoices.find(inv => inv.id === invoiceIdInput.trim() && inv.type === 'sale');
     }
 
     if (invoice) {
@@ -44,29 +68,63 @@ export default function ReturnsPage() {
         setErrorMessage(`La factura ${invoice.invoiceNumber} ya es una nota de crédito y no puede ser devuelta.`);
         return;
       }
-      // Check if a return already exists for this invoice
-      const existingReturn = invoices.find(inv => inv.originalInvoiceId === invoice?.id && inv.type === 'return');
+      const existingReturn = validInvoices.find(inv => inv.originalInvoiceId === invoice?.id && inv.type === 'return');
       if (existingReturn) {
         setErrorMessage(`Ya existe una nota de crédito (${existingReturn.invoiceNumber}) para la factura ${invoice.invoiceNumber}.`);
-        setFoundInvoice(null); // Clear foundInvoice if return exists
+        setFoundInvoice(null);
         return;
       }
       setFoundInvoice(invoice);
     } else {
       setErrorMessage(`No se encontró ninguna factura de venta con el identificador "${invoiceIdInput}".`);
     }
-  };
+  }, [invoiceIdInput, invoices]);
 
-  const handleProcessReturn = () => {
-    if (!foundInvoice) return;
+  useEffect(() => {
+    // Auto-search if invoiceIdInput is set (e.g. from query) and invoices are loaded
+    if (isClient && invoiceIdInput && invoices.length > 0 && !foundInvoice && !errorMessage) {
+      // Ensure this only runs if invoiceIdInput was likely set by query and not yet searched
+      const queryInvoiceId = searchParams.get('invoiceId');
+      if (invoiceIdInput === queryInvoiceId) {
+        handleSearchInvoice();
+      }
+    }
+  }, [invoiceIdInput, invoices, isClient, foundInvoice, errorMessage, searchParams, handleSearchInvoice]);
 
-    const existingReturn = invoices.find(inv => inv.originalInvoiceId === foundInvoice.id && inv.type === 'return');
-    if (existingReturn) {
+
+  const triggerProcessReturn = () => {
+    if (!foundInvoice) {
         toast({
-            title: "Devolución ya procesada",
-            description: `Ya existe una nota de crédito (${existingReturn.invoiceNumber}) para esta factura.`,
+            title: "Error",
+            description: "No hay factura seleccionada para procesar la devolución.",
             variant: "destructive",
         });
+        return;
+    }
+    // Check again for existing return before opening dialog, in case state changed
+    const existingReturn = invoices.find(inv => inv.originalInvoiceId === foundInvoice.id && inv.type === 'return');
+    if (existingReturn) {
+        setErrorMessage(`Ya existe una nota de crédito (${existingReturn.invoiceNumber}) para la factura ${foundInvoice.invoiceNumber}.`);
+        setFoundInvoice(null); // Clear selection as it can't be processed
+        return;
+    }
+    setIsConfirmDialogOpen(true);
+  };
+
+  const confirmedProcessReturn = () => {
+    if (!foundInvoice) return;
+
+    // Double check again inside the confirmed action, though UI should prevent this
+    const existingReturnCheck = invoices.find(inv => inv.originalInvoiceId === foundInvoice.id && inv.type === 'return');
+    if (existingReturnCheck) {
+        toast({
+            title: "Devolución ya procesada",
+            description: `Ya existe una nota de crédito (${existingReturnCheck.invoiceNumber}) para esta factura.`,
+            variant: "destructive",
+        });
+        setIsConfirmDialogOpen(false);
+        setFoundInvoice(null);
+        setInvoiceIdInput("");
         return;
     }
 
@@ -81,7 +139,7 @@ export default function ReturnsPage() {
       originalInvoiceId: foundInvoice.id,
       paymentMethods: [{
         method: 'Nota de Crédito Aplicada',
-        amount: foundInvoice.totalAmount, // The full amount of the original invoice
+        amount: foundInvoice.totalAmount, 
         reference: `Ref. Factura Nro. ${foundInvoice.invoiceNumber}`,
       }],
       amountPaid: foundInvoice.totalAmount, 
@@ -106,8 +164,17 @@ export default function ReturnsPage() {
     });
     setFoundInvoice(null); 
     setInvoiceIdInput(""); 
+    setIsConfirmDialogOpen(false);
   };
 
+  if (!isClient) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-muted-foreground">
+        <Undo2 className="h-16 w-16 mb-4 animate-pulse text-primary" />
+        <p className="text-xl font-semibold">Cargando devoluciones...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -133,7 +200,12 @@ export default function ReturnsPage() {
                 id="invoiceIdInput"
                 placeholder="Ej: FACT-123456 o ID interno"
                 value={invoiceIdInput}
-                onChange={(e) => setInvoiceIdInput(e.target.value)}
+                onChange={(e) => {
+                  setInvoiceIdInput(e.target.value);
+                  // Clear previous search results if user types manually
+                  setFoundInvoice(null);
+                  setErrorMessage(null);
+                }}
               />
             </div>
             <Button onClick={handleSearchInvoice} className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground">
@@ -174,13 +246,35 @@ export default function ReturnsPage() {
                     La devolución procesada será por la totalidad de la factura original.
                 </p>
             </div>
-            <Button onClick={handleProcessReturn} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground mt-4">
+            <Button onClick={triggerProcessReturn} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground mt-4" disabled={!foundInvoice}>
               <FileCheck2 className="mr-2 h-4 w-4" /> Generar Nota de Crédito
             </Button>
           </CardContent>
         </Card>
       )}
+
+      <AlertDialog open={isConfirmDialogOpen} onOpenChange={setIsConfirmDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Devolución</AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Está seguro de que desea generar una nota de crédito para la factura 
+              <span className="font-semibold"> {foundInvoice?.invoiceNumber}</span>? 
+              Esta acción no se puede deshacer y generará una nota de crédito por el monto total de 
+              <span className="font-semibold"> {CURRENCY_SYMBOL}{foundInvoice?.totalAmount.toFixed(2)}</span>.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setIsConfirmDialogOpen(false)}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmedProcessReturn} 
+              className="bg-primary hover:bg-primary/90 text-primary-foreground"
+            >
+              Confirmar y Generar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
-
