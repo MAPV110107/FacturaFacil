@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
@@ -24,6 +25,7 @@ import { useToast } from "@/hooks/use-toast";
 import { PlusCircle, Trash2, Users, FileText, DollarSign, Settings, Receipt, CalendarDays, Info } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { Form, FormField, FormItem } from "@/components/ui/form"; // Added Form import
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -464,3 +466,5 @@ export function InvoiceEditor() {
     </div>
   );
 }
+
+    
