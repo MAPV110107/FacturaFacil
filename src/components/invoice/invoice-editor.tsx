@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { useForm, useFieldArray, Controller } from "react-hook-form";
+import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
 import { v4 as uuidv4 } from "uuid";
@@ -33,6 +33,17 @@ type InvoiceFormData = z.infer<typeof invoiceFormSchema>;
 const defaultCompany: CompanyDetails = { id: DEFAULT_COMPANY_ID, name: "", rif: "", address: "" };
 const defaultCustomer: CustomerDetails = { id: "", name: "", rif: "", address: "", phone: "", email: "", outstandingBalance: 0, creditBalance: 0 };
 
+// Helper debounce function
+const debounce = <F extends (...args: any[]) => any>(func: F, waitFor: number) => {
+  let timeout: NodeJS.Timeout;
+  return (...args: Parameters<F>): Promise<ReturnType<F>> =>
+    new Promise(resolve => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => resolve(func(...args)), waitFor);
+    });
+};
+
+
 export function InvoiceEditor() {
   const [companyDetails] = useLocalStorage<CompanyDetails>("companyDetails", defaultCompany);
   const [customers, setCustomers] = useLocalStorage<CustomerDetails[]>("customers", []);
@@ -52,8 +63,11 @@ export function InvoiceEditor() {
   const [selectedCustomerIdForDropdown, setSelectedCustomerIdForDropdown] = useState<string | undefined>(undefined);
 
   const initialLivePreviewState: Partial<Invoice> = {
+    id: '', // Placeholder
     invoiceNumber: "",
     date: new Date(0).toISOString(), 
+    type: 'sale',
+    companyDetails: companyDetails || defaultCompany,
     cashierNumber: "",
     salesperson: "",
     customerDetails: { ...defaultCustomer },
@@ -68,7 +82,6 @@ export function InvoiceEditor() {
     amountDue: 0,
     thankYouMessage: DEFAULT_THANK_YOU_MESSAGE,
     notes: "",
-    type: 'sale',
     isDebtPayment: false,
   };
 
@@ -78,7 +91,7 @@ export function InvoiceEditor() {
     resolver: zodResolver(invoiceFormSchema),
     defaultValues: {
       invoiceNumber: "", 
-      date: undefined, 
+      date: new Date(), 
       type: 'sale',
       originalInvoiceId: undefined,
       isDebtPayment: false,
@@ -92,100 +105,6 @@ export function InvoiceEditor() {
       taxRate: TAX_RATE,
       discountAmount: 0,
     },
-  });
-
-  const resetFormAndState = useCallback((debtPaymentParams: {isDebt: boolean, customerId?: string, amount?: number} = {isDebt: false}) => {
-    let initialInvoiceNumber = `FACT-${Date.now().toString().slice(-6)}`;
-    const initialDate = new Date();
-    let initialItems = [{ id: uuidv4(), description: "", quantity: 1, unitPrice: 0 }];
-    let initialCustomer = { ...defaultCustomer };
-    let debtMode = false;
-    let debtAmount = 0;
-
-    if (debtPaymentParams.isDebt && debtPaymentParams.customerId && debtPaymentParams.amount) {
-      const debtCustomer = customers.find(c => c.id === debtPaymentParams.customerId);
-      if (debtCustomer) {
-        initialCustomer = { ...debtCustomer };
-        initialInvoiceNumber = `PAGO-${Date.now().toString().slice(-6)}`;
-        initialItems = [{ id: uuidv4(), description: "Abono a Deuda Pendiente", quantity: 1, unitPrice: debtPaymentParams.amount }];
-        debtMode = true;
-        debtAmount = debtPaymentParams.amount;
-        setSelectedCustomerIdForDropdown(debtCustomer.id);
-        setCustomerRifInput(debtCustomer.rif);
-        setCustomerSearchMessage(`Pagando deuda de: ${debtCustomer.name}`);
-        setShowNewCustomerFields(false);
-      }
-    }
-    
-    setIsDebtPaymentMode(debtMode);
-    setDebtPaymentOriginalAmount(debtAmount);
-
-    form.reset({
-      invoiceNumber: initialInvoiceNumber,
-      date: initialDate,
-      type: 'sale',
-      isDebtPayment: debtMode,
-      originalInvoiceId: undefined,
-      cashierNumber: "",
-      salesperson: "",
-      customerDetails: initialCustomer,
-      items: initialItems,
-      paymentMethods: [{ method: "Efectivo", amount: 0, reference: "" }],
-      thankYouMessage: debtMode ? "Gracias por su abono." : DEFAULT_THANK_YOU_MESSAGE,
-      notes: debtMode ? `Abono a deuda pendiente por ${CURRENCY_SYMBOL}${debtAmount.toFixed(2)}` : "",
-      taxRate: debtMode ? 0 : TAX_RATE, // No tax on debt payments typically
-      discountAmount: 0,
-    });
-    
-    if (!debtMode) {
-      setCustomerRifInput("");
-      setShowNewCustomerFields(false);
-      setCustomerSearchMessage(null);
-      setSelectedCustomerIdForDropdown(undefined);
-    }
-
-    setLiveInvoicePreview({
-      ...initialLivePreviewState,
-      invoiceNumber: initialInvoiceNumber,
-      date: initialDate.toISOString(),
-      isDebtPayment: debtMode,
-      items: initialItems.map(item => ({...item, totalPrice: item.quantity * item.unitPrice})),
-      customerDetails: initialCustomer,
-      thankYouMessage: debtMode ? "Gracias por su abono." : DEFAULT_THANK_YOU_MESSAGE,
-      notes: debtMode ? `Abono a deuda pendiente por ${CURRENCY_SYMBOL}${debtAmount.toFixed(2)}` : "",
-      taxRate: debtMode ? 0 : TAX_RATE,
-    });
-
-  }, [form, customers]);
-
-
-  useEffect(() => {
-    if (isClient) {
-      const customerId = searchParams.get('customerId');
-      const debtPayment = searchParams.get('debtPayment') === 'true';
-      const amountStr = searchParams.get('amount');
-      const amount = parseFloat(amountStr || '0');
-
-      if (debtPayment && customerId && amount > 0) {
-        resetFormAndState({isDebt: true, customerId, amount});
-      } else {
-        resetFormAndState();
-      }
-      // Clean up query params after use to prevent re-triggering on form reset/navigate back
-      // router.replace('/invoice/new', undefined); // This causes issues with Next.js 13+ app router.
-      // For now, we'll rely on the user navigating away or explicit reset.
-    }
-  }, [isClient, searchParams, resetFormAndState, router]);
-
-
-  const { fields: itemFields, append: appendItem, remove: removeItem } = useFieldArray({
-    control: form.control,
-    name: "items",
-  });
-
-  const { fields: paymentFields, append: appendPayment, remove: removePayment } = useFieldArray({
-    control: form.control,
-    name: "paymentMethods",
   });
 
   const calculateTotals = useCallback((items: InvoiceItem[], taxRateValue: number, discountAmountValue: number) => {
@@ -204,53 +123,179 @@ export function InvoiceEditor() {
     return { amountPaid, amountDue };
   }, []);
 
-  useEffect(() => {
-    const subscription = form.watch((values, { name, type }) => {
-      const currentItems = (values.items || []).map(item => ({
+  const resetFormAndState = useCallback((debtPaymentParams: {isDebt: boolean, customerId?: string, amount?: number} = {isDebt: false}) => {
+    let initialInvoiceNumber = `FACT-${Date.now().toString().slice(-6)}`;
+    const initialDate = new Date();
+    let initialItemsArr = [{ id: uuidv4(), description: "", quantity: 1, unitPrice: 0 }];
+    let initialCustomerState = { ...defaultCustomer };
+    let debtMode = false;
+    let debtAmount = 0;
+
+    if (debtPaymentParams.isDebt && debtPaymentParams.customerId && debtPaymentParams.amount) {
+      const debtCustomer = customers.find(c => c.id === debtPaymentParams.customerId);
+      if (debtCustomer) {
+        initialCustomerState = { ...debtCustomer };
+        initialInvoiceNumber = `PAGO-${Date.now().toString().slice(-6)}`;
+        initialItemsArr = [{ id: uuidv4(), description: "Abono a Deuda Pendiente", quantity: 1, unitPrice: debtPaymentParams.amount }];
+        debtMode = true;
+        debtAmount = debtPaymentParams.amount;
+        setSelectedCustomerIdForDropdown(debtCustomer.id);
+        setCustomerRifInput(debtCustomer.rif);
+        setCustomerSearchMessage(`Pagando deuda de: ${debtCustomer.name}`);
+        setShowNewCustomerFields(false);
+      }
+    }
+    
+    setIsDebtPaymentMode(debtMode);
+    setDebtPaymentOriginalAmount(debtAmount);
+
+    const formValuesToReset = {
+      invoiceNumber: initialInvoiceNumber,
+      date: initialDate,
+      type: 'sale' as 'sale' | 'return',
+      isDebtPayment: debtMode,
+      originalInvoiceId: undefined,
+      cashierNumber: "",
+      salesperson: "",
+      customerDetails: initialCustomerState,
+      items: initialItemsArr,
+      paymentMethods: [{ method: "Efectivo", amount: 0, reference: "" }],
+      thankYouMessage: debtMode ? "Gracias por su abono." : DEFAULT_THANK_YOU_MESSAGE,
+      notes: debtMode ? `Abono a deuda pendiente por ${CURRENCY_SYMBOL}${debtAmount.toFixed(2)}` : "",
+      taxRate: debtMode ? 0 : TAX_RATE, 
+      discountAmount: 0,
+    };
+    form.reset(formValuesToReset);
+    
+    if (!debtMode) {
+      setCustomerRifInput("");
+      setShowNewCustomerFields(false);
+      setCustomerSearchMessage(null);
+      setSelectedCustomerIdForDropdown(undefined);
+    }
+    
+    // Directly update preview on reset
+    const currentItems = (formValuesToReset.items || []).map(item => ({
         ...item,
         quantity: item.quantity || 0,
         unitPrice: item.unitPrice || 0,
         totalPrice: (item.quantity || 0) * (item.unitPrice || 0),
       })) as InvoiceItem[];
-      
-      const currentTaxRate = values.taxRate ?? TAX_RATE;
-      const currentDiscountAmount = values.discountAmount || 0;
-      const { subTotal, discountAmount, taxAmount, totalAmount } = calculateTotals(currentItems, currentTaxRate, currentDiscountAmount);
-      const { amountPaid, amountDue } = calculatePaymentSummary(values.paymentMethods || [], totalAmount);
+    const currentTaxRate = formValuesToReset.taxRate ?? TAX_RATE;
+    const currentDiscountAmount = formValuesToReset.discountAmount || 0;
+    const { subTotal, discountAmount, taxAmount, totalAmount } = calculateTotals(currentItems, currentTaxRate, currentDiscountAmount);
+    const { amountPaid, amountDue } = calculatePaymentSummary(formValuesToReset.paymentMethods || [], totalAmount);
 
-      setLiveInvoicePreview(prev => ({
-        ...prev,
-        invoiceNumber: values.invoiceNumber,
-        date: values.date ? values.date.toISOString() : (prev.date || new Date(0).toISOString()),
-        cashierNumber: values.cashierNumber,
-        salesperson: values.salesperson,
-        customerDetails: values.customerDetails as CustomerDetails,
-        items: currentItems,
-        paymentMethods: values.paymentMethods as PaymentDetails[],
-        subTotal,
-        discountAmount,
-        taxRate: currentTaxRate,
-        taxAmount,
-        totalAmount,
-        amountPaid,
-        amountDue,
-        thankYouMessage: values.thankYouMessage || DEFAULT_THANK_YOU_MESSAGE,
-        notes: values.notes,
-        type: 'sale', 
-        isDebtPayment: !!values.isDebtPayment,
-      }));
+    setLiveInvoicePreview({
+      ...initialLivePreviewState, // Base state
+      id: '', // Placeholder for preview
+      invoiceNumber: formValuesToReset.invoiceNumber,
+      date: formValuesToReset.date ? formValuesToReset.date.toISOString() : new Date().toISOString(),
+      type: 'sale',
+      companyDetails: companyDetails || defaultCompany,
+      cashierNumber: formValuesToReset.cashierNumber,
+      salesperson: formValuesToReset.salesperson,
+      customerDetails: formValuesToReset.customerDetails as CustomerDetails,
+      items: currentItems,
+      paymentMethods: formValuesToReset.paymentMethods as PaymentDetails[],
+      subTotal,
+      discountAmount,
+      taxRate: currentTaxRate,
+      taxAmount,
+      totalAmount,
+      amountPaid,
+      amountDue,
+      thankYouMessage: formValuesToReset.thankYouMessage || DEFAULT_THANK_YOU_MESSAGE,
+      notes: formValuesToReset.notes,
+      isDebtPayment: !!formValuesToReset.isDebtPayment,
     });
-    return () => subscription.unsubscribe();
+
+  }, [form, customers, companyDetails, calculateTotals, calculatePaymentSummary]);
+
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    if (isClient && customers.length >= 0) { // Ensure customers are loaded
+      const customerId = searchParams.get('customerId');
+      const debtPayment = searchParams.get('debtPayment') === 'true';
+      const amountStr = searchParams.get('amount');
+      const amount = parseFloat(amountStr || '0');
+
+      if (debtPayment && customerId && amount > 0) {
+        resetFormAndState({isDebt: true, customerId, amount});
+      } else if (!form.getValues('invoiceNumber')) { // Only reset if form is not already populated (e.g. by previous debt payment)
+        resetFormAndState();
+      }
+    }
+  }, [isClient, searchParams, resetFormAndState, customers]); // Added customers to dependencies
+
+  const { fields: itemFields, append: appendItem, remove: removeItem } = useFieldArray({
+    control: form.control,
+    name: "items",
+  });
+
+  const { fields: paymentFields, append: appendPayment, remove: removePayment } = useFieldArray({
+    control: form.control,
+    name: "paymentMethods",
+  });
+  
+  useEffect(() => {
+    const updatePreview = (values: InvoiceFormData) => {
+        const currentItems = (values.items || []).map(item => ({
+            ...item,
+            quantity: item.quantity || 0,
+            unitPrice: item.unitPrice || 0,
+            totalPrice: (item.quantity || 0) * (item.unitPrice || 0),
+        })) as InvoiceItem[];
+        
+        const currentTaxRate = values.taxRate ?? TAX_RATE;
+        const currentDiscountAmount = values.discountAmount || 0;
+        const { subTotal, discountAmount, taxAmount, totalAmount } = calculateTotals(currentItems, currentTaxRate, currentDiscountAmount);
+        const { amountPaid, amountDue } = calculatePaymentSummary(values.paymentMethods || [], totalAmount);
+
+        setLiveInvoicePreview(prev => ({
+            ...prev,
+            invoiceNumber: values.invoiceNumber,
+            date: values.date ? values.date.toISOString() : (prev.date || new Date(0).toISOString()),
+            cashierNumber: values.cashierNumber,
+            salesperson: values.salesperson,
+            customerDetails: values.customerDetails as CustomerDetails,
+            items: currentItems,
+            paymentMethods: values.paymentMethods as PaymentDetails[],
+            subTotal,
+            discountAmount,
+            taxRate: currentTaxRate,
+            taxAmount,
+            totalAmount,
+            amountPaid,
+            amountDue,
+            thankYouMessage: values.thankYouMessage || DEFAULT_THANK_YOU_MESSAGE,
+            notes: values.notes,
+            type: 'sale', 
+            isDebtPayment: !!values.isDebtPayment,
+        }));
+    };
+    
+    const debouncedUpdatePreview = debounce(updatePreview, 300); // 300ms delay
+
+    const subscription = form.watch((values) => {
+        debouncedUpdatePreview(values as InvoiceFormData);
+    });
+    return () => {
+        subscription.unsubscribe();
+    };
   }, [form, calculateTotals, calculatePaymentSummary]);
 
+
   const handleRifSearch = async () => {
-    if (isDebtPaymentMode) return; // Don't allow customer search in debt payment mode
+    if (isDebtPaymentMode) return; 
     if (!customerRifInput.trim()) {
       setCustomerSearchMessage("Ingrese un RIF/Cédula para buscar.");
       setShowNewCustomerFields(false);
-      form.reset({ ...form.getValues(), customerDetails: { ...defaultCustomer } });
-      form.setValue("customerDetails.id", "");
-      form.setValue("customerDetails.rif", "");
+      form.reset({ ...form.getValues(), customerDetails: { ...defaultCustomer, rif: "" } });
       setSelectedCustomerIdForDropdown(undefined);
       return;
     }
@@ -264,7 +309,10 @@ export function InvoiceEditor() {
       const numericPart = customerRifInput.trim();
       const ciWithV = `V${numericPart}`;
       const ciWithE = `E${numericPart}`;
-      foundCustomer = customers.find(c => c.rif.toUpperCase().replace(/[^A-Z0-9]/gi, '') === ciWithV || c.rif.toUpperCase().replace(/[^A-Z0-9]/gi, '') === ciWithE);
+      foundCustomer = customers.find(c => 
+        c.rif.toUpperCase().replace(/[^A-Z0-9]/gi, '') === ciWithV || 
+        c.rif.toUpperCase().replace(/[^A-Z0-9]/gi, '') === ciWithE
+      );
     }
   
     if (foundCustomer) {
@@ -279,7 +327,7 @@ export function InvoiceEditor() {
       form.setValue("customerDetails.address", "");
       form.setValue("customerDetails.phone", "");
       form.setValue("customerDetails.email", "");
-      form.setValue("customerDetails.rif", customerRifInput.toUpperCase());
+      form.setValue("customerDetails.rif", customerRifInput.toUpperCase(), { shouldValidate: true });
       setCustomerSearchMessage("Cliente no encontrado. Complete los datos para registrarlo.");
       setShowNewCustomerFields(true);
       setSelectedCustomerIdForDropdown(undefined);
@@ -297,9 +345,11 @@ export function InvoiceEditor() {
       setShowNewCustomerFields(false); 
       setCustomerSearchMessage(`Cliente seleccionado: ${customer.name}`);
     } else {
-      form.reset({ ...form.getValues(), customerDetails: { ...defaultCustomer } });
-      form.setValue("customerDetails.id","");
-      form.setValue("customerDetails.rif","");
+      const currentFormValues = form.getValues();
+      form.reset({ 
+        ...currentFormValues, 
+        customerDetails: { ...defaultCustomer, rif: "" } 
+      });
       setCustomerRifInput("");
       setShowNewCustomerFields(true);
       setCustomerSearchMessage("Ingrese los datos para un nuevo cliente o busque por RIF.");
@@ -309,8 +359,9 @@ export function InvoiceEditor() {
   function onSubmit(data: InvoiceFormData) {
     let customerToSaveOnInvoice = data.customerDetails;
     let customerWasModified = false;
+    let newCustomerJustAdded: CustomerDetails | null = null;
 
-    if (showNewCustomerFields && !data.customerDetails.id && !isDebtPaymentMode) { // Only create new if not debt payment mode
+    if (showNewCustomerFields && !data.customerDetails.id && !isDebtPaymentMode) { 
       if (data.customerDetails.name && data.customerDetails.rif && data.customerDetails.address) {
         const newCustomer: CustomerDetails = {
           ...data.customerDetails,
@@ -318,17 +369,15 @@ export function InvoiceEditor() {
           outstandingBalance: 0,
           creditBalance: 0,
         };
-        // setCustomers directly here or collect for batched update later
         customerToSaveOnInvoice = newCustomer; 
-        customerWasModified = true; // Flag to add to global customers list later
+        customerWasModified = true; 
+        newCustomerJustAdded = newCustomer;
         toast({ title: "Nuevo Cliente Registrado", description: `Cliente ${newCustomer.name} añadido al sistema.` });
       } else {
         toast({ variant: "destructive", title: "Datos Incompletos del Cliente", description: "Por favor, complete nombre, RIF y dirección para el nuevo cliente." });
-        form.setError("customerDetails.name", {type: "manual", message: "Nombre requerido"});
-        form.setError("customerDetails.address", {type: "manual", message: "Dirección requerida"});
-         if (!data.customerDetails.rif) {
-          form.setError("customerDetails.rif", {type: "manual", message: "RIF/Cédula requerido"});
-        }
+        if (!data.customerDetails.name) form.setError("customerDetails.name", {type: "manual", message: "Nombre requerido"});
+        if (!data.customerDetails.address) form.setError("customerDetails.address", {type: "manual", message: "Dirección requerida"});
+        if (!data.customerDetails.rif) form.setError("customerDetails.rif", {type: "manual", message: "RIF/Cédula requerido"});
         return; 
       }
     }
@@ -344,7 +393,7 @@ export function InvoiceEditor() {
       totalPrice: item.quantity * item.unitPrice,
     }));
     const currentDiscountAmount = data.discountAmount || 0;
-    const currentTaxRate = isDebtPaymentMode ? 0 : data.taxRate; // No tax for debt payment
+    const currentTaxRate = isDebtPaymentMode ? 0 : data.taxRate; 
     const { subTotal, discountAmount, taxAmount, totalAmount } = calculateTotals(finalItems, currentTaxRate, currentDiscountAmount);
     const { amountPaid, amountDue } = calculatePaymentSummary(data.paymentMethods, totalAmount);
 
@@ -372,44 +421,69 @@ export function InvoiceEditor() {
     };
     
     setSavedInvoices(prevInvoices => [...prevInvoices, fullInvoiceData]);
-    setLiveInvoicePreview(fullInvoiceData); 
+    // setLiveInvoicePreview(fullInvoiceData); // Preview is already live
     
-    // Update customer balances
-    let finalCustomers = [...customers];
-    if (customerWasModified && customerToSaveOnInvoice.id) { // New customer was created
-        finalCustomers.push(customerToSaveOnInvoice);
+    let currentCustomersList = [...customers];
+    if (customerWasModified && newCustomerJustAdded) { 
+        currentCustomersList.push(newCustomerJustAdded);
     }
 
-    const customerIndex = finalCustomers.findIndex(c => c.id === customerToSaveOnInvoice.id);
+    const customerIndex = currentCustomersList.findIndex(c => c.id === customerToSaveOnInvoice.id);
     if (customerIndex !== -1) {
-        const StoredCustomer = {...finalCustomers[customerIndex]}; // Make a mutable copy
+        const StoredCustomer = {...currentCustomersList[customerIndex]}; 
         StoredCustomer.outstandingBalance = StoredCustomer.outstandingBalance || 0;
         StoredCustomer.creditBalance = StoredCustomer.creditBalance || 0;
 
         if (isDebtPaymentMode) {
             StoredCustomer.outstandingBalance = Math.max(0, StoredCustomer.outstandingBalance - amountPaid);
-            // Ensure not to overpay debt from this single transaction beyond original debt for this payment
-            // This is simplified; assumes amountPaid for debt is <= outstanding balance for this transaction
-        } else { // Regular invoice
+        } else { 
             if (amountDue > 0) {
                 StoredCustomer.outstandingBalance += amountDue;
             } else if (amountDue < 0) {
                 StoredCustomer.creditBalance += Math.abs(amountDue);
             }
         }
-        finalCustomers[customerIndex] = StoredCustomer;
-        setCustomers(finalCustomers);
+        currentCustomersList[customerIndex] = StoredCustomer;
+        setCustomers(currentCustomersList);
+    } else if (!customerWasModified && customerToSaveOnInvoice.id) {
+        // This case handles if an existing customer was selected, and their balance needs update
+        // but they weren't part of `newCustomerJustAdded`
+        const existingCustomerIndexGlobal = customers.findIndex(c => c.id === customerToSaveOnInvoice.id);
+        if(existingCustomerIndexGlobal !== -1) {
+            const StoredCustomer = {...customers[existingCustomerIndexGlobal]};
+            StoredCustomer.outstandingBalance = StoredCustomer.outstandingBalance || 0;
+            StoredCustomer.creditBalance = StoredCustomer.creditBalance || 0;
+            if (isDebtPaymentMode) {
+                StoredCustomer.outstandingBalance = Math.max(0, StoredCustomer.outstandingBalance - amountPaid);
+            } else {
+                if (amountDue > 0) StoredCustomer.outstandingBalance += amountDue;
+                else if (amountDue < 0) StoredCustomer.creditBalance += Math.abs(amountDue);
+            }
+            const updatedCustomersList = [...customers];
+            updatedCustomersList[existingCustomerIndexGlobal] = StoredCustomer;
+            setCustomers(updatedCustomersList);
+        }
     }
     
     toast({
       title: isDebtPaymentMode ? "Abono Registrado" : "Factura Guardada",
       description: `El documento Nro. ${data.invoiceNumber} ha sido ${isDebtPaymentMode ? 'registrado como abono y' : ''} guardado.`,
+       action: (
+        <Button variant="outline" size="sm" onClick={() => router.push(`/invoices/${fullInvoiceData.id}`)}>
+          Ver Documento <ArrowRight className="ml-2 h-4 w-4" />
+        </Button>
+      ),
     });
-
-    // Reset form for next invoice
-    // router.replace('/invoice/new', undefined); // Clear query params by navigating
-    resetFormAndState(); // Then reset the form
-    // The above router.replace can sometimes cause issues. A simple resetForm might be enough if not relying on params clearing for next state.
+    
+    // router.replace('/invoice/new', { shallow: true }); // Attempt to clear query params more gently
+    // For full reset and param clearing:
+    const currentPath = router.pathname; // This is not available in App router, use usePathname
+    // router.push(currentPath, undefined, { shallow: true }); // Needs correct usage for App Router
+    // A more reliable way to reset for new invoice without params affecting:
+    router.replace('/invoice/new'); 
+    // This will trigger the useEffect for searchParams again, which will call resetFormAndState without debt params
+    // If router.replace immediately is an issue, then direct resetFormAndState() without params is needed.
+    resetFormAndState(); // Reset for a completely new invoice
   }
 
   const previewCompanyDetails = companyDetails;
@@ -472,7 +546,9 @@ export function InvoiceEditor() {
                           <Calendar
                             mode="single"
                             selected={field.value}
-                            onSelect={field.onChange}
+                            onSelect={(date) => {
+                                if (date) field.onChange(date);
+                            }}
                             initialFocus
                             locale={es}
                             disabled={(date) => date > new Date() || date < new Date("1900-01-01")}
@@ -540,7 +616,7 @@ export function InvoiceEditor() {
                 </Button>
               </div>
 
-              {customerSearchMessage && <p className={`text-sm mt-2 ${form.formState.errors.customerDetails ? 'text-destructive' : 'text-primary'}`}>{customerSearchMessage}</p>}
+              {customerSearchMessage && <p className={`text-sm mt-1 ${form.formState.errors.customerDetails?.rif || form.formState.errors.customerDetails?.name ? 'text-destructive' : 'text-muted-foreground'}`}>{customerSearchMessage}</p>}
               
               <div className="space-y-3 pt-3 border-t mt-3">
                 <FormField control={form.control} name="customerDetails.rif" render={({ field }) => (
@@ -596,7 +672,7 @@ export function InvoiceEditor() {
                     ))}
                   </SelectContent>
                 </Select>
-                 <FormMessage>{form.formState.errors.customerDetails && typeof form.formState.errors.customerDetails !== 'string' && form.formState.errors.customerDetails.message}</FormMessage>
+                 <FormMessage>{form.formState.errors.customerDetails && typeof form.formState.errors.customerDetails !== 'string' && (form.formState.errors.customerDetails as any)?.message}</FormMessage>
               </FormItem>
             </CardContent>
           </Card>
@@ -649,7 +725,7 @@ export function InvoiceEditor() {
                 </div>
               ))}
               <FormMessage>{form.formState.errors.items && typeof form.formState.errors.items === 'object' && !Array.isArray(form.formState.errors.items) ? (form.formState.errors.items as any).message : null}</FormMessage>
-               <FormMessage>{form.formState.errors.items && Array.isArray(form.formState.errors.items) && form.formState.errors.items.length ===0 && (form.formState.errors.items as any).message ? (form.formState.errors.items as any).message : null}</FormMessage>
+               <FormMessage>{form.formState.errors.items && Array.isArray(form.formState.errors.items) && form.formState.errors.items.length ===0 && (form.formState.errors.items as any)?.message ? (form.formState.errors.items as any).message : null}</FormMessage>
               {!isDebtPaymentMode && (
                 <Button type="button" variant="outline" onClick={() => appendItem({ id: uuidv4(), description: "", quantity: 1, unitPrice: 0 })}>
                   <PlusCircle className="mr-2 h-4 w-4" /> Añadir Artículo
@@ -793,8 +869,8 @@ export function InvoiceEditor() {
                 </Button>
                 {isDebtPaymentMode && (
                     <Button type="button" variant="outline" onClick={() => {
-                        resetFormAndState();
-                        router.replace('/invoice/new', undefined); // Clear query params
+                        resetFormAndState(); // Resets to a normal invoice state
+                        // router.replace('/invoice/new', undefined); // Clear query params if any were present
                     }}>
                         <Ban className="mr-2 h-4 w-4" /> Cancelar Modo Abono de Deuda
                     </Button>
