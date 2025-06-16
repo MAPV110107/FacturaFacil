@@ -97,6 +97,8 @@ body {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
     font-size: 10pt; /* Adjust base font size for print */
+    background-color: white !important; /* Ensure background is white for print */
+    color: black !important; /* Ensure text is black for print */
   }
   .no-print {
     display: none !important;
@@ -104,8 +106,10 @@ body {
   .print-only {
     display: block !important;
   }
-  /* Ensure invoice preview takes full width in print */
-  main > div[data-invoice-preview-container] {
+  
+  /* Ensure invoice preview takes full width in print and removes shadows/borders */
+  main > div[data-invoice-preview-container],
+  div[data-invoice-preview-container] {
     width: 100% !important;
     max-width: 100% !important;
     margin: 0 !important;
@@ -113,15 +117,67 @@ body {
     box-shadow: none !important;
     border: none !important;
   }
-  /* Specific styles for thermal receipt look */
+
+  /* Thermal receipt specific styles */
   .receipt-font {
     font-family: 'Courier New', Courier, monospace !important; /* Common thermal printer font */
     font-size: 9pt !important;
+    line-height: 1.2 !important;
+    color: black !important;
   }
-  .receipt-text-xs {
-    font-size: 7pt !important;
+  .receipt-font p, 
+  .receipt-font div,
+  .receipt-font span {
+    font-size: 9pt !important;
+    line-height: 1.2 !important;
+    color: black !important;
+    margin-bottom: 0.5px !important; /* Reduce space between paragraphs */
   }
-   .receipt-table th, .receipt-table td {
-    padding: 2px !important;
+  .receipt-font .text-lg { font-size: 11pt !important; }
+  .receipt-font .text-sm { font-size: 9pt !important; }
+  .receipt-font .text-xs { font-size: 8pt !important; }
+  .receipt-font .font-bold { font-weight: bold !important; }
+  .receipt-font .truncate { overflow: visible !important; white-space: normal !important; }
+
+  .receipt-font .grid { display: block !important; } /* Simplify grid for print */
+  .receipt-font .grid > div { display: block !important; width: 100% !important; }
+
+  /* Item table styling for receipt */
+  .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] {
+     display: block !important; /* override grid display */
+  }
+  .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div {
+    display: inline-block !important; /* make columns inline */
+    padding-right: 4px !important; /* small spacing between "columns" */
+    vertical-align: top !important;
+  }
+  .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div:nth-child(1) { width: 45% !important; } /* Desc */
+  .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div:nth-child(2) { width: 15% !important; text-align: right !important; } /* Qty */
+  .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div:nth-child(3) { width: 20% !important; text-align: right !important; } /* P.Unit */
+  .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div:nth-child(4) { width: 20% !important; text-align: right !important; } /* Total */
+  
+  .receipt-font .border-dashed { border-style: none !important; }
+  .receipt-font .my-1, .receipt-font .my-2, .receipt-font .mb-1, .receipt-font .mb-2, .receipt-font .mt-1, .receipt-font .mt-2, .receipt-font .mt-3 {
+    margin-top: 2px !important;
+    margin-bottom: 2px !important;
+  }
+  .receipt-font hr, .receipt-font .DottedLine { 
+    border-top: 1px dashed black !important;
+    margin-top: 2px !important;
+    margin-bottom: 2px !important;
+  }
+
+  /* Watermark for Nota de Credito */
+  .print-receipt .watermark-text {
+    font-size: 40pt !important; /* Smaller for receipt */
+    opacity: 0.1 !important; /* More transparent for actual print */
+    color: #888888 !important;
+    transform: rotate(-30deg) !important;
+  }
+
+  /* Hide elements that are typically too large or not needed for thermal receipt */
+  .print-receipt img[alt*="logo"] {
+     max-height: 30px !important; /* Make logo very small or hide if preferred */
+     /* display: none !important; */ /* Uncomment to hide logo completely on thermal */
   }
 }

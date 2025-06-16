@@ -16,15 +16,19 @@ interface InvoicePreviewProps {
 
 const formatCurrency = (amount: number | undefined | null) => {
   if (amount === undefined || amount === null) return `${CURRENCY_SYMBOL} 0.00`;
-  return `${CURRENCY_SYMBOL} ${amount.toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,')}`;
+  // For thermal printers, avoid thousands separators if they cause issues with width.
+  // Using a simpler format for currency, can be adjusted.
+  return `${CURRENCY_SYMBOL}${amount.toFixed(2)}`;
 };
 
 const formatLine = (left: string, right: string, width: number = FISCAL_PRINTER_LINE_WIDTH): string => {
-  const spaces = Math.max(0, width - left.length - right.length);
-  return `${left}${' '.repeat(spaces)}${right}`;
+  const sanitizedLeft = String(left || "").slice(0, width - Math.max(0, String(right || "").length) -1); // Ensure left doesn't overflow
+  const sanitizedRight = String(right || "");
+  const spaces = Math.max(0, width - sanitizedLeft.length - sanitizedRight.length);
+  return `${sanitizedLeft}${' '.repeat(spaces)}${sanitizedRight}`;
 };
 
-const DottedLine = () => <div className="border-t border-dashed border-foreground my-1"></div>;
+const DottedLine = () => <hr className="DottedLine border-t border-dashed border-foreground my-1" />;
 
 export function InvoicePreview({ invoice, companyDetails, className }: InvoicePreviewProps) {
   
@@ -51,19 +55,34 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
   const isReturn = invoice.type === 'return';
   const documentTitle = isReturn ? "NOTA DE CRÉDITO" : "FACTURA";
 
+  // Attempt to get saved invoices from localStorage for original invoice number reference
+  let originalInvoiceNumber = null;
+  if (isReturn && invoice.originalInvoiceId && typeof window !== 'undefined') {
+    try {
+      const allInvoices: Invoice[] = JSON.parse(localStorage.getItem("invoices") || "[]");
+      const originalInv = allInvoices.find(inv => inv.id === invoice.originalInvoiceId);
+      if (originalInv) {
+        originalInvoiceNumber = originalInv.invoiceNumber;
+      }
+    } catch (e) {
+      console.error("Error reading invoices from localStorage for original invoice number", e);
+    }
+  }
+
+
   return (
     <Card className={`w-full max-w-md mx-auto shadow-xl print-receipt relative ${className}`} data-invoice-preview-container>
       {isReturn && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 watermark-container">
           <span 
-            className="text-6xl sm:text-7xl md:text-8xl font-bold text-destructive/15 transform -rotate-45 opacity-70 select-none"
-            style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.1)' }}
+            className="text-6xl sm:text-7xl md:text-8xl font-bold text-destructive/10 transform -rotate-45 opacity-70 select-none watermark-text"
+            style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.05)' }}
           >
             NOTA DE CRÉDITO
           </span>
         </div>
       )}
-      <CardContent className="p-4 receipt-font text-xs relative z-10"> {/* Ensure content is above watermark */}
+      <CardContent className={`p-4 receipt-font text-xs relative z-10`}> {/* Ensure content is above watermark */}
         <div className="text-center mb-1">
           <p className="font-bold text-lg my-1">{SENIAT_TEXT}</p>
         </div>
@@ -87,8 +106,8 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
           <p>{formatLine("HORA:", actualInvoiceDate.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }))}</p>
           {invoice.cashierNumber && <p>{formatLine("CAJA NRO:", invoice.cashierNumber)}</p>}
           {invoice.salesperson && <p>{formatLine("VENDEDOR:", invoice.salesperson)}</p>}
-          {isReturn && invoice.originalInvoiceId && (
-            <p className="text-xs">{formatLine("REF. FACTURA:", invoicesData.find(inv => inv.id === invoice.originalInvoiceId)?.invoiceNumber || String(invoice.originalInvoiceId))}</p>
+          {isReturn && originalInvoiceNumber && (
+            <p className="text-xs">{formatLine("REF. FACTURA:", originalInvoiceNumber)}</p>
           )}
         </div>
         
@@ -127,10 +146,10 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
           {discountAmount > 0 && (
             <p>{formatLine("DESCUENTO:", `-${formatCurrency(discountAmount)}`)}</p>
           )}
-           {taxAmount > 0 && (
+           {taxAmount > 0 && ( // Show taxable base only if there is tax
             <p>{formatLine(`BASE IMPONIBLE:`, formatCurrency(taxableBase))}</p>
           )}
-          {taxAmount > 0 && (
+          {taxAmount > 0 && ( // Show tax only if there is tax
             <p>{formatLine(`IVA (${(taxRate * 100).toFixed(0)}%):`, formatCurrency(taxAmount))}</p>
           )}
           <p className="font-bold text-sm">{formatLine(isReturn ? "TOTAL CRÉDITO:" : "TOTAL A PAGAR:", formatCurrency(totalAmount))}</p>
@@ -142,7 +161,7 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
           <div className="mt-2 space-y-0.5">
             <p className="font-semibold">{isReturn ? "CRÉDITO EMITIDO VÍA:" : "FORMA DE PAGO:"}</p>
             {payments.map((p, idx) => (
-              <p key={idx}>{formatLine(p.method.toUpperCase() + (p.reference ? ` (${p.reference})` : ''), formatCurrency(p.amount))}</p>
+              <p key={idx}>{formatLine(p.method.toUpperCase() + (p.reference ? ` (${p.reference.slice(0,10)})` : ''), formatCurrency(p.amount))}</p>
             ))}
           </div>
         )}
@@ -151,10 +170,10 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
             <div className="mt-1">
                 <DottedLine />
                 <p className="font-semibold">{formatLine("TOTAL PAGADO:", formatCurrency(amountPaid))}</p>
-                {amountDue < 0 && (
+                {amountDue < 0 && ( // Customer paid more
                     <p className="font-semibold">{formatLine("VUELTO:", formatCurrency(Math.abs(amountDue)))}</p>
                 )}
-                {amountDue > 0 && (
+                {amountDue > 0 && ( // Customer paid less
                     <p className="font-semibold">{formatLine("MONTO PENDIENTE:", formatCurrency(amountDue))}</p>
                 )}
             </div>
@@ -177,7 +196,3 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
     </Card>
   );
 }
-
-// Renamed 'invoices' to 'invoicesData' to avoid conflict if 'invoices' is used as a prop elsewhere.
-// This is used for looking up original invoice number for credit notes.
-const invoicesData: Invoice[] = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem("invoices") || "[]") : [];
