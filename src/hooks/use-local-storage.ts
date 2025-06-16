@@ -3,18 +3,25 @@ import { useState, useEffect, useCallback } from 'react';
 type SetValue<T> = (value: T | ((val: T) => T)) => void;
 
 function useLocalStorage<T>(key: string, initialValue: T): [T, SetValue<T>] {
-  const [storedValue, setStoredValue] = useState<T>(() => {
-    if (typeof window === 'undefined') {
-      return initialValue;
+  // Initialize with initialValue to ensure server and initial client render match.
+  const [storedValue, setStoredValue] = useState<T>(initialValue);
+
+  // Client-side effect to read from localStorage and update state.
+  useEffect(() => {
+    // This check is important to ensure localStorage is only accessed on the client.
+    if (typeof window !== 'undefined') {
+      try {
+        const item = window.localStorage.getItem(key);
+        if (item !== null) { // Check if item exists
+          setStoredValue(JSON.parse(item));
+        }
+        // If item is null (not in localStorage), storedValue remains initialValue, which is correct.
+      } catch (error) {
+        console.error(`Error reading localStorage key "${key}" in useEffect:`, error);
+        // Do not change storedValue from initialValue on error, it's already set to initialValue.
+      }
     }
-    try {
-      const item = window.localStorage.getItem(key);
-      return item ? JSON.parse(item) : initialValue;
-    } catch (error) {
-      console.error(`Error reading localStorage key "${key}":`, error);
-      return initialValue;
-    }
-  });
+  }, [key]); // Removed initialValue from deps as it should not cause re-read from storage if it changes.
 
   const setValue: SetValue<T> = useCallback(
     (value) => {
@@ -33,29 +40,21 @@ function useLocalStorage<T>(key: string, initialValue: T): [T, SetValue<T>] {
   
   useEffect(() => {
     const handleStorageChange = (event: StorageEvent) => {
-      if (event.key === key && event.newValue) {
-        try {
-          setStoredValue(JSON.parse(event.newValue));
-        } catch (error) {
-           console.error(`Error parsing storage change for key "${key}":`, error);
+      if (event.key === key) {
+        if (event.newValue) {
+          try {
+            setStoredValue(JSON.parse(event.newValue));
+          } catch (error) {
+             console.error(`Error parsing storage change for key "${key}":`, error);
+          }
+        } else { // Item was removed or cleared in another tab
+          setStoredValue(initialValue);
         }
       }
     };
 
     if (typeof window !== 'undefined') {
       window.addEventListener('storage', handleStorageChange);
-      // Initialize state from localStorage again in case it was updated in another tab
-      const item = window.localStorage.getItem(key);
-      if (item) {
-        try {
-            const parsedItem = JSON.parse(item);
-            if (JSON.stringify(parsedItem) !== JSON.stringify(storedValue)) {
-                 setStoredValue(parsedItem);
-            }
-        } catch (error) {
-            console.error(`Error re-syncing localStorage key "${key}":`, error);
-        }
-      }
     }
     
     return () => {
@@ -63,7 +62,7 @@ function useLocalStorage<T>(key: string, initialValue: T): [T, SetValue<T>] {
         window.removeEventListener('storage', handleStorageChange);
       }
     };
-  }, [key, storedValue]);
+  }, [key, initialValue]);
 
 
   return [storedValue, setValue];

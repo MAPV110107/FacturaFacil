@@ -25,7 +25,7 @@ import { useToast } from "@/hooks/use-toast";
 import { PlusCircle, Trash2, Users, FileText, DollarSign, Settings, Receipt, CalendarDays, Info, Save } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Form, FormField, FormItem } from "@/components/ui/form";
+import { Form, FormField, FormItem, FormControl, FormLabel, FormMessage } from "@/components/ui/form";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -54,19 +54,25 @@ export function InvoiceEditor() {
   const { toast } = useToast();
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | undefined>(undefined);
   
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
   const [liveInvoicePreview, setLiveInvoicePreview] = useState<Partial<Invoice>>({
     items: [],
     paymentMethods: [],
     thankYouMessage: DEFAULT_THANK_YOU_MESSAGE,
-    date: new Date().toISOString(),
-    invoiceNumber: `FACT-${Date.now().toString().slice(-6)}`
+    date: new Date(0).toISOString(), // SSR-safe: Use a fixed epoch date
+    invoiceNumber: "" // SSR-safe: Initialize as empty
   });
 
   const form = useForm<InvoiceFormData>({
     resolver: zodResolver(invoiceFormSchema),
     defaultValues: {
-      invoiceNumber: liveInvoicePreview.invoiceNumber,
-      date: new Date(),
+      invoiceNumber: "", // SSR-safe
+      date: undefined, // SSR-safe, Calendar will show placeholder
       customerDetails: { name: "", rif: "", address: "" },
       items: [{ id: uuidv4(), description: "", quantity: 1, unitPrice: 0 }],
       paymentMethods: [{ method: "Efectivo", amount: 0, reference: "" }],
@@ -75,6 +81,24 @@ export function InvoiceEditor() {
       taxRate: TAX_RATE,
     },
   });
+
+  useEffect(() => {
+    if (isClient) {
+      const initialInvoiceNumber = `FACT-${Date.now().toString().slice(-6)}`;
+      const initialDate = new Date();
+
+      form.setValue("invoiceNumber", initialInvoiceNumber, { shouldDirty: false, shouldValidate: false });
+      form.setValue("date", initialDate, { shouldDirty: false, shouldValidate: false });
+      
+      // Update preview state immediately after setting form values for client
+      setLiveInvoicePreview(prev => ({
+        ...prev,
+        invoiceNumber: initialInvoiceNumber,
+        date: initialDate.toISOString(),
+      }));
+    }
+  }, [isClient, form]);
+
 
   const { fields: itemFields, append: appendItem, remove: removeItem } = useFieldArray({
     control: form.control,
@@ -101,8 +125,11 @@ export function InvoiceEditor() {
 
   useEffect(() => {
     const subscription = form.watch((values, { name, type }) => {
+      // Ensure values are defined before processing
       const currentItems = (values.items || []).map(item => ({
         ...item,
+        quantity: item.quantity || 0,
+        unitPrice: item.unitPrice || 0,
         totalPrice: (item.quantity || 0) * (item.unitPrice || 0),
       })) as InvoiceItem[];
       
@@ -112,7 +139,7 @@ export function InvoiceEditor() {
       setLiveInvoicePreview(prev => ({
         ...prev,
         invoiceNumber: values.invoiceNumber,
-        date: values.date ? values.date.toISOString() : new Date().toISOString(),
+        date: values.date ? values.date.toISOString() : (prev.date || new Date(0).toISOString()),
         customerDetails: values.customerDetails as CustomerDetails,
         items: currentItems,
         paymentMethods: values.paymentMethods as PaymentDetails[],
@@ -130,17 +157,34 @@ export function InvoiceEditor() {
 
 
    useEffect(() => {
-    const items = form.getValues("items").map(item => ({
-        ...item,
-        totalPrice: (item.quantity || 0) * (item.unitPrice || 0),
-    })) as InvoiceItem[];
-    const taxRate = form.getValues("taxRate");
-    const { subTotal, taxAmount, totalAmount } = calculateTotals(items, taxRate);
-    const payments = form.getValues("paymentMethods");
-    const {amountPaid, amountDue} = calculatePaymentSummary(payments, totalAmount);
+    // This effect ensures liveInvoicePreview is updated when form values (potentially from localStorage via selected customer) are ready.
+    // Run only on client after initial hydration and form setup.
+    if (isClient) {
+        const values = form.getValues();
+        const currentItems = (values.items || []).map(item => ({
+            ...item,
+            quantity: item.quantity || 0,
+            unitPrice: item.unitPrice || 0,
+            totalPrice: (item.quantity || 0) * (item.unitPrice || 0),
+        })) as InvoiceItem[];
+        const taxRate = values.taxRate ?? TAX_RATE;
+        const { subTotal, taxAmount, totalAmount } = calculateTotals(currentItems, taxRate);
+        const payments = values.paymentMethods || [];
+        const {amountPaid, amountDue} = calculatePaymentSummary(payments, totalAmount);
 
-    setLiveInvoicePreview(prev => ({ ...prev, items, subTotal, taxAmount, totalAmount, amountPaid, amountDue }));
-  }, [form, calculateTotals, calculatePaymentSummary]); 
+        setLiveInvoicePreview(prev => ({ 
+            ...prev, 
+            invoiceNumber: values.invoiceNumber || prev.invoiceNumber,
+            date: values.date ? values.date.toISOString() : (prev.date || new Date(0).toISOString()),
+            customerDetails: values.customerDetails as CustomerDetails,
+            items: currentItems, 
+            paymentMethods: payments as PaymentDetails[],
+            subTotal, taxAmount, totalAmount, amountPaid, amountDue,
+            thankYouMessage: values.thankYouMessage || DEFAULT_THANK_YOU_MESSAGE,
+            notes: values.notes,
+        }));
+    }
+  }, [isClient, form, calculateTotals, calculatePaymentSummary, companyDetails, customers]); // Add relevant dependencies
 
 
   const handleCustomerSelect = (customerId: string) => {
@@ -149,7 +193,8 @@ export function InvoiceEditor() {
     if (customer) {
       form.setValue("customerDetails", customer, { shouldValidate: true });
     } else {
-      form.setValue("customerDetails", { name: "", rif: "", address: "", phone: "", email: "" }, { shouldValidate: true });
+      // Reset to new customer input fields, keeping other form data
+      form.setValue("customerDetails", { id: undefined, name: "", rif: "", address: "", phone: "", email: "" }, { shouldValidate: true });
     }
   };
   
@@ -165,7 +210,7 @@ export function InvoiceEditor() {
       id: uuidv4(),
       invoiceNumber: data.invoiceNumber,
       date: data.date.toISOString(),
-      companyDetails: companyDetails || defaultCompany,
+      companyDetails: companyDetails || defaultCompany, // companyDetails from useLocalStorage
       customerDetails: data.customerDetails as CustomerDetails, 
       items: finalItems,
       paymentMethods: data.paymentMethods,
@@ -179,16 +224,21 @@ export function InvoiceEditor() {
     };
     
     setSavedInvoices(prevInvoices => [...prevInvoices, fullInvoiceData]);
-    setLiveInvoicePreview(fullInvoiceData);
+    // Set liveInvoicePreview to the saved invoice to ensure preview matches what was saved
+    setLiveInvoicePreview(fullInvoiceData); 
     
     toast({
       title: "Factura Guardada y Lista para Imprimir",
       description: `La factura Nro. ${data.invoiceNumber} ha sido guardada en el historial y generada.`,
     });
-    // Reset form for next invoice
+
+    // Reset form for next invoice, ensuring client-side values are re-initialized
+    const newInvoiceNumber = isClient ? `FACT-${Date.now().toString().slice(-6)}` : "";
+    const newDate = isClient ? new Date() : undefined;
+
     form.reset({
-      invoiceNumber: `FACT-${Date.now().toString().slice(-6)}`,
-      date: new Date(),
+      invoiceNumber: newInvoiceNumber,
+      date: newDate,
       customerDetails: { name: "", rif: "", address: "" },
       items: [{ id: uuidv4(), description: "", quantity: 1, unitPrice: 0 }],
       paymentMethods: [{ method: "Efectivo", amount: 0, reference: "" }],
@@ -196,7 +246,34 @@ export function InvoiceEditor() {
       notes: "",
       taxRate: TAX_RATE,
     });
-    setSelectedCustomerId(undefined); // Reset customer dropdown
+    setSelectedCustomerId(undefined); 
+    // also reset live preview for the new form
+     if(isClient) {
+        setLiveInvoicePreview({
+            items: [{ id: uuidv4(), description: "", quantity: 1, unitPrice: 0, totalPrice: 0}],
+            paymentMethods: [{ method: "Efectivo", amount: 0, reference: "" }],
+            thankYouMessage: DEFAULT_THANK_YOU_MESSAGE,
+            date: newDate?.toISOString() || new Date(0).toISOString(),
+            invoiceNumber: newInvoiceNumber,
+            subTotal: 0, taxAmount: 0, totalAmount: 0, amountPaid: 0, amountDue: 0,
+            customerDetails: { name: "", rif: "", address: "" },
+        });
+     }
+  }
+
+  // Determine company details for preview, ensuring it's SSR-safe initially.
+  // The updated useLocalStorage hook should handle this, so companyDetails is initialValue on SSR.
+  const previewCompanyDetails = companyDetails;
+
+
+  if (!isClient) {
+    // Render a loading state or minimal version for SSR / pre-hydration
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-muted-foreground">
+        <FileText className="h-16 w-16 mb-4 animate-pulse text-primary" />
+        <p className="text-xl font-semibold">Cargando editor de facturas...</p>
+      </div>
+    );
   }
 
   return (
@@ -214,9 +291,11 @@ export function InvoiceEditor() {
                   name="invoiceNumber"
                   render={({ field }) => (
                     <FormItem>
-                      <Label htmlFor="invoiceNumber">Número de Factura</Label>
-                      <Input id="invoiceNumber" {...field} />
-                      {form.formState.errors.invoiceNumber && <p className="text-sm text-destructive">{form.formState.errors.invoiceNumber.message}</p>}
+                      <FormLabel htmlFor="invoiceNumber">Número de Factura</FormLabel>
+                      <FormControl>
+                        <Input id="invoiceNumber" {...field} />
+                      </FormControl>
+                      <FormMessage />
                     </FormItem>
                   )}
                 />
@@ -225,9 +304,10 @@ export function InvoiceEditor() {
                   name="date"
                   render={({ field }) => (
                     <FormItem className="flex flex-col">
-                      <Label htmlFor="date">Fecha de Factura</Label>
-                      <Popover>
+                      <FormLabel htmlFor="date">Fecha de Factura</FormLabel>
+                       <Popover>
                         <PopoverTrigger asChild>
+                          <FormControl>
                            <Button
                             id="date"
                             variant={"outline"}
@@ -236,6 +316,7 @@ export function InvoiceEditor() {
                             <CalendarDays className="mr-2 h-4 w-4" />
                             {field.value ? format(field.value, "PPP", { locale: es }) : <span>Seleccione una fecha</span>}
                           </Button>
+                          </FormControl>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0">
                           <Calendar
@@ -244,10 +325,11 @@ export function InvoiceEditor() {
                             onSelect={field.onChange}
                             initialFocus
                             locale={es}
+                            disabled={(date) => date > new Date() || date < new Date("1900-01-01")}
                           />
                         </PopoverContent>
                       </Popover>
-                      {form.formState.errors.date && <p className="text-sm text-destructive">{form.formState.errors.date.message}</p>}
+                      <FormMessage />
                     </FormItem>
                   )}
                 />
@@ -260,31 +342,42 @@ export function InvoiceEditor() {
               <CardTitle className="text-xl flex items-center text-primary"><Users className="mr-2 h-5 w-5" />Información del Cliente</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Select onValueChange={handleCustomerSelect} value={selectedCustomerId || ""}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar cliente existente o ingresar nuevo" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="new_customer">--- Ingresar Nuevo Cliente ---</SelectItem>
-                  {customers.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name} ({c.rif})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {form.formState.errors.customerDetails?.name && <p className="text-sm text-destructive">{form.formState.errors.customerDetails.name.message}</p>}
-
+              <FormField
+                control={form.control}
+                name="customerDetails.id" // Not directly used in schema but helps manage selection
+                render={({ field }) => (
+                  <FormItem>
+                  <FormLabel>Cliente</FormLabel>
+                  <Select onValueChange={handleCustomerSelect} value={selectedCustomerId || ""}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar cliente existente o ingresar nuevo" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="new_customer">--- Ingresar Nuevo Cliente ---</SelectItem>
+                      {customers.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name} ({c.rif})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage /> {/* For general customer selection error if any */}
+                  </FormItem>
+                )}
+              />
+              
               {(selectedCustomerId === "new_customer" || !selectedCustomerId || customers.length === 0) && (
                 <div className="space-y-3 pt-3 border-t mt-3">
                     <FormField control={form.control} name="customerDetails.name" render={({ field }) => (
-                        <FormItem><Label>Nombre/Razón Social</Label><Input {...field} placeholder="Nombre del nuevo cliente" />{form.formState.errors.customerDetails?.name && <p className="text-sm text-destructive">{form.formState.errors.customerDetails.name.message}</p>}</FormItem>
+                        <FormItem><FormLabel>Nombre/Razón Social</FormLabel><FormControl><Input {...field} placeholder="Nombre del nuevo cliente" /></FormControl><FormMessage /></FormItem>
                     )} />
                     <FormField control={form.control} name="customerDetails.rif" render={({ field }) => (
-                        <FormItem><Label>RIF/CI</Label><Input {...field} placeholder="RIF del nuevo cliente" />{form.formState.errors.customerDetails?.rif && <p className="text-sm text-destructive">{form.formState.errors.customerDetails.rif.message}</p>}</FormItem>
+                        <FormItem><FormLabel>RIF/CI</FormLabel><FormControl><Input {...field} placeholder="RIF del nuevo cliente" /></FormControl><FormMessage /></FormItem>
                     )} />
                     <FormField control={form.control} name="customerDetails.address" render={({ field }) => (
-                        <FormItem><Label>Dirección</Label><Textarea {...field} placeholder="Dirección del nuevo cliente" />{form.formState.errors.customerDetails?.address && <p className="text-sm text-destructive">{form.formState.errors.customerDetails.address.message}</p>}</FormItem>
+                        <FormItem><FormLabel>Dirección</FormLabel><FormControl><Textarea {...field} placeholder="Dirección del nuevo cliente" /></FormControl><FormMessage /></FormItem>
                     )} />
                 </div>
               )}
@@ -303,9 +396,9 @@ export function InvoiceEditor() {
                     name={`items.${index}.description`}
                     render={({ field: f }) => (
                       <FormItem>
-                        <Label>Descripción</Label>
-                        <Input {...f} placeholder="Artículo o Servicio" />
-                        {form.formState.errors.items?.[index]?.description && <p className="text-sm text-destructive">{form.formState.errors.items[index]?.description?.message}</p>}
+                        <FormLabel>Descripción</FormLabel>
+                        <FormControl><Input {...f} placeholder="Artículo o Servicio" /></FormControl>
+                        <FormMessage />
                       </FormItem>
                     )}
                   />
@@ -314,10 +407,10 @@ export function InvoiceEditor() {
                     name={`items.${index}.quantity`}
                     render={({ field: f }) => (
                       <FormItem>
-                        <Label>Cantidad</Label>
-                        <Input {...f} type="number" step="0.01" placeholder="1" 
-                         onChange={e => f.onChange(parseFloat(e.target.value) || 0)} />
-                        {form.formState.errors.items?.[index]?.quantity && <p className="text-sm text-destructive">{form.formState.errors.items[index]?.quantity?.message}</p>}
+                        <FormLabel>Cantidad</FormLabel>
+                        <FormControl><Input {...f} type="number" step="0.01" placeholder="1" 
+                         onChange={e => f.onChange(parseFloat(e.target.value) || 0)} /></FormControl>
+                        <FormMessage />
                       </FormItem>
                     )}
                   />
@@ -326,10 +419,10 @@ export function InvoiceEditor() {
                     name={`items.${index}.unitPrice`}
                     render={({ field: f }) => (
                       <FormItem>
-                        <Label>Precio Unit. ({CURRENCY_SYMBOL})</Label>
-                        <Input {...f} type="number" step="0.01" placeholder="0.00" 
-                         onChange={e => f.onChange(parseFloat(e.target.value) || 0)} />
-                        {form.formState.errors.items?.[index]?.unitPrice && <p className="text-sm text-destructive">{form.formState.errors.items[index]?.unitPrice?.message}</p>}
+                        <FormLabel>Precio Unit. ({CURRENCY_SYMBOL})</FormLabel>
+                        <FormControl><Input {...f} type="number" step="0.01" placeholder="0.00" 
+                         onChange={e => f.onChange(parseFloat(e.target.value) || 0)} /></FormControl>
+                        <FormMessage />
                       </FormItem>
                     )}
                   />
@@ -338,7 +431,7 @@ export function InvoiceEditor() {
                   </Button>
                 </div>
               ))}
-              {form.formState.errors.items && typeof form.formState.errors.items === 'object' && !Array.isArray(form.formState.errors.items) && <p className="text-sm text-destructive">{ (form.formState.errors.items as any).message }</p>}
+              <FormMessage>{form.formState.errors.items && typeof form.formState.errors.items === 'object' && !Array.isArray(form.formState.errors.items) ? (form.formState.errors.items as any).message : null}</FormMessage>
               <Button type="button" variant="outline" onClick={() => appendItem({ id: uuidv4(), description: "", quantity: 1, unitPrice: 0 })}>
                 <PlusCircle className="mr-2 h-4 w-4" /> Añadir Artículo
               </Button>
@@ -357,9 +450,11 @@ export function InvoiceEditor() {
                             name={`paymentMethods.${index}.method`}
                             render={({ field: f }) => (
                                 <FormItem>
-                                    <Label>Método</Label>
-                                     <Select onValueChange={f.onChange} defaultValue={f.value}>
+                                    <FormLabel>Método</FormLabel>
+                                    <Select onValueChange={f.onChange} defaultValue={f.value}>
+                                      <FormControl>
                                         <SelectTrigger><SelectValue placeholder="Seleccione método" /></SelectTrigger>
+                                      </FormControl>
                                         <SelectContent>
                                             <SelectItem value="Efectivo">Efectivo</SelectItem>
                                             <SelectItem value="Tarjeta de Débito">Tarjeta de Débito</SelectItem>
@@ -370,7 +465,7 @@ export function InvoiceEditor() {
                                             <SelectItem value="Otro">Otro</SelectItem>
                                         </SelectContent>
                                     </Select>
-                                    {form.formState.errors.paymentMethods?.[index]?.method && <p className="text-sm text-destructive">{form.formState.errors.paymentMethods[index]?.method?.message}</p>}
+                                    <FormMessage />
                                 </FormItem>
                             )}
                         />
@@ -379,10 +474,10 @@ export function InvoiceEditor() {
                             name={`paymentMethods.${index}.amount`}
                             render={({ field: f }) => (
                                 <FormItem>
-                                    <Label>Monto ({CURRENCY_SYMBOL})</Label>
-                                    <Input {...f} type="number" step="0.01" placeholder="0.00" 
-                                     onChange={e => f.onChange(parseFloat(e.target.value) || 0)} />
-                                     {form.formState.errors.paymentMethods?.[index]?.amount && <p className="text-sm text-destructive">{form.formState.errors.paymentMethods[index]?.amount?.message}</p>}
+                                    <FormLabel>Monto ({CURRENCY_SYMBOL})</FormLabel>
+                                    <FormControl><Input {...f} type="number" step="0.01" placeholder="0.00" 
+                                     onChange={e => f.onChange(parseFloat(e.target.value) || 0)} /></FormControl>
+                                     <FormMessage />
                                 </FormItem>
                             )}
                         />
@@ -391,8 +486,9 @@ export function InvoiceEditor() {
                             name={`paymentMethods.${index}.reference`}
                             render={({ field: f }) => (
                                 <FormItem>
-                                    <Label>Referencia (Opcional)</Label>
-                                    <Input {...f} placeholder="Nro. de confirmación" />
+                                    <FormLabel>Referencia (Opcional)</FormLabel>
+                                    <FormControl><Input {...f} placeholder="Nro. de confirmación" /></FormControl>
+                                    <FormMessage />
                                 </FormItem>
                             )}
                         />
@@ -401,7 +497,7 @@ export function InvoiceEditor() {
                         </Button>
                     </div>
                 ))}
-                {form.formState.errors.paymentMethods && typeof form.formState.errors.paymentMethods === 'object' && !Array.isArray(form.formState.errors.paymentMethods) && <p className="text-sm text-destructive">{ (form.formState.errors.paymentMethods as any).message }</p>}
+                <FormMessage>{form.formState.errors.paymentMethods && typeof form.formState.errors.paymentMethods === 'object' && !Array.isArray(form.formState.errors.paymentMethods) ? (form.formState.errors.paymentMethods as any).message : null}</FormMessage>
                 <Button type="button" variant="outline" onClick={() => appendPayment({ method: "Efectivo", amount: 0, reference: "" })}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Añadir Método de Pago
                 </Button>
@@ -418,10 +514,10 @@ export function InvoiceEditor() {
                     name="taxRate"
                     render={({ field }) => (
                         <FormItem>
-                            <Label>Tasa de IVA (ej. 0.16 para 16%)</Label>
-                            <Input {...field} type="number" step="0.01" placeholder="0.16" 
-                             onChange={e => field.onChange(parseFloat(e.target.value) || 0)} />
-                            {form.formState.errors.taxRate && <p className="text-sm text-destructive">{form.formState.errors.taxRate.message}</p>}
+                            <FormLabel>Tasa de IVA (ej. 0.16 para 16%)</FormLabel>
+                            <FormControl><Input {...field} type="number" step="0.01" placeholder="0.16" 
+                             onChange={e => field.onChange(parseFloat(e.target.value) || 0)} /></FormControl>
+                            <FormMessage />
                         </FormItem>
                     )}
                 />
@@ -430,8 +526,9 @@ export function InvoiceEditor() {
                     name="thankYouMessage"
                     render={({ field }) => (
                         <FormItem>
-                            <Label>Mensaje de Agradecimiento</Label>
-                            <Input {...field} placeholder="¡Gracias por su compra!" />
+                            <FormLabel>Mensaje de Agradecimiento</FormLabel>
+                            <FormControl><Input {...field} placeholder="¡Gracias por su compra!" /></FormControl>
+                            <FormMessage />
                         </FormItem>
                     )}
                 />
@@ -440,8 +537,9 @@ export function InvoiceEditor() {
                     name="notes"
                     render={({ field }) => (
                         <FormItem>
-                            <Label>Notas Adicionales (Opcional)</Label>
-                            <Textarea {...field} placeholder="Ej: Garantía válida por 30 días." />
+                            <FormLabel>Notas Adicionales (Opcional)</FormLabel>
+                            <FormControl><Textarea {...field} placeholder="Ej: Garantía válida por 30 días." /></FormControl>
+                            <FormMessage />
                         </FormItem>
                     )}
                 />
@@ -462,8 +560,10 @@ export function InvoiceEditor() {
             <CardDescription>Así se verá su factura. Use el botón de abajo para imprimir.</CardDescription>
           </CardHeader>
         </Card>
-        <InvoicePreview invoice={liveInvoicePreview} companyDetails={companyDetails} className="print-receipt" />
+        {/* Pass previewCompanyDetails which is hydration-safe */}
+        <InvoicePreview invoice={liveInvoicePreview} companyDetails={previewCompanyDetails} className="print-receipt" />
       </div>
     </div>
   );
 }
+
