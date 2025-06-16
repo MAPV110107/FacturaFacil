@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { Menu, Settings, Users, FilePlus2, LayoutDashboard, History } from "lucide-react";
+import { Menu, Settings, Users, FilePlus2, LayoutDashboard, History, Undo2, SlidersHorizontal } from "lucide-react";
 import { Logo } from "@/components/icons";
 import { cn } from "@/lib/utils";
 
@@ -14,7 +14,9 @@ const navItems = [
   { href: "/invoice/new", label: "Nueva Factura", icon: FilePlus2 },
   { href: "/customers", label: "Clientes", icon: Users },
   { href: "/invoices", label: "Historial", icon: History },
+  { href: "/returns", label: "Devoluciones", icon: Undo2 },
   { href: "/company", label: "Empresa", icon: Settings },
+  { href: "/settings", label: "Ajustes", icon: SlidersHorizontal },
 ];
 
 export function SiteHeader() {
