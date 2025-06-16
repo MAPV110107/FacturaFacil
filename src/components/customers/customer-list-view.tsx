@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import useLocalStorage from "@/hooks/use-local-storage";
 import type { CustomerDetails } from "@/lib/types";
 import { CustomerDialog } from "./customer-dialog";
@@ -17,7 +18,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Trash2, UserRoundPlus, Users, Edit, DollarSign } from "lucide-react"; 
+import { Trash2, UserRoundPlus, Users, Edit, DollarSign, Gift } from "lucide-react"; 
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,6 +43,7 @@ export function CustomerListView() {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [isClient, setIsClient] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     setIsClient(true);
@@ -50,7 +52,7 @@ export function CustomerListView() {
   const handleSaveCustomer = (customer: CustomerDetails) => {
     setCustomers((prevCustomers) => {
       const existingIndex = prevCustomers.findIndex((c) => c.id === customer.id);
-      const customerWithDefaults = { // Ensure balances are numbers
+      const customerWithDefaults = { 
         ...customer,
         outstandingBalance: customer.outstandingBalance || 0,
         creditBalance: customer.creditBalance || 0,
@@ -138,18 +140,29 @@ export function CustomerListView() {
                     <TableCell className="hidden md:table-cell truncate max-w-xs" title={customer.address}>{customer.address}</TableCell>
                     <TableCell className={cn("text-right", (customer.outstandingBalance ?? 0) > 0 ? "text-destructive font-semibold" : "text-muted-foreground")}>
                       {formatCurrency(customer.outstandingBalance)}
-                    </TableCell>
-                    <TableCell className={cn("text-right", (customer.creditBalance ?? 0) > 0 ? "text-green-600 font-semibold" : "text-muted-foreground")}>
-                      {formatCurrency(customer.creditBalance)}
-                    </TableCell>
-                    <TableCell className="text-right space-x-1">
                       {(customer.outstandingBalance ?? 0) > 0 && (
-                        <Button asChild variant="outline" size="sm" className="text-xs h-7 px-2 border-primary text-primary hover:bg-primary/10 hover:text-primary">
+                        <Button asChild variant="link" size="sm" className="text-xs h-auto p-0 ml-1 text-primary hover:text-primary/80" title="Saldar Deuda">
                           <Link href={`/invoice/new?customerId=${customer.id}&debtPayment=true&amount=${customer.outstandingBalance}`}>
-                            <DollarSign className="mr-1 h-3 w-3" /> Saldar Deuda
+                            <DollarSign className="h-3 w-3" />
                           </Link>
                         </Button>
                       )}
+                    </TableCell>
+                    <TableCell className={cn("text-right", (customer.creditBalance ?? 0) > 0 ? "text-green-600 font-semibold" : "text-muted-foreground")}>
+                      {formatCurrency(customer.creditBalance)}
+                      {(customer.creditBalance ?? 0) > 0 && (
+                         <Button 
+                            variant="link" 
+                            size="sm" 
+                            className="text-xs h-auto p-0 ml-1 text-green-600 hover:text-green-700"
+                            onClick={() => router.push(`/returns?mode=creditWithdrawal&customerId=${customer.id}&amount=${customer.creditBalance}`)}
+                            title="Retirar Saldo a Favor"
+                          >
+                           <Gift className="h-3 w-3" />
+                         </Button>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right space-x-1">
                       <CustomerDialog
                         customer={customer}
                         onSave={handleSaveCustomer}

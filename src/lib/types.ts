@@ -1,6 +1,6 @@
 
 export interface CompanyDetails {
-  id: string; // Typically a single instance, so 'default' or a fixed ID
+  id: string; // Typically a single instance, 'default' or a fixed ID
   name: string;
   rif: string; // Registro de Información Fiscal
   address: string;
@@ -38,10 +38,10 @@ export interface Invoice {
   id: string; // Unique ID for the invoice (e.g., timestamp or sequential number)
   invoiceNumber: string; // User-defined or auto-generated invoice number
   date: string; // ISO string date
-  type: 'sale' | 'return'; // Distinguishes between sales invoice and credit note
-  originalInvoiceId?: string; // For returns, links to the original sale invoice ID
+  type: 'sale' | 'return'; // Distinguishes sales invoice and credit note
+  originalInvoiceId?: string | null; // For returns, links to original sale invoice ID. Can be special string for withdrawals.
   isDebtPayment?: boolean; // Flag to identify debt payment invoices
-  isCreditDeposit?: boolean; // Flag to identify credit deposit transactions
+  isCreditDeposit?: boolean; // Flag to identify credit deposit transactions OR credit withdrawal NCs
   companyDetails: CompanyDetails;
   customerDetails: CustomerDetails;
   items: InvoiceItem[];
