@@ -1,7 +1,8 @@
+
 import Link from "next/link";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FilePlus2, Users, Settings, ArrowRight } from "lucide-react";
+import { FilePlus2, Users, Settings, ArrowRight, History } from "lucide-react";
 
 export default function DashboardPage() {
   const features = [
@@ -20,6 +21,13 @@ export default function DashboardPage() {
       cta: "Ver Clientes",
     },
     {
+      title: "Historial de Facturas",
+      description: "Consultar y gestionar facturas emitidas.",
+      href: "/invoices",
+      icon: History,
+      cta: "Ver Historial",
+    },
+    {
       title: "Configuración de Empresa",
       description: "Actualizar los datos fiscales de su empresa.",
       href: "/company",
@@ -34,7 +42,7 @@ export default function DashboardPage() {
         <h1 className="text-3xl font-bold tracking-tight text-primary">Bienvenido a FacturaFacil</h1>
         <p className="text-muted-foreground mt-2">Su solución sencilla para la facturación fiscal.</p>
       </div>
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4">
         {features.map((feature) => (
           <Card key={feature.title} className="flex flex-col shadow-lg hover:shadow-xl transition-shadow duration-300">
             <CardHeader className="pb-4">

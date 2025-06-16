@@ -22,10 +22,10 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { InvoicePreview } from "./invoice-preview";
 import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, Trash2, Users, FileText, DollarSign, Settings, Receipt, CalendarDays, Info } from "lucide-react";
+import { PlusCircle, Trash2, Users, FileText, DollarSign, Settings, Receipt, CalendarDays, Info, Save } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Form, FormField, FormItem } from "@/components/ui/form"; // Added Form import
+import { Form, FormField, FormItem } from "@/components/ui/form";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -34,7 +34,7 @@ const invoiceFormSchema = z.object({
   date: z.date({ required_error: "La fecha es requerida."}),
   customerDetails: partialCustomerSchema.refine(data => data.id || (data.name && data.rif && data.address), {
     message: "Debe seleccionar un cliente existente o ingresar los datos de un nuevo cliente.",
-    path: ["name"], // Attach error to a common field if new customer is incomplete
+    path: ["name"], 
   }),
   items: z.array(invoiceItemSchema).min(1, "Debe añadir al menos un artículo a la factura."),
   paymentMethods: z.array(paymentDetailsSchema).min(1, "Debe añadir al menos un método de pago."),
@@ -50,10 +50,10 @@ const defaultCompany: CompanyDetails = { id: DEFAULT_COMPANY_ID, name: "", rif: 
 export function InvoiceEditor() {
   const [companyDetails] = useLocalStorage<CompanyDetails>("companyDetails", defaultCompany);
   const [customers] = useLocalStorage<CustomerDetails[]>("customers", []);
+  const [savedInvoices, setSavedInvoices] = useLocalStorage<Invoice[]>("invoices", []);
   const { toast } = useToast();
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | undefined>(undefined);
   
-  // State for the invoice preview, separate from form state for easier updates
   const [liveInvoicePreview, setLiveInvoicePreview] = useState<Partial<Invoice>>({
     items: [],
     paymentMethods: [],
@@ -99,7 +99,6 @@ export function InvoiceEditor() {
     return { amountPaid, amountDue };
   }, []);
 
-  // Effect to update live preview when form values change
   useEffect(() => {
     const subscription = form.watch((values, { name, type }) => {
       const currentItems = (values.items || []).map(item => ({
@@ -130,7 +129,6 @@ export function InvoiceEditor() {
   }, [form, calculateTotals, calculatePaymentSummary]);
 
 
-  // Effect to update totals in live preview when items or tax rate initially load or change
    useEffect(() => {
     const items = form.getValues("items").map(item => ({
         ...item,
@@ -142,7 +140,7 @@ export function InvoiceEditor() {
     const {amountPaid, amountDue} = calculatePaymentSummary(payments, totalAmount);
 
     setLiveInvoicePreview(prev => ({ ...prev, items, subTotal, taxAmount, totalAmount, amountPaid, amountDue }));
-  }, [form, calculateTotals, calculatePaymentSummary]); // Removed itemFields dependency to avoid loop
+  }, [form, calculateTotals, calculatePaymentSummary]); 
 
 
   const handleCustomerSelect = (customerId: string) => {
@@ -151,13 +149,11 @@ export function InvoiceEditor() {
     if (customer) {
       form.setValue("customerDetails", customer, { shouldValidate: true });
     } else {
-      // Clear customer details if "new" or invalid selection
       form.setValue("customerDetails", { name: "", rif: "", address: "", phone: "", email: "" }, { shouldValidate: true });
     }
   };
   
   function onSubmit(data: InvoiceFormData) {
-    // In a real app, you would save this invoice data
     const finalItems = data.items.map(item => ({
       ...item,
       totalPrice: item.quantity * item.unitPrice,
@@ -170,7 +166,7 @@ export function InvoiceEditor() {
       invoiceNumber: data.invoiceNumber,
       date: data.date.toISOString(),
       companyDetails: companyDetails || defaultCompany,
-      customerDetails: data.customerDetails as CustomerDetails, // Cast, validated by schema
+      customerDetails: data.customerDetails as CustomerDetails, 
       items: finalItems,
       paymentMethods: data.paymentMethods,
       subTotal,
@@ -182,21 +178,31 @@ export function InvoiceEditor() {
       notes: data.notes,
     };
     
-    // For now, we just update the preview and toast.
+    setSavedInvoices(prevInvoices => [...prevInvoices, fullInvoiceData]);
     setLiveInvoicePreview(fullInvoiceData);
-    console.log("Invoice Data:", fullInvoiceData);
+    
     toast({
-      title: "Factura Lista para Imprimir",
-      description: `La factura Nro. ${data.invoiceNumber} ha sido generada.`,
+      title: "Factura Guardada y Lista para Imprimir",
+      description: `La factura Nro. ${data.invoiceNumber} ha sido guardada en el historial y generada.`,
     });
-    // To save invoices: useLocalStorage("invoices", (prev = []) => [...prev, fullInvoiceData]);
+    // Reset form for next invoice
+    form.reset({
+      invoiceNumber: `FACT-${Date.now().toString().slice(-6)}`,
+      date: new Date(),
+      customerDetails: { name: "", rif: "", address: "" },
+      items: [{ id: uuidv4(), description: "", quantity: 1, unitPrice: 0 }],
+      paymentMethods: [{ method: "Efectivo", amount: 0, reference: "" }],
+      thankYouMessage: DEFAULT_THANK_YOU_MESSAGE,
+      notes: "",
+      taxRate: TAX_RATE,
+    });
+    setSelectedCustomerId(undefined); // Reset customer dropdown
   }
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="lg:col-span-2 space-y-8">
-          {/* Invoice Meta Section */}
           <Card>
             <CardHeader>
               <CardTitle className="text-xl flex items-center text-primary"><FileText className="mr-2 h-5 w-5" />Detalles de la Factura</CardTitle>
@@ -249,13 +255,12 @@ export function InvoiceEditor() {
             </CardContent>
           </Card>
 
-          {/* Customer Section */}
           <Card>
             <CardHeader>
               <CardTitle className="text-xl flex items-center text-primary"><Users className="mr-2 h-5 w-5" />Información del Cliente</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Select onValueChange={handleCustomerSelect} value={selectedCustomerId}>
+              <Select onValueChange={handleCustomerSelect} value={selectedCustomerId || ""}>
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccionar cliente existente o ingresar nuevo" />
                 </SelectTrigger>
@@ -286,7 +291,6 @@ export function InvoiceEditor() {
             </CardContent>
           </Card>
 
-          {/* Items Section */}
           <Card>
             <CardHeader>
               <CardTitle className="text-xl flex items-center text-primary"><Receipt className="mr-2 h-5 w-5" />Artículos de la Factura</CardTitle>
@@ -341,7 +345,6 @@ export function InvoiceEditor() {
             </CardContent>
           </Card>
           
-          {/* Payment Section */}
            <Card>
             <CardHeader>
                 <CardTitle className="text-xl flex items-center text-primary"><DollarSign className="mr-2 h-5 w-5" />Detalles del Pago</CardTitle>
@@ -405,7 +408,6 @@ export function InvoiceEditor() {
             </CardContent>
           </Card>
 
-          {/* Additional Settings */}
           <Card>
             <CardHeader>
                 <CardTitle className="text-xl flex items-center text-primary"><Settings className="mr-2 h-5 w-5" />Configuración Adicional</CardTitle>
@@ -446,15 +448,14 @@ export function InvoiceEditor() {
             </CardContent>
              <CardFooter>
                 <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
-                    <FileText className="mr-2 h-4 w-4" /> Generar Factura para Imprimir
+                    <Save className="mr-2 h-4 w-4" /> Guardar y Generar Factura
                 </Button>
             </CardFooter>
           </Card>
         </form>
       </Form>
       
-      {/* Invoice Preview Section */}
-      <div className="lg:col-span-1 space-y-4 sticky top-20 no-print"> {/* Added no-print here */}
+      <div className="lg:col-span-1 space-y-4 sticky top-20 no-print">
         <Card className="shadow-md">
           <CardHeader>
             <CardTitle className="text-xl flex items-center text-primary"><Info className="mr-2 h-5 w-5" />Previsualización de Factura</CardTitle>
@@ -466,5 +467,3 @@ export function InvoiceEditor() {
     </div>
   );
 }
-
-    
