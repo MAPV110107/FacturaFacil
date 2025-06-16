@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Trash2, UserRoundPlus, Users } from "lucide-react";
+import { Trash2, UserRoundPlus, Users, Edit } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -174,4 +174,3 @@ const Input = React.forwardRef<
   );
 });
 Input.displayName = "Input";
-
