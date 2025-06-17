@@ -271,21 +271,21 @@ export function InvoiceEditor() {
   }, []);
 
   useEffect(() => {
-    if (!isClient || customers.length === 0) { 
-        // Wait for client-side hydration and customers to be loaded
-        // This check is crucial if URL params depend on the customers list
-        const customerIdParam = searchParams.get('customerId');
-        if (customerIdParam && editorMode === 'normal' && !form.getValues('invoiceNumber')) {
-            // If there's a customerId in URL and form is pristine, it's likely we are waiting for customers.
-            // Do nothing this run, let the next run (once customers are loaded) handle it.
-            return;
-        }
-        if (!customerIdParam && !form.getValues('invoiceNumber')) {
-             resetFormAndState({ mode: 'normal' }); // Ensure initial reset if no params and form pristine
+    if (!isClient) { 
+        // Allow initial reset if no params and form pristine before customers load
+        if (!searchParams.get('customerId') && !form.getValues('invoiceNumber')) {
+            resetFormAndState({ mode: 'normal' });
         }
         return;
     }
 
+    if (isClient && customers.length === 0 && searchParams.get('customerId')) {
+        // If there's a customerId in URL but customers list is empty (still loading),
+        // we might display a loading state or just wait for next effect run.
+        // For now, let's not reset if a customerId is present, to give customers a chance to load.
+        return;
+    }
+    
     const customerIdParam = searchParams.get('customerId');
     const debtPaymentParam = searchParams.get('debtPayment') === 'true';
     const amountStrParam = searchParams.get('amount');
@@ -295,6 +295,7 @@ export function InvoiceEditor() {
         const targetCustomer = customers.find(c => c.id === customerIdParam);
         if (targetCustomer) {
             const currentFormValues = form.getValues();
+            // Check if we are already in the correct state or if this is the first time setting it up
             const isAlreadyCorrectlySetup = editorMode === 'debtPayment' &&
                                          currentFormValues.customerDetails.id === customerIdParam &&
                                          currentFormValues.items[0]?.unitPrice === amountParam &&
@@ -303,9 +304,14 @@ export function InvoiceEditor() {
                 resetFormAndState({ mode: 'debtPayment', customerId: customerIdParam, amount: amountParam });
             }
         } else {
-            toast({ variant: "destructive", title: "Cliente no encontrado", description: "No se pudo encontrar el cliente para el pago de deuda." });
-            if (pathname === '/invoice/new') router.replace('/invoice/new', { scroll: false });
-            resetFormAndState({ mode: 'normal' }); // Reset to normal if customer not found
+             // Customer not found, maybe customers list wasn't fully loaded yet or bad ID.
+             // If customers list *is* loaded and customer not found, show error and reset.
+            if (customers.length > 0) { // Check if customers list has content
+                toast({ variant: "destructive", title: "Cliente no encontrado", description: "No se pudo encontrar el cliente para el pago de deuda." });
+                if (pathname === '/invoice/new') router.replace('/invoice/new', { scroll: false }); // Clear params
+                resetFormAndState({ mode: 'normal' }); 
+            }
+            // If customers list is empty, it might still be loading, so don't reset yet.
         }
         return; 
     }
@@ -461,7 +467,7 @@ export function InvoiceEditor() {
         const invoiceTotal = liveInvoicePreview.totalAmount || 0;
         let otherPaymentsTotal = 0;
         paymentMethods.forEach((pm, i) => {
-            if (i !== index) { 
+            if (i !== index && pm.method !== "Saldo a Favor") { // Only consider other NON-credit payments
                 otherPaymentsTotal += pm.amount || 0;
             }
         });
@@ -645,13 +651,12 @@ export function InvoiceEditor() {
   }
   
   const handleCancelInvoice = () => {
-    // Potentially add a confirmation dialog here if form is dirty
     resetFormAndState({ mode: 'normal' });
     toast({
         title: "Creación Cancelada",
         description: "El documento ha sido descartado.",
     });
-    router.push('/dashboard'); // Or back to previous page
+    router.push('/dashboard'); 
   };
 
 
@@ -676,244 +681,77 @@ export function InvoiceEditor() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="lg:col-span-2 space-y-8">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-xl flex items-center text-primary">
-                <FileText className="mr-2 h-5 w-5" />
-                {getEditorTitle()}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="invoiceNumber"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel htmlFor="invoiceNumber">Número de Documento</FormLabel>
-                      <FormControl>
-                        <Input id="invoiceNumber" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="date"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-col">
-                      <FormLabel htmlFor="date">Fecha</FormLabel>
-                       <Popover>
-                        <PopoverTrigger asChild>
-                          <FormControl>
-                           <Button
-                            id="date"
-                            variant={"outline"}
-                            className={`w-full justify-start text-left font-normal ${!field.value && "text-muted-foreground"}`}
-                          >
-                            <CalendarDays className="mr-2 h-4 w-4" />
-                            {field.value ? format(field.value, "PPP", { locale: es }) : <span>Seleccione una fecha</span>}
-                          </Button>
-                          </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0">
-                          <Calendar
-                            mode="single"
-                            selected={field.value}
-                            onSelect={(date) => {
-                                if (date) field.onChange(date);
-                            }}
-                            initialFocus
-                            locale={es}
-                            disabled={(date) => date > new Date() || date < new Date("1900-01-01")}
-                          />
-                        </PopoverContent>
-                      </Popover>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="cashierNumber"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel htmlFor="cashierNumber">Número de Caja (Opcional)</FormLabel>
-                      <FormControl>
-                        <Input id="cashierNumber" {...field} placeholder="Ej: 01" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="salesperson"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel htmlFor="salesperson">Vendedor (Opcional)</FormLabel>
-                      <FormControl>
-                        <Input id="salesperson" {...field} placeholder="Ej: Ana Pérez" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-xl flex items-center text-primary"><Users className="mr-2 h-5 w-5" />Información del Cliente</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-col sm:flex-row gap-2 items-end">
-                <FormItem className="flex-grow">
-                  <FormLabel htmlFor="customerRifInput">RIF/Cédula del Cliente</FormLabel>
-                  <FormControl>
-                    <Input
-                      id="customerRifInput"
-                      placeholder="Ingrese RIF/Cédula y presione Enter o Busque"
-                      value={customerRifInput}
-                      onChange={(e) => setCustomerRifInput(e.target.value)}
-                      onBlur={handleRifSearch}
-                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleRifSearch(); }}}
-                      disabled={editorMode !== 'normal'}
-                    />
-                  </FormControl>
-                </FormItem>
-                <Button type="button" onClick={handleRifSearch} disabled={isSearchingCustomer || editorMode !== 'normal'} className="w-full sm:w-auto">
-                  <Search className="mr-2 h-4 w-4" /> {isSearchingCustomer ? "Buscando..." : "Buscar"}
-                </Button>
-              </div>
-
-              {customerSearchMessage && <p className={`text-sm mt-1 ${form.formState.errors.customerDetails?.rif || form.formState.errors.customerDetails?.name ? 'text-destructive' : 'text-muted-foreground'}`}>{customerSearchMessage}</p>}
-              
-              <div className="space-y-3 pt-3 border-t mt-3">
-                <FormField control={form.control} name="customerDetails.rif" render={({ field }) => (
-                    <FormItem>
-                        <FormLabel>RIF/CI (verificado/ingresado)</FormLabel>
-                        <FormControl><Input {...field} readOnly={editorMode !== 'normal' || (!showNewCustomerFields && !!form.getValues("customerDetails.id"))} placeholder="RIF del cliente" /></FormControl>
+      <div className="lg:col-span-2 no-print">
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-xl flex items-center text-primary">
+                  <FileText className="mr-2 h-5 w-5" />
+                  {getEditorTitle()}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="invoiceNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel htmlFor="invoiceNumber">Número de Documento</FormLabel>
+                        <FormControl>
+                          <Input id="invoiceNumber" {...field} />
+                        </FormControl>
                         <FormMessage />
-                    </FormItem>
-                )} />
-                <FormField control={form.control} name="customerDetails.name" render={({ field }) => (
-                    <FormItem>
-                        <FormLabel>Nombre/Razón Social</FormLabel>
-                        <FormControl><Input {...field} placeholder="Nombre del cliente" readOnly={editorMode !== 'normal' || (!showNewCustomerFields && !!form.getValues("customerDetails.id") && !isSearchingCustomer && !selectedCustomerIdForDropdown)} /></FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="date"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-col">
+                        <FormLabel htmlFor="date">Fecha</FormLabel>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <FormControl>
+                            <Button
+                              id="date"
+                              variant={"outline"}
+                              className={`w-full justify-start text-left font-normal ${!field.value && "text-muted-foreground"}`}
+                            >
+                              <CalendarDays className="mr-2 h-4 w-4" />
+                              {field.value ? format(field.value, "PPP", { locale: es }) : <span>Seleccione una fecha</span>}
+                            </Button>
+                            </FormControl>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar
+                              mode="single"
+                              selected={field.value}
+                              onSelect={(date) => {
+                                  if (date) field.onChange(date);
+                              }}
+                              initialFocus
+                              locale={es}
+                              disabled={(date) => date > new Date() || date < new Date("1900-01-01")}
+                            />
+                          </PopoverContent>
+                        </Popover>
                         <FormMessage />
-                    </FormItem>
-                )} />
-                <FormField control={form.control} name="customerDetails.address" render={({ field }) => (
-                    <FormItem>
-                        <FormLabel>Dirección Fiscal</FormLabel>
-                        <FormControl><Textarea {...field} placeholder="Dirección del cliente" readOnly={editorMode !== 'normal' || (!showNewCustomerFields && !!form.getValues("customerDetails.id") && !isSearchingCustomer && !selectedCustomerIdForDropdown)} /></FormControl>
-                        <FormMessage />
-                    </FormItem>
-                )} />
-                <FormField control={form.control} name="customerDetails.phone" render={({ field }) => (
-                    <FormItem>
-                        <FormLabel>Teléfono (Opcional)</FormLabel>
-                        <FormControl><Input {...field} placeholder="Teléfono del cliente" readOnly={editorMode !== 'normal' || (!showNewCustomerFields && !!form.getValues("customerDetails.id") && !isSearchingCustomer && !selectedCustomerIdForDropdown)} /></FormControl>
-                        <FormMessage />
-                    </FormItem>
-                )} />
-                <FormField control={form.control} name="customerDetails.email" render={({ field }) => (
-                    <FormItem>
-                        <FormLabel>Email (Opcional)</FormLabel>
-                        <FormControl><Input {...field} type="email" placeholder="Email del cliente" readOnly={editorMode !== 'normal' || (!showNewCustomerFields && !!form.getValues("customerDetails.id") && !isSearchingCustomer && !selectedCustomerIdForDropdown)} /></FormControl>
-                        <FormMessage />
-                    </FormItem>
-                )} />
-              </div>
-
-              <FormItem className="mt-4">
-                <FormLabel>O seleccionar de la lista:</FormLabel>
-                <Select onValueChange={handleCustomerSelectFromDropdown} value={selectedCustomerIdForDropdown || ""} disabled={editorMode !== 'normal'}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar cliente existente" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {customers.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name} ({c.rif})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                 <FormMessage>{form.formState.errors.customerDetails && typeof form.formState.errors.customerDetails !== 'string' && (form.formState.errors.customerDetails as any)?.message}</FormMessage>
-              </FormItem>
-
-              {editorMode === 'normal' && currentCustomerForActions?.id && (
-                <div className="pt-4 mt-4 border-t space-y-2 sm:space-y-0 sm:flex sm:gap-2">
-                  {(currentCustomerForActions.outstandingBalance ?? 0) > 0 && (
-                     <Button type="button" variant="outline" onClick={handleEnterDebtPaymentMode} className="w-full sm:w-auto">
-                        <HandCoins className="mr-2 h-4 w-4" /> Cobrar Deuda Pendiente ({formatCurrency(currentCustomerForActions.outstandingBalance ?? 0)})
-                    </Button>
-                  )}
-                   <Button type="button" variant="outline" onClick={handleEnterCreditDepositMode} className="w-full sm:w-auto">
-                        <PiggyBank className="mr-2 h-4 w-4" /> Registrar Depósito a Cuenta
-                    </Button>
+                      </FormItem>
+                    )}
+                  />
                 </div>
-              )}
-               {editorMode !== 'normal' && (
-                 <div className="pt-4 mt-4 border-t">
-                    <Button type="button" variant="outline" onClick={() => resetFormAndState({mode: 'normal', customerId: form.getValues("customerDetails.id") || undefined })} className="w-full">
-                        <Ban className="mr-2 h-4 w-4" /> Cancelar Modo Especial / Nueva Factura
-                    </Button>
-                 </div>
-               )}
-
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-xl flex items-center text-primary"><Receipt className="mr-2 h-5 w-5" />Artículos del Documento</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {itemFields.map((field, index) => (
-                <div key={field.id} className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_auto] gap-3 items-end p-3 border rounded-md">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
-                    name={`items.${index}.description`}
-                    render={({ field: f }) => (
+                    name="cashierNumber"
+                    render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Descripción</FormLabel>
+                        <FormLabel htmlFor="cashierNumber">Número de Caja (Opcional)</FormLabel>
                         <FormControl>
-                          <Input 
-                            {...f} 
-                            placeholder="Artículo o Servicio" 
-                            readOnly={editorMode === 'debtPayment' || editorMode === 'creditDeposit'} 
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                   <FormField
-                    control={form.control}
-                    name={`items.${index}.quantity`}
-                    render={({ field: f }) => (
-                      <FormItem>
-                        <FormLabel>Cantidad</FormLabel>
-                        <FormControl>
-                          <Input 
-                            {...f} 
-                            type="number" 
-                            step="0.01" 
-                            placeholder="1" 
-                            onChange={e => f.onChange(parseFloat(e.target.value) || 0)} 
-                            readOnly={editorMode === 'debtPayment' || editorMode === 'creditDeposit'} 
-                          />
+                          <Input id="cashierNumber" {...field} placeholder="Ej: 01" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -921,232 +759,401 @@ export function InvoiceEditor() {
                   />
                   <FormField
                     control={form.control}
-                    name={`items.${index}.unitPrice`}
-                    render={({ field: f }) => (
+                    name="salesperson"
+                    render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Precio Unit. ({CURRENCY_SYMBOL})</FormLabel>
+                        <FormLabel htmlFor="salesperson">Vendedor (Opcional)</FormLabel>
                         <FormControl>
-                          <Input 
-                            {...f} 
-                            value={(editorMode === 'creditDeposit' && f.value === 0) ? '' : (f.value === 0 ? '' : f.value)}
-                            onChange={e => f.onChange(parseFloat(e.target.value) || 0)}
-                            type="number" 
-                            step="0.01" 
-                            placeholder="0.00" 
-                            readOnly={editorMode === 'debtPayment' || (editorMode === 'creditDeposit' && f.name === `items.${index}.unitPrice`)}
-                          />
-                        </FormControl> 
+                          <Input id="salesperson" {...field} placeholder="Ej: Ana Pérez" />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                  <Button 
-                    type="button" 
-                    variant="ghost" 
-                    size="icon" 
-                    onClick={() => removeItem(index)} 
-                    className="text-destructive hover:text-destructive/80" 
-                    disabled={editorMode !== 'normal' || itemFields.length <= 1}
-                  >
-                    <Trash2 className="h-5 w-5" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-xl flex items-center text-primary"><Users className="mr-2 h-5 w-5" />Información del Cliente</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-col sm:flex-row gap-2 items-end">
+                  <FormItem className="flex-grow">
+                    <FormLabel htmlFor="customerRifInput">RIF/Cédula del Cliente</FormLabel>
+                    <FormControl>
+                      <Input
+                        id="customerRifInput"
+                        placeholder="Ingrese RIF/Cédula y presione Enter o Busque"
+                        value={customerRifInput}
+                        onChange={(e) => setCustomerRifInput(e.target.value)}
+                        onBlur={handleRifSearch}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleRifSearch(); }}}
+                        disabled={editorMode !== 'normal'}
+                      />
+                    </FormControl>
+                  </FormItem>
+                  <Button type="button" onClick={handleRifSearch} disabled={isSearchingCustomer || editorMode !== 'normal'} className="w-full sm:w-auto">
+                    <Search className="mr-2 h-4 w-4" /> {isSearchingCustomer ? "Buscando..." : "Buscar"}
                   </Button>
                 </div>
-              ))}
-              <FormMessage>{form.formState.errors.items && typeof form.formState.errors.items === 'object' && !Array.isArray(form.formState.errors.items) ? (form.formState.errors.items as any).message : null}</FormMessage>
-               <FormMessage>{form.formState.errors.items && Array.isArray(form.formState.errors.items) && form.formState.errors.items.length ===0 && (form.formState.errors.items as any)?.message ? (form.formState.errors.items as any).message : null}</FormMessage>
-              {editorMode === 'normal' && (
-                <Button type="button" variant="outline" onClick={() => appendItem({ id: uuidv4(), description: "", quantity: 1, unitPrice: 0 })}>
-                  <PlusCircle className="mr-2 h-4 w-4" /> Añadir Artículo
-                </Button>
-              )}
-              {editorMode !== 'normal' && (
-                <div className="flex items-center p-3 rounded-md bg-accent/10 text-accent-foreground border border-accent/30">
-                  <Info className="h-5 w-5 mr-2" />
-                  <p className="text-sm">
-                    {editorMode === 'debtPayment' 
-                      ? "Está registrando un abono a una deuda. No se pueden modificar los artículos." 
-                      : "Está registrando un depósito a cuenta. Los detalles del artículo son fijos. Ingrese el monto del depósito en 'Detalles del Pago'."}
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-          
-           <Card>
-            <CardHeader>
-                <CardTitle className="text-xl flex items-center text-primary"><DollarSign className="mr-2 h-5 w-5" />Detalles del Pago</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                {paymentFields.map((field, index) => (
-                    <div key={field.id} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_auto] gap-3 items-end p-3 border rounded-md">
-                        <FormField
-                            control={form.control}
-                            name={`paymentMethods.${index}.method`}
-                            render={({ field: f }) => (
-                                <FormItem>
-                                    <FormLabel>Método</FormLabel>
-                                    <Select 
-                                      onValueChange={(value) => handlePaymentMethodChange(index, value)} 
-                                      value={f.value}
-                                      disabled={editorMode !== 'normal' && f.value === 'Saldo a Favor'}
-                                    >
-                                      <FormControl>
-                                        <SelectTrigger><SelectValue placeholder="Seleccione método" /></SelectTrigger>
-                                      </FormControl>
-                                        <SelectContent>
-                                            <SelectItem value="Efectivo">Efectivo</SelectItem>
-                                            <SelectItem value="Tarjeta de Débito">Tarjeta de Débito</SelectItem>
-                                            <SelectItem value="Tarjeta de Crédito">Tarjeta de Crédito</SelectItem>
-                                            <SelectItem value="Transferencia">Transferencia</SelectItem>
-                                            <SelectItem value="Pago Móvil">Pago Móvil</SelectItem>
-                                            <SelectItem value="Zelle">Zelle</SelectItem>
-                                            {selectedCustomerAvailableCredit > 0 && editorMode === 'normal' && (
-                                              <SelectItem value="Saldo a Favor">
-                                                Saldo a Favor (Disp: {formatCurrency(selectedCustomerAvailableCredit)})
-                                              </SelectItem>
-                                            )}
-                                            <SelectItem value="Otro">Otro</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name={`paymentMethods.${index}.amount`}
-                            render={({ field: f }) => (
-                                <FormItem>
-                                    <FormLabel>Monto ({CURRENCY_SYMBOL})</FormLabel>
-                                    <FormControl>
-                                      <Input 
-                                        {...f} 
-                                        value={f.value === 0 ? '' : f.value}
-                                        onChange={e => f.onChange(parseFloat(e.target.value) || 0)}
-                                        type="number" 
-                                        step="0.01" 
-                                        placeholder="0.00"
-                                        readOnly={form.getValues(`paymentMethods.${index}.method`) === 'Saldo a Favor' && editorMode === 'normal' && (liveInvoicePreview.totalAmount || 0) <= selectedCustomerAvailableCredit} 
-                                      />
-                                    </FormControl>
-                                     <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name={`paymentMethods.${index}.reference`}
-                            render={({ field: f }) => (
-                                <FormItem>
-                                    <FormLabel>Referencia (Opcional)</FormLabel>
-                                    <FormControl><Input {...f} placeholder="Nro. de confirmación" /></FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                         <Button type="button" variant="ghost" size="icon" onClick={() => removePayment(index)} className="text-destructive hover:text-destructive/80" disabled={paymentFields.length <=1}>
-                            <Trash2 className="h-5 w-5" />
-                        </Button>
-                    </div>
-                ))}
-                <FormMessage>{form.formState.errors.paymentMethods && typeof form.formState.errors.paymentMethods === 'object' && !Array.isArray(form.formState.errors.paymentMethods) ? (form.formState.errors.paymentMethods as any).message : null}</FormMessage>
-                <Button type="button" variant="outline" onClick={() => appendPayment({ method: "Efectivo", amount: 0, reference: "" })}>
-                    <PlusCircle className="mr-2 h-4 w-4" /> Añadir Método de Pago
-                </Button>
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardHeader>
-                <CardTitle className="text-xl flex items-center text-primary"><Settings className="mr-2 h-5 w-5" />Configuración Adicional</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                 <FormField
-                    control={form.control}
-                    name="discountAmount"
-                    render={({ field }) => (
-                        <FormItem>
-                            <FormLabel className="flex items-center">
-                              <Percent className="mr-2 h-4 w-4 text-muted-foreground" />
-                              Monto de Descuento ({CURRENCY_SYMBOL}) (Opcional)
-                            </FormLabel>
-                            <FormControl>
-                              <Input 
-                                {...field} 
-                                value={field.value === 0 ? '' : field.value}
-                                onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
-                                type="number" 
-                                step="0.01" 
-                                placeholder="0.00"
-                                readOnly={editorMode !== 'normal'} 
-                              />
-                            </FormControl>
-                             {editorMode !== 'normal' && <p className="text-xs text-muted-foreground mt-1">Los descuentos no aplican en este modo.</p>}
-                            <FormMessage />
-                        </FormItem>
+                {customerSearchMessage && <p className={`text-sm mt-1 ${form.formState.errors.customerDetails?.rif || form.formState.errors.customerDetails?.name ? 'text-destructive' : 'text-muted-foreground'}`}>{customerSearchMessage}</p>}
+                
+                <div className="space-y-3 pt-3 border-t mt-3">
+                  <FormField control={form.control} name="customerDetails.rif" render={({ field }) => (
+                      <FormItem>
+                          <FormLabel>RIF/CI (verificado/ingresado)</FormLabel>
+                          <FormControl><Input {...field} readOnly={editorMode !== 'normal' || (!showNewCustomerFields && !!form.getValues("customerDetails.id"))} placeholder="RIF del cliente" /></FormControl>
+                          <FormMessage />
+                      </FormItem>
+                  )} />
+                  <FormField control={form.control} name="customerDetails.name" render={({ field }) => (
+                      <FormItem>
+                          <FormLabel>Nombre/Razón Social</FormLabel>
+                          <FormControl><Input {...field} placeholder="Nombre del cliente" readOnly={editorMode !== 'normal' || (!showNewCustomerFields && !!form.getValues("customerDetails.id") && !isSearchingCustomer && !selectedCustomerIdForDropdown)} /></FormControl>
+                          <FormMessage />
+                      </FormItem>
+                  )} />
+                  <FormField control={form.control} name="customerDetails.address" render={({ field }) => (
+                      <FormItem>
+                          <FormLabel>Dirección Fiscal</FormLabel>
+                          <FormControl><Textarea {...field} placeholder="Dirección del cliente" readOnly={editorMode !== 'normal' || (!showNewCustomerFields && !!form.getValues("customerDetails.id") && !isSearchingCustomer && !selectedCustomerIdForDropdown)} /></FormControl>
+                          <FormMessage />
+                      </FormItem>
+                  )} />
+                  <FormField control={form.control} name="customerDetails.phone" render={({ field }) => (
+                      <FormItem>
+                          <FormLabel>Teléfono (Opcional)</FormLabel>
+                          <FormControl><Input {...field} placeholder="Teléfono del cliente" readOnly={editorMode !== 'normal' || (!showNewCustomerFields && !!form.getValues("customerDetails.id") && !isSearchingCustomer && !selectedCustomerIdForDropdown)} /></FormControl>
+                          <FormMessage />
+                      </FormItem>
+                  )} />
+                  <FormField control={form.control} name="customerDetails.email" render={({ field }) => (
+                      <FormItem>
+                          <FormLabel>Email (Opcional)</FormLabel>
+                          <FormControl><Input {...field} type="email" placeholder="Email del cliente" readOnly={editorMode !== 'normal' || (!showNewCustomerFields && !!form.getValues("customerDetails.id") && !isSearchingCustomer && !selectedCustomerIdForDropdown)} /></FormControl>
+                          <FormMessage />
+                      </FormItem>
+                  )} />
+                </div>
+
+                <FormItem className="mt-4">
+                  <FormLabel>O seleccionar de la lista:</FormLabel>
+                  <Select onValueChange={handleCustomerSelectFromDropdown} value={selectedCustomerIdForDropdown || ""} disabled={editorMode !== 'normal'}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar cliente existente" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {customers.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name} ({c.rif})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage>{form.formState.errors.customerDetails && typeof form.formState.errors.customerDetails !== 'string' && (form.formState.errors.customerDetails as any)?.message}</FormMessage>
+                </FormItem>
+
+                {editorMode === 'normal' && currentCustomerForActions?.id && (
+                  <div className="pt-4 mt-4 border-t space-y-2 sm:space-y-0 sm:flex sm:gap-2">
+                    {(currentCustomerForActions.outstandingBalance ?? 0) > 0 && (
+                      <Button type="button" variant="outline" onClick={handleEnterDebtPaymentMode} className="w-full sm:w-auto">
+                          <HandCoins className="mr-2 h-4 w-4" /> Cobrar Deuda Pendiente ({formatCurrency(currentCustomerForActions.outstandingBalance ?? 0)})
+                      </Button>
                     )}
-                />
-                <FormField
-                    control={form.control}
-                    name="taxRate"
-                    render={({ field }) => (
+                    <Button type="button" variant="outline" onClick={handleEnterCreditDepositMode} className="w-full sm:w-auto">
+                          <PiggyBank className="mr-2 h-4 w-4" /> Registrar Depósito a Cuenta
+                      </Button>
+                  </div>
+                )}
+                {editorMode !== 'normal' && (
+                  <div className="pt-4 mt-4 border-t">
+                      <Button type="button" variant="outline" onClick={() => resetFormAndState({mode: 'normal', customerId: form.getValues("customerDetails.id") || undefined })} className="w-full">
+                          <Ban className="mr-2 h-4 w-4" /> Cancelar Modo Especial / Nueva Factura
+                      </Button>
+                  </div>
+                )}
+
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-xl flex items-center text-primary"><Receipt className="mr-2 h-5 w-5" />Artículos del Documento</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {itemFields.map((field, index) => (
+                  <div key={field.id} className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_auto] gap-3 items-end p-3 border rounded-md">
+                    <FormField
+                      control={form.control}
+                      name={`items.${index}.description`}
+                      render={({ field: f }) => (
                         <FormItem>
-                            <FormLabel>Tasa de IVA (ej. 0.16 para 16%)</FormLabel>
-                            <FormControl>
-                              <Input 
-                                {...field} 
-                                type="number" 
-                                step="0.01" 
-                                placeholder="0.16" 
-                                onChange={e => field.onChange(parseFloat(e.target.value) || 0)} 
-                                readOnly={editorMode !== 'normal'} 
-                              />
-                            </FormControl>
-                             {editorMode !== 'normal' && <p className="text-xs text-muted-foreground mt-1">El IVA no aplica en este modo.</p>}
-                            <FormMessage />
+                          <FormLabel>Descripción</FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...f} 
+                              placeholder="Artículo o Servicio" 
+                              readOnly={editorMode === 'debtPayment' || editorMode === 'creditDeposit'} 
+                            />
+                          </FormControl>
+                          <FormMessage />
                         </FormItem>
-                    )}
-                />
-                <FormField
-                    control={form.control}
-                    name="thankYouMessage"
-                    render={({ field }) => (
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name={`items.${index}.quantity`}
+                      render={({ field: f }) => (
                         <FormItem>
-                            <FormLabel>Mensaje de Agradecimiento</FormLabel>
-                            <FormControl><Input {...field} placeholder="¡Gracias por su compra!" /></FormControl>
-                            <FormMessage />
+                          <FormLabel>Cantidad</FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...f} 
+                              type="number" 
+                              step="0.01" 
+                              placeholder="1" 
+                              onChange={e => f.onChange(parseFloat(e.target.value) || 0)} 
+                              readOnly={editorMode === 'debtPayment' || editorMode === 'creditDeposit'} 
+                            />
+                          </FormControl>
+                          <FormMessage />
                         </FormItem>
-                    )}
-                />
-                <FormField
-                    control={form.control}
-                    name="notes"
-                    render={({ field }) => (
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name={`items.${index}.unitPrice`}
+                      render={({ field: f }) => (
                         <FormItem>
-                            <FormLabel>Notas Adicionales (Opcional)</FormLabel>
-                            <FormControl><Textarea {...field} placeholder="Ej: Garantía válida por 30 días." /></FormControl>
-                            <FormMessage />
+                          <FormLabel>Precio Unit. ({CURRENCY_SYMBOL})</FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...f} 
+                              value={(editorMode === 'creditDeposit' && f.value === 0) ? '' : (f.value === 0 ? '' : f.value)}
+                              onChange={e => f.onChange(parseFloat(e.target.value) || 0)}
+                              type="number" 
+                              step="0.01" 
+                              placeholder="0.00" 
+                              readOnly={editorMode === 'debtPayment' || (editorMode === 'creditDeposit' && f.name === `items.${index}.unitPrice`)}
+                            />
+                          </FormControl> 
+                          <FormMessage />
                         </FormItem>
-                    )}
-                />
-            </CardContent>
-             <CardFooter className="flex-col sm:flex-row items-stretch gap-3">
-                <Button type="submit" className="w-full sm:flex-1 bg-primary hover:bg-primary/90 text-primary-foreground">
-                    <Save className="mr-2 h-4 w-4" /> 
-                    {editorMode === 'debtPayment' && "Guardar Abono a Deuda"}
-                    {editorMode === 'creditDeposit' && "Guardar Depósito a Cuenta"}
-                    {editorMode === 'normal' && "Guardar y Generar Factura"}
-                </Button>
-                <Button type="button" variant="outline" onClick={handleCancelInvoice} className="w-full sm:w-auto">
-                    <XCircle className="mr-2 h-4 w-4" /> Cancelar Documento
-                </Button>
-            </CardFooter>
-          </Card>
-        </form>
-      </Form>
+                      )}
+                    />
+                    <Button 
+                      type="button" 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={() => removeItem(index)} 
+                      className="text-destructive hover:text-destructive/80" 
+                      disabled={editorMode !== 'normal' || itemFields.length <= 1}
+                    >
+                      <Trash2 className="h-5 w-5" />
+                    </Button>
+                  </div>
+                ))}
+                <FormMessage>{form.formState.errors.items && typeof form.formState.errors.items === 'object' && !Array.isArray(form.formState.errors.items) ? (form.formState.errors.items as any).message : null}</FormMessage>
+                <FormMessage>{form.formState.errors.items && Array.isArray(form.formState.errors.items) && form.formState.errors.items.length ===0 && (form.formState.errors.items as any)?.message ? (form.formState.errors.items as any).message : null}</FormMessage>
+                {editorMode === 'normal' && (
+                  <Button type="button" variant="outline" onClick={() => appendItem({ id: uuidv4(), description: "", quantity: 1, unitPrice: 0 })}>
+                    <PlusCircle className="mr-2 h-4 w-4" /> Añadir Artículo
+                  </Button>
+                )}
+                {editorMode !== 'normal' && (
+                  <div className="flex items-center p-3 rounded-md bg-accent/10 text-accent-foreground border border-accent/30">
+                    <Info className="h-5 w-5 mr-2" />
+                    <p className="text-sm">
+                      {editorMode === 'debtPayment' 
+                        ? "Está registrando un abono a una deuda. No se pueden modificar los artículos." 
+                        : "Está registrando un depósito a cuenta. Los detalles del artículo son fijos. Ingrese el monto del depósito en 'Detalles del Pago'."}
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader>
+                  <CardTitle className="text-xl flex items-center text-primary"><DollarSign className="mr-2 h-5 w-5" />Detalles del Pago</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                  {paymentFields.map((field, index) => (
+                      <div key={field.id} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_auto] gap-3 items-end p-3 border rounded-md">
+                          <FormField
+                              control={form.control}
+                              name={`paymentMethods.${index}.method`}
+                              render={({ field: f }) => (
+                                  <FormItem>
+                                      <FormLabel>Método</FormLabel>
+                                      <Select 
+                                        onValueChange={(value) => handlePaymentMethodChange(index, value)} 
+                                        value={f.value}
+                                        disabled={editorMode !== 'normal' && f.value === 'Saldo a Favor'}
+                                      >
+                                        <FormControl>
+                                          <SelectTrigger><SelectValue placeholder="Seleccione método" /></SelectTrigger>
+                                        </FormControl>
+                                          <SelectContent>
+                                              <SelectItem value="Efectivo">Efectivo</SelectItem>
+                                              <SelectItem value="Tarjeta de Débito">Tarjeta de Débito</SelectItem>
+                                              <SelectItem value="Tarjeta de Crédito">Tarjeta de Crédito</SelectItem>
+                                              <SelectItem value="Transferencia">Transferencia</SelectItem>
+                                              <SelectItem value="Pago Móvil">Pago Móvil</SelectItem>
+                                              <SelectItem value="Zelle">Zelle</SelectItem>
+                                              {selectedCustomerAvailableCredit > 0 && editorMode === 'normal' && (
+                                                <SelectItem value="Saldo a Favor">
+                                                  Saldo a Favor (Disp: {formatCurrency(selectedCustomerAvailableCredit)})
+                                                </SelectItem>
+                                              )}
+                                              <SelectItem value="Otro">Otro</SelectItem>
+                                          </SelectContent>
+                                      </Select>
+                                      <FormMessage />
+                                  </FormItem>
+                              )}
+                          />
+                          <FormField
+                              control={form.control}
+                              name={`paymentMethods.${index}.amount`}
+                              render={({ field: f }) => (
+                                  <FormItem>
+                                      <FormLabel>Monto ({CURRENCY_SYMBOL})</FormLabel>
+                                      <FormControl>
+                                        <Input 
+                                          {...f} 
+                                          value={f.value === 0 ? '' : f.value}
+                                          onChange={e => f.onChange(parseFloat(e.target.value) || 0)}
+                                          type="number" 
+                                          step="0.01" 
+                                          placeholder="0.00"
+                                          readOnly={form.getValues(`paymentMethods.${index}.method`) === 'Saldo a Favor' && editorMode === 'normal' && (liveInvoicePreview.totalAmount || 0) <= selectedCustomerAvailableCredit} 
+                                        />
+                                      </FormControl>
+                                      <FormMessage />
+                                  </FormItem>
+                              )}
+                          />
+                          <FormField
+                              control={form.control}
+                              name={`paymentMethods.${index}.reference`}
+                              render={({ field: f }) => (
+                                  <FormItem>
+                                      <FormLabel>Referencia (Opcional)</FormLabel>
+                                      <FormControl><Input {...f} placeholder="Nro. de confirmación" /></FormControl>
+                                      <FormMessage />
+                                  </FormItem>
+                              )}
+                          />
+                          <Button type="button" variant="ghost" size="icon" onClick={() => removePayment(index)} className="text-destructive hover:text-destructive/80" disabled={paymentFields.length <=1}>
+                              <Trash2 className="h-5 w-5" />
+                          </Button>
+                      </div>
+                  ))}
+                  <FormMessage>{form.formState.errors.paymentMethods && typeof form.formState.errors.paymentMethods === 'object' && !Array.isArray(form.formState.errors.paymentMethods) ? (form.formState.errors.paymentMethods as any).message : null}</FormMessage>
+                  <Button type="button" variant="outline" onClick={() => appendPayment({ method: "Efectivo", amount: 0, reference: "" })}>
+                      <PlusCircle className="mr-2 h-4 w-4" /> Añadir Método de Pago
+                  </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                  <CardTitle className="text-xl flex items-center text-primary"><Settings className="mr-2 h-5 w-5" />Configuración Adicional</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                  <FormField
+                      control={form.control}
+                      name="discountAmount"
+                      render={({ field }) => (
+                          <FormItem>
+                              <FormLabel className="flex items-center">
+                                <Percent className="mr-2 h-4 w-4 text-muted-foreground" />
+                                Monto de Descuento ({CURRENCY_SYMBOL}) (Opcional)
+                              </FormLabel>
+                              <FormControl>
+                                <Input 
+                                  {...field} 
+                                  value={field.value === 0 ? '' : field.value}
+                                  onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
+                                  type="number" 
+                                  step="0.01" 
+                                  placeholder="0.00"
+                                  readOnly={editorMode !== 'normal'} 
+                                />
+                              </FormControl>
+                              {editorMode !== 'normal' && <p className="text-xs text-muted-foreground mt-1">Los descuentos no aplican en este modo.</p>}
+                              <FormMessage />
+                          </FormItem>
+                      )}
+                  />
+                  <FormField
+                      control={form.control}
+                      name="taxRate"
+                      render={({ field }) => (
+                          <FormItem>
+                              <FormLabel>Tasa de IVA (ej. 0.16 para 16%)</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  {...field} 
+                                  type="number" 
+                                  step="0.01" 
+                                  placeholder="0.16" 
+                                  onChange={e => field.onChange(parseFloat(e.target.value) || 0)} 
+                                  readOnly={editorMode !== 'normal'} 
+                                />
+                              </FormControl>
+                              {editorMode !== 'normal' && <p className="text-xs text-muted-foreground mt-1">El IVA no aplica en este modo.</p>}
+                              <FormMessage />
+                          </FormItem>
+                      )}
+                  />
+                  <FormField
+                      control={form.control}
+                      name="thankYouMessage"
+                      render={({ field }) => (
+                          <FormItem>
+                              <FormLabel>Mensaje de Agradecimiento</FormLabel>
+                              <FormControl><Input {...field} placeholder="¡Gracias por su compra!" /></FormControl>
+                              <FormMessage />
+                          </FormItem>
+                      )}
+                  />
+                  <FormField
+                      control={form.control}
+                      name="notes"
+                      render={({ field }) => (
+                          <FormItem>
+                              <FormLabel>Notas Adicionales (Opcional)</FormLabel>
+                              <FormControl><Textarea {...field} placeholder="Ej: Garantía válida por 30 días." /></FormControl>
+                              <FormMessage />
+                          </FormItem>
+                      )}
+                  />
+              </CardContent>
+              <CardFooter className="flex-col sm:flex-row items-stretch gap-3">
+                  <Button type="submit" className="w-full sm:flex-1 bg-primary hover:bg-primary/90 text-primary-foreground">
+                      <Save className="mr-2 h-4 w-4" /> 
+                      {editorMode === 'debtPayment' && "Guardar Abono a Deuda"}
+                      {editorMode === 'creditDeposit' && "Guardar Depósito a Cuenta"}
+                      {editorMode === 'normal' && "Guardar y Generar Factura"}
+                  </Button>
+                  <Button type="button" variant="outline" onClick={handleCancelInvoice} className="w-full sm:w-auto">
+                      <XCircle className="mr-2 h-4 w-4" /> Cancelar Documento
+                  </Button>
+              </CardFooter>
+            </Card>
+          </form>
+        </Form>
+      </div>
       
-      <div className="lg:col-span-1 space-y-4 sticky top-20 no-print">
-        <Card className="shadow-md">
+      <div className="lg:col-span-1 space-y-4 sticky top-20">
+        <Card className="shadow-md no-print" data-invoice-preview-header>
           <CardHeader>
             <CardTitle className="text-xl flex items-center text-primary">
               <Info className="mr-2 h-5 w-5" />
@@ -1160,3 +1167,4 @@ export function InvoiceEditor() {
     </div>
   );
 }
+
