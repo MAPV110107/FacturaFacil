@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { SlidersHorizontal, Palette, Info, CheckCircle, BookOpen, Eye, Undo2, DollarSign, Gift, Users, FilePlus2, History } from "lucide-react";
+import { SlidersHorizontal, Palette, Info, CheckCircle, BookOpen, Eye, Undo2, DollarSign, Gift, Users, FilePlus2, History, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -370,7 +370,7 @@ export default function SettingsPage() {
             <AccordionItem value="item-6">
               <AccordionTrigger>Configuración de Empresa</AccordionTrigger>
               <AccordionContent className="space-y-2 text-sm text-muted-foreground">
-                <p>En la sección <Link href="/company" className="text-primary hover:underline">Empresa</Link> (<Settings className="inline h-4 w-4" />), puede configurar los datos de su negocio que aparecerán en todos los documentos emitidos. Asegúrese de que sean correctos y estén actualizados.</p>
+                <p>En la sección <Link href="/company" className="text-primary hover:underline">Empresa</Link> (<Settings className="inline h-4 w-4" />), puede configurar los datos de su negocio que aparecerán en todos los documentos emitidos. Asegúrese de que sean correctos y estén actualizados. Puede cancelar los cambios no guardados con el botón "Cancelar".</p>
               </AccordionContent>
             </AccordionItem>
 
