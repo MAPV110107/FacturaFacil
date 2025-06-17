@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { CURRENCY_SYMBOL } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input"; // Ensure Input is imported
 
 const formatCurrency = (amount: number | undefined | null) => {
   if (amount === undefined || amount === null) return `${CURRENCY_SYMBOL}0.00`;
@@ -159,7 +160,7 @@ export function CustomerListView() {
                             variant="link" 
                             size="sm" 
                             className="text-xs h-auto p-0 ml-1 text-green-600 hover:text-green-700"
-                            onClick={() => router.push(`/returns?mode=creditWithdrawal&customerId=${customer.id}&amount=${customer.creditBalance}`)}
+                            onClick={() => router.push(`/returns?mode=creditWithdrawal&customerId=${customer.id}&availableCredit=${customer.creditBalance}`)}
                             title="Retirar Saldo a Favor"
                           >
                            <Gift className="h-3 w-3" />
@@ -221,18 +222,3 @@ export function CustomerListView() {
     </Card>
   );
 }
-
-const Input = React.forwardRef<
-  HTMLInputElement,
-  React.InputHTMLAttributes<HTMLInputElement>
->(({ className, ...props }, ref) => {
-  return (
-    <input
-      ref={ref}
-      className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
-      {...props}
-    />
-  );
-});
-Input.displayName = "Input";
-

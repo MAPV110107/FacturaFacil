@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Undo2, Search, History, AlertTriangle, FileCheck2, ArrowRight, DollarSign, UserCog, Gift } from 'lucide-react';
+import { Undo2, Search, History, AlertTriangle, FileCheck2, ArrowRight, DollarSign, UserCog, Gift, Info } from 'lucide-react';
 import useLocalStorage from '@/hooks/use-local-storage';
 import type { Invoice, CompanyDetails, CustomerDetails } from '@/lib/types';
 import { InvoicePreview } from '@/components/invoice/invoice-preview';
@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 type EditorMode = 'invoiceReturn' | 'creditWithdrawal';
+type WithdrawalStep = 'enterAmount' | 'confirmDetails';
 
 const formatCurrency = (amount: number | undefined | null) => {
   if (amount === undefined || amount === null) return `${CURRENCY_SYMBOL}0.00`;
@@ -40,8 +41,9 @@ export default function ReturnsPage() {
   const router = useRouter();
   
   const [editorMode, setEditorMode] = useState<EditorMode>('invoiceReturn');
+  const [withdrawalStep, setWithdrawalStep] = useState<WithdrawalStep>('enterAmount');
   const [invoiceIdInput, setInvoiceIdInput] = useState('');
-  const [foundInvoice, setFoundInvoice] = useState<Invoice | null>(null); // This can be an original sale or a synthetic invoice for withdrawal
+  const [foundInvoice, setFoundInvoice] = useState<Invoice | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
   const [invoices, setInvoices] = useLocalStorage<Invoice[]>("invoices", []);
@@ -54,62 +56,57 @@ export default function ReturnsPage() {
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
 
-  // State for new return details (applies to both modes)
   const [returnPaymentMethod, setReturnPaymentMethod] = useState('Efectivo');
   const [returnPaymentReference, setReturnPaymentReference] = useState('');
   const [returnCashier, setReturnCashier] = useState('');
   const [returnSalesperson, setReturnSalesperson] = useState('');
 
+  const [withdrawalAmountInput, setWithdrawalAmountInput] = useState('');
+  const [maxAvailableCredit, setMaxAvailableCredit] = useState(0);
+  const [targetWithdrawalCustomer, setTargetWithdrawalCustomer] = useState<CustomerDetails | null>(null);
 
-  const prepareForCreditWithdrawal = useCallback((customerId: string, amountStr: string | null) => {
-    setEditorMode('creditWithdrawal');
+
+  const prepareForCreditWithdrawal = useCallback((customer: CustomerDetails, withdrawalAmount: number) => {
     setErrorMessage(null);
     setFoundInvoice(null);
 
-    const amount = parseFloat(amountStr || '0');
-    if (!customerId || amount <= 0) {
-      setErrorMessage("ID de cliente o monto inválido para el retiro de saldo.");
-      return;
-    }
-
-    const customer = customers.find(c => c.id === customerId);
-    if (!customer) {
-      setErrorMessage(`Cliente con ID ${customerId} no encontrado.`);
-      return;
-    }
-    if ((customer.creditBalance ?? 0) < amount) {
-        setErrorMessage(`El cliente ${customer.name} no tiene suficiente saldo a favor (${formatCurrency(customer.creditBalance)}) para retirar ${formatCurrency(amount)}.`);
+    if ((customer.creditBalance ?? 0) < withdrawalAmount) {
+        setErrorMessage(`El cliente ${customer.name} no tiene suficiente saldo a favor (${formatCurrency(customer.creditBalance)}) para retirar ${formatCurrency(withdrawalAmount)}.`);
         return;
     }
+    if (withdrawalAmount <= 0) {
+      setErrorMessage(`El monto a retirar debe ser mayor a cero.`);
+      return;
+    }
 
-    // Create a synthetic "original invoice" for the withdrawal
     const syntheticInvoice: Invoice = {
       id: `SYNTHETIC-${uuidv4()}`,
       invoiceNumber: `RETIRO-${Date.now().toString().slice(-6)}`,
       date: new Date().toISOString(),
-      type: 'sale', // It's like we are "returning" from this conceptual sale of credit
+      type: 'sale',
       companyDetails: companyDetails,
       customerDetails: customer,
-      items: [{ id: uuidv4(), description: "Retiro de Saldo a Favor", quantity: 1, unitPrice: amount, totalPrice: amount }],
-      subTotal: amount,
+      items: [{ id: uuidv4(), description: "Retiro de Saldo a Favor", quantity: 1, unitPrice: withdrawalAmount, totalPrice: withdrawalAmount }],
+      subTotal: withdrawalAmount,
       discountAmount: 0,
       taxRate: 0,
       taxAmount: 0,
-      totalAmount: amount,
-      paymentMethods: [{ method: "Saldo a Favor", amount: amount, reference: `Retiro de crédito cliente ${customer.name}` }],
-      amountPaid: amount,
+      totalAmount: withdrawalAmount,
+      paymentMethods: [{ method: "Saldo a Favor", amount: withdrawalAmount, reference: `Retiro de crédito cliente ${customer.name}` }],
+      amountPaid: withdrawalAmount,
       amountDue: 0,
       thankYouMessage: "Procesando retiro de saldo a favor.",
-      notes: `Preparando Nota de Crédito para retiro de saldo a favor por ${formatCurrency(amount)} para ${customer.name}.`,
-      isCreditDeposit: true, // Mark it as related to credit balance
+      notes: `Preparando Nota de Crédito para retiro de saldo a favor por ${formatCurrency(withdrawalAmount)} para ${customer.name}.`,
+      isCreditDeposit: true, 
     };
     setFoundInvoice(syntheticInvoice);
-    setInvoiceIdInput(syntheticInvoice.invoiceNumber); // For display consistency, though not searchable
-  }, [customers, companyDetails]);
+    setInvoiceIdInput(syntheticInvoice.invoiceNumber); 
+    setWithdrawalStep('confirmDetails');
+  }, [companyDetails, customers]);
 
 
   const handleSearchInvoice = useCallback(() => {
-    setEditorMode('invoiceReturn'); // Default to invoice return when searching manually
+    setEditorMode('invoiceReturn'); 
     setErrorMessage(null);
     setFoundInvoice(null);
     if (!invoiceIdInput.trim()) {
@@ -153,27 +150,57 @@ export default function ReturnsPage() {
     setIsClient(true);
     const modeParam = searchParams.get('mode') as EditorMode | null;
     const customerIdParam = searchParams.get('customerId');
-    const amountParam = searchParams.get('amount');
+    const availableCreditParam = searchParams.get('availableCredit');
     const invoiceIdQueryParam = searchParams.get('invoiceId');
 
-    if (modeParam === 'creditWithdrawal' && customerIdParam && amountParam) {
-      prepareForCreditWithdrawal(customerIdParam, amountParam);
+    if (modeParam === 'creditWithdrawal' && customerIdParam && availableCreditParam) {
+      const customer = customers.find(c => c.id === customerIdParam);
+      const credit = parseFloat(availableCreditParam);
+      if (customer && !isNaN(credit) && credit > 0) {
+        setEditorMode('creditWithdrawal');
+        setTargetWithdrawalCustomer(customer);
+        setMaxAvailableCredit(credit);
+        setWithdrawalAmountInput(credit.toFixed(2)); // Pre-fill with max, user can change
+        setWithdrawalStep('enterAmount');
+        setFoundInvoice(null); // Clear any previously found invoice
+        setErrorMessage(null);
+      } else {
+        setErrorMessage("Datos inválidos para retiro de saldo. Regrese y reintente.");
+        setEditorMode('invoiceReturn'); // Fallback to normal mode
+      }
     } else if (invoiceIdQueryParam) {
       setInvoiceIdInput(invoiceIdQueryParam);
-      // Let the next effect trigger the search if invoiceIdInput was set by query
+      setEditorMode('invoiceReturn'); // Ensure mode is set for invoice search
+    } else {
+      setEditorMode('invoiceReturn'); // Default mode
     }
-  }, [searchParams, prepareForCreditWithdrawal]);
+  }, [searchParams, customers]);
 
   useEffect(() => {
-    // This effect runs if invoiceIdInput changes, e.g. from query param or user typing
     if (isClient && invoiceIdInput && invoices.length > 0 && !foundInvoice && !errorMessage && editorMode === 'invoiceReturn') {
       const queryInvoiceId = searchParams.get('invoiceId');
-      if (invoiceIdInput === queryInvoiceId || !queryInvoiceId) { // Search if input matches query OR if no query (manual search)
+      if (invoiceIdInput === queryInvoiceId || (!queryInvoiceId && editorMode === 'invoiceReturn')) {
         handleSearchInvoice();
       }
     }
   }, [invoiceIdInput, invoices, isClient, foundInvoice, errorMessage, searchParams, handleSearchInvoice, editorMode]);
 
+  const handleProceedWithWithdrawalAmount = () => {
+    if (!targetWithdrawalCustomer) {
+      setErrorMessage("Cliente para retiro no definido.");
+      return;
+    }
+    const amountToWithdraw = parseFloat(withdrawalAmountInput);
+    if (isNaN(amountToWithdraw) || amountToWithdraw <= 0) {
+      setErrorMessage("El monto a retirar debe ser un número positivo.");
+      return;
+    }
+    if (amountToWithdraw > maxAvailableCredit) {
+      setErrorMessage(`No puede retirar más del saldo disponible (${formatCurrency(maxAvailableCredit)}).`);
+      return;
+    }
+    prepareForCreditWithdrawal(targetWithdrawalCustomer, amountToWithdraw);
+  };
 
   const triggerProcessReturn = () => {
     if (!foundInvoice) {
@@ -184,7 +211,7 @@ export default function ReturnsPage() {
         });
         return;
     }
-    if (editorMode === 'invoiceReturn') { // Only check for existing returns for actual invoice returns
+    if (editorMode === 'invoiceReturn') { 
       const existingReturn = invoices.find(inv => inv.originalInvoiceId === foundInvoice.id && inv.type === 'return');
       if (existingReturn) {
           setErrorMessage(`Ya existe una nota de crédito (${existingReturn.invoiceNumber}) para la factura ${foundInvoice.invoiceNumber}.`);
@@ -237,13 +264,12 @@ export default function ReturnsPage() {
       discountAmount: foundInvoice.discountAmount,
       taxAmount: foundInvoice.taxAmount,
       totalAmount: foundInvoice.totalAmount,
-      isCreditDeposit: editorMode === 'creditWithdrawal' ? true : foundInvoice.isCreditDeposit, // Mark the NC if it's from a withdrawal
-      isDebtPayment: false, // NCs are not debt payments
+      isCreditDeposit: editorMode === 'creditWithdrawal' ? true : foundInvoice.isCreditDeposit,
+      isDebtPayment: false,
     };
 
     setInvoices(prevInvoices => [...prevInvoices, returnInvoice]);
 
-    // Update customer's credit balance if it's a credit withdrawal
     if (editorMode === 'creditWithdrawal') {
       setCustomers(prevCustomers => 
         prevCustomers.map(cust => 
@@ -266,12 +292,16 @@ export default function ReturnsPage() {
     setFoundInvoice(null); 
     setInvoiceIdInput(""); 
     setIsConfirmDialogOpen(false);
-    router.replace('/returns', {scroll: false}); // Clear URL params
+    setTargetWithdrawalCustomer(null);
+    setMaxAvailableCredit(0);
+    setWithdrawalAmountInput('');
+    setWithdrawalStep('enterAmount');
+    router.replace('/returns', {scroll: false}); 
   };
 
   const pageTitle = editorMode === 'creditWithdrawal' ? "Procesar Retiro de Saldo a Favor" : "Procesar Devolución (Generar Nota de Crédito)";
   const pageDescription = editorMode === 'creditWithdrawal' 
-    ? "Confirme los detalles para generar una nota de crédito por el retiro de saldo del cliente."
+    ? (withdrawalStep === 'enterAmount' ? "Especifique el monto a retirar del saldo a favor del cliente." : "Confirme los detalles para generar una nota de crédito por el retiro de saldo.")
     : "Ingrese el número de la factura de venta original para generar una nota de crédito.";
 
   if (!isClient) {
@@ -310,7 +340,7 @@ export default function ReturnsPage() {
                   value={invoiceIdInput}
                   onChange={(e) => {
                     setInvoiceIdInput(e.target.value);
-                    if (foundInvoice) setFoundInvoice(null); // Clear found invoice if input changes
+                    if (foundInvoice) setFoundInvoice(null); 
                     if (errorMessage) setErrorMessage(null);
                   }}
                 />
@@ -320,6 +350,28 @@ export default function ReturnsPage() {
               </Button>
             </div>
           )}
+
+          {editorMode === 'creditWithdrawal' && withdrawalStep === 'enterAmount' && targetWithdrawalCustomer && (
+            <div className="space-y-4 p-4 border rounded-md bg-muted/50">
+              <h3 className="text-lg font-semibold text-primary">Retirar Saldo de: {targetWithdrawalCustomer.name}</h3>
+              <p className="text-sm text-muted-foreground">Saldo a favor disponible: <span className="font-bold">{formatCurrency(maxAvailableCredit)}</span></p>
+              <div>
+                <Label htmlFor="withdrawalAmountInput">Monto a Retirar ({CURRENCY_SYMBOL})</Label>
+                <Input
+                  id="withdrawalAmountInput"
+                  type="number"
+                  step="0.01"
+                  value={withdrawalAmountInput}
+                  onChange={(e) => setWithdrawalAmountInput(e.target.value)}
+                  placeholder={`Max. ${maxAvailableCredit.toFixed(2)}`}
+                />
+              </div>
+              <Button onClick={handleProceedWithWithdrawalAmount} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+                Continuar con Retiro de {formatCurrency(parseFloat(withdrawalAmountInput) || 0)}
+              </Button>
+            </div>
+          )}
+
           <Button variant="outline" asChild className="w-full sm:w-auto">
             <Link href="/invoices">
               <History className="mr-2 h-4 w-4" /> Ver Historial (Facturas y Notas de Crédito)
@@ -335,13 +387,13 @@ export default function ReturnsPage() {
         </CardContent>
       </Card>
 
-      {foundInvoice && (
+      {foundInvoice && (editorMode === 'invoiceReturn' || (editorMode === 'creditWithdrawal' && withdrawalStep === 'confirmDetails')) && (
         <>
           <Card className="mt-8 shadow-lg">
             <CardHeader>
               <CardTitle className="text-xl text-primary">
                 {editorMode === 'creditWithdrawal' 
-                  ? `Retiro de Saldo para: ${foundInvoice.customerDetails.name}` 
+                  ? `Confirmar Retiro de Saldo para: ${foundInvoice.customerDetails.name}` 
                   : `Factura Original Encontrada: ${foundInvoice.invoiceNumber}`}
               </CardTitle>
               <CardDescription>
@@ -438,6 +490,14 @@ export default function ReturnsPage() {
                         Actualmente, no se admite la selección de artículos para devoluciones parciales.
                         La devolución procesada será por la totalidad de la factura original.
                     </p>
+                  )}
+                  {editorMode === 'creditWithdrawal' && (
+                    <div className="flex items-center p-3 mt-2 rounded-md bg-accent/10 text-accent-foreground border border-accent/30">
+                        <Info className="h-5 w-5 mr-2" />
+                        <p className="text-sm">
+                            El saldo a favor del cliente <span className="font-semibold">{foundInvoice.customerDetails.name}</span> se reducirá en <span className="font-semibold">{formatCurrency(foundInvoice.totalAmount)}</span>.
+                        </p>
+                    </div>
                   )}
               </div>
               <Button onClick={triggerProcessReturn} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground mt-4" disabled={!foundInvoice}>
