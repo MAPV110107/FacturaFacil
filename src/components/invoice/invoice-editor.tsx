@@ -264,19 +264,28 @@ export function InvoiceEditor() {
   }, []);
 
   useEffect(() => {
-    if (isClient && customers.length >= 0 && editorMode === 'normal') { 
-      const customerIdParam = searchParams.get('customerId');
-      const debtPaymentParam = searchParams.get('debtPayment') === 'true';
-      const amountStrParam = searchParams.get('amount');
-      const amountParam = parseFloat(amountStrParam || '0');
+    if (isClient && customers.length >= 0 && editorMode === 'normal') {
+        const customerIdParam = searchParams.get('customerId');
+        const debtPaymentParam = searchParams.get('debtPayment') === 'true';
+        const amountStrParam = searchParams.get('amount');
+        const amountParam = parseFloat(amountStrParam || '0');
 
-      if (debtPaymentParam && customerIdParam && amountParam > 0) {
-        resetFormAndState({mode: 'debtPayment', customerId: customerIdParam, amount: amountParam});
-      } else if (!form.getValues('invoiceNumber')) { 
-        resetFormAndState({ mode: 'normal' });
-      }
+        if (debtPaymentParam && customerIdParam && amountParam > 0) {
+            const targetCustomer = customers.find(c => c.id === customerIdParam);
+            if (targetCustomer) {
+                resetFormAndState({ mode: 'debtPayment', customerId: customerIdParam, amount: amountParam });
+            } else if (customers.length > 0) { // Customers list is loaded, but this specific one not found
+                toast({ variant: "destructive", title: "Cliente no encontrado", description: "No se pudo encontrar el cliente especificado para el pago de deuda." });
+                router.replace('/invoice/new', { scroll: false }); // Clear invalid params
+                resetFormAndState({ mode: 'normal' }); // Reset to normal mode without customer
+            }
+            // If customers.length is 0, it means customers are not loaded yet.
+            // This effect will run again when `customers` state updates, and then targetCustomer might be found.
+        } else if (!form.getValues('invoiceNumber')) { // If no specific mode params and form is "empty" (no invoice number), do a normal reset.
+            resetFormAndState({ mode: 'normal' });
+        }
     }
-  }, [isClient, searchParams, resetFormAndState, customers, editorMode, form]); 
+  }, [isClient, searchParams, resetFormAndState, customers, editorMode, form, router, toast]); // Added router and toast
 
   const { fields: itemFields, append: appendItem, remove: removeItem } = useFieldArray({
     control: form.control,
