@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
@@ -70,6 +70,8 @@ export function InvoiceEditor() {
   const [showNewCustomerFields, setShowNewCustomerFields] = useState(false);
   const [selectedCustomerIdForDropdown, setSelectedCustomerIdForDropdown] = useState<string | undefined>(undefined);
   const [selectedCustomerAvailableCredit, setSelectedCustomerAvailableCredit] = useState(0);
+  const isInitializingDebtPaymentRef = useRef(false);
+
 
   const initialLivePreviewState: Partial<Invoice> = {
     id: '', 
@@ -267,11 +269,11 @@ export function InvoiceEditor() {
       changeRefundPaymentMethods: formValuesToReset.changeRefundPaymentMethods as PaymentDetails[],
     });
     
-    const debtPaymentParamInUrl = searchParams.get('debtPayment') === 'true';
-    if ((mode === 'debtPayment' && debtPaymentParamInUrl) || (mode === 'creditDeposit' /* && relevant credit deposit param if we add one */)) {
-      if (pathname === '/invoice/new' && searchParams.toString() !== "") {
-        router.replace('/invoice/new', { scroll: false });
-      }
+    // Clear URL parameters if they were for debt payment and successfully processed or if mode changed
+     if ((mode === 'debtPayment' && searchParams.get('debtPayment') === 'true') || (mode === 'normal' && searchParams.has('debtPayment'))) {
+        if (pathname === '/invoice/new') { // Only modify URL if on the correct page
+            router.replace('/invoice/new', { scroll: false });
+        }
     }
   }, [form, customers, companyDetails, calculateTotals, calculatePaymentSummary, router, pathname, searchParams]);
 
@@ -281,47 +283,58 @@ export function InvoiceEditor() {
   }, []);
 
   useEffect(() => {
-    if (!isClient) { 
-        if (!searchParams.get('customerId') && !form.getValues('invoiceNumber')) {
-            resetFormAndState({ mode: 'normal' });
-        }
-        return;
+    if (!isClient) {
+      if (!searchParams.get('customerId') && !form.getValues('invoiceNumber')) {
+        resetFormAndState({ mode: 'normal' });
+      }
+      return;
     }
-
-    if (isClient && customers.length === 0 && searchParams.get('customerId')) {
-        return;
+  
+    if (customers.length === 0 && searchParams.get('customerId')) {
+      // Still waiting for customers to load, defer decisions
+      return;
     }
-    
+  
     const customerIdParam = searchParams.get('customerId');
     const debtPaymentParam = searchParams.get('debtPayment') === 'true';
     const amountStrParam = searchParams.get('amount');
     const amountParam = parseFloat(amountStrParam || '0');
-
+  
     if (debtPaymentParam && customerIdParam && amountParam > 0) {
-        const targetCustomer = customers.find(c => c.id === customerIdParam);
-        if (targetCustomer) {
-            const currentFormValues = form.getValues();
-            const isAlreadyCorrectlySetup = editorMode === 'debtPayment' &&
-                                         currentFormValues.customerDetails.id === customerIdParam &&
-                                         currentFormValues.items[0]?.unitPrice === amountParam &&
-                                         currentFormValues.items[0]?.description === "Abono a Deuda Pendiente";
-            if (!isAlreadyCorrectlySetup) {
-                resetFormAndState({ mode: 'debtPayment', customerId: customerIdParam, amount: amountParam });
-            }
-        } else {
-            if (customers.length > 0) { 
-                toast({ variant: "destructive", title: "Cliente no encontrado", description: "No se pudo encontrar el cliente para el pago de deuda." });
-                if (pathname === '/invoice/new') router.replace('/invoice/new', { scroll: false }); 
-                resetFormAndState({ mode: 'normal' }); 
-            }
+      const targetCustomer = customers.find(c => c.id === customerIdParam);
+      if (targetCustomer) {
+        const currentFormValues = form.getValues();
+        const isAlreadyCorrectlySetup = editorMode === 'debtPayment' &&
+                                       currentFormValues.customerDetails.id === customerIdParam &&
+                                       currentFormValues.items[0]?.unitPrice === amountParam &&
+                                       currentFormValues.items[0]?.description === "Abono a Deuda Pendiente";
+  
+        if (!isAlreadyCorrectlySetup && !isInitializingDebtPaymentRef.current) {
+          isInitializingDebtPaymentRef.current = true;
+          resetFormAndState({ mode: 'debtPayment', customerId: customerIdParam, amount: amountParam });
+        } else if (isAlreadyCorrectlySetup) {
+          isInitializingDebtPaymentRef.current = false; // Reset flag once setup is correct
         }
-        return; 
+      } else {
+        if (customers.length > 0) { // Only toast if customers have loaded and target not found
+          toast({ variant: "destructive", title: "Cliente no encontrado", description: "No se pudo encontrar el cliente para el pago de deuda." });
+          if (pathname === '/invoice/new') router.replace('/invoice/new', { scroll: false });
+          resetFormAndState({ mode: 'normal' });
+        }
+      }
+      return; // Important: return after handling debt payment params
+    } else {
+        // If not in debt payment mode via URL, ensure the ref is false
+        isInitializingDebtPaymentRef.current = false;
     }
     
+    // Default initialization to 'normal' mode if no specific parameters dictate otherwise
+    // and form hasn't been touched (e.g. no invoice number and no customer selected).
+    // This should only run if not coming from a debt payment flow or other specific setup.
     if (!debtPaymentParam && editorMode === 'normal' && !form.getValues('invoiceNumber') && !selectedCustomerIdForDropdown) {
-        resetFormAndState({ mode: 'normal' });
+      resetFormAndState({ mode: 'normal' });
     }
-
+  
   }, [isClient, searchParams, customers, editorMode, form, resetFormAndState, router, toast, pathname, selectedCustomerIdForDropdown]);
 
 
@@ -360,10 +373,8 @@ export function InvoiceEditor() {
         if (amountDue < 0) { // Overpayment occurred
             overpaymentAmt = Math.abs(amountDue);
             if (values.overpaymentHandlingChoice === 'refundNow') {
-                // If refunding now, the invoice's own amountDue effectively becomes 0 after refund.
                 finalAmountDueForInvoice = 0;
             }
-            // If crediting to account, amountDue remains negative to reflect credit.
         }
 
 
@@ -382,7 +393,7 @@ export function InvoiceEditor() {
             taxAmount,
             totalAmount,
             amountPaid,
-            amountDue: finalAmountDueForInvoice, // Reflects final state after considering refund choice
+            amountDue: finalAmountDueForInvoice, 
             thankYouMessage: values.thankYouMessage || DEFAULT_THANK_YOU_MESSAGE,
             notes: values.notes,
             type: 'sale', 
@@ -405,7 +416,6 @@ export function InvoiceEditor() {
   }, [form, calculateTotals, calculatePaymentSummary]);
 
 
-  // Effect to manage changeRefundPaymentMethods when overpaymentHandlingChoice changes or overpayment amount changes
   useEffect(() => {
     const overpaymentHandlingChoice = form.getValues("overpaymentHandlingChoice");
     const actualOverpaymentAmount = liveInvoicePreview.overpaymentAmount || 0;
@@ -414,15 +424,12 @@ export function InvoiceEditor() {
         if (changePaymentFields.length === 0) {
             appendChangePayment({ method: "Efectivo", amount: actualOverpaymentAmount, reference: "" });
         } else {
-            // If there are existing fields, update the first one's amount if it's the only one,
-            // or if the sum doesn't match. This logic might need refinement for multiple payment methods for change.
-            // For now, let's assume one method for simplicity or manual adjustment by user.
              if (changePaymentFields.length === 1) {
                  updateChangePayment(0, { ...changePaymentFields[0], amount: actualOverpaymentAmount });
              }
         }
     } else if (overpaymentHandlingChoice === 'creditToAccount') {
-        replaceChangePayments([]); // Clear change payment methods if crediting to account
+        replaceChangePayments([]); 
     }
   }, [form.watch("overpaymentHandlingChoice"), liveInvoicePreview.overpaymentAmount, appendChangePayment, replaceChangePayments, updateChangePayment, changePaymentFields, form]);
 
@@ -505,13 +512,13 @@ export function InvoiceEditor() {
     const paymentMethods = form.getValues("paymentMethods");
     const currentPayment = paymentMethods[index];
     
-    updatePayment(index, { ...currentPayment, method: newMethod, amount: 0 }); // Reset amount to 0 when method changes
+    updatePayment(index, { ...currentPayment, method: newMethod, amount: 0 }); 
 
     if (newMethod === "Saldo a Favor" && editorMode === 'normal' && selectedCustomerAvailableCredit > 0) {
         const invoiceTotal = liveInvoicePreview.totalAmount || 0;
         let otherPaymentsTotal = 0;
         paymentMethods.forEach((pm, i) => {
-            if (i !== index && pm.method !== "Saldo a Favor") { // Only consider other NON-credit payments
+            if (i !== index && pm.method !== "Saldo a Favor") { 
                 otherPaymentsTotal += pm.amount || 0;
             }
         });
@@ -603,28 +610,27 @@ export function InvoiceEditor() {
     const currentDiscountAmount = data.isDebtPayment || data.isCreditDeposit ? 0 : (data.discountAmount || 0);
     
     const { subTotal, discountAmount, taxAmount, totalAmount } = calculateTotals(finalItems, currentTaxRate, currentDiscountAmount);
-    const { amountPaid, amountDue: rawAmountDue } = calculatePaymentSummary(data.paymentMethods, totalAmount); // rawAmountDue can be negative
+    const { amountPaid, amountDue: rawAmountDue } = calculatePaymentSummary(data.paymentMethods, totalAmount); 
 
     let finalInvoiceAmountDue = rawAmountDue;
     let overpaymentAmountToStore = 0;
     let overpaymentHandlingToStore: 'creditedToAccount' | 'refunded' | undefined = undefined;
     let changeRefundPaymentMethodsToStore: PaymentDetails[] | undefined = undefined;
 
-    if (rawAmountDue < 0) { // Overpayment occurred
+    if (rawAmountDue < 0) { 
         overpaymentAmountToStore = Math.abs(rawAmountDue);
         if (data.overpaymentHandlingChoice === 'refundNow') {
             const totalChangeRefunded = (data.changeRefundPaymentMethods || []).reduce((sum, pm) => sum + pm.amount, 0);
-            if (Math.abs(totalChangeRefunded - overpaymentAmountToStore) > 0.001) { // Check if refund matches overpayment
+            if (Math.abs(totalChangeRefunded - overpaymentAmountToStore) > 0.001) { 
                 toast({ variant: "destructive", title: "Error en Vuelto", description: `El monto del vuelto procesado (${formatCurrency(totalChangeRefunded)}) no coincide con el sobrepago (${formatCurrency(overpaymentAmountToStore)}).` });
                 form.setError("changeRefundPaymentMethods", {type: "manual", message: "El total del vuelto debe igualar el sobrepago."});
                 return;
             }
             overpaymentHandlingToStore = 'refunded';
             changeRefundPaymentMethodsToStore = data.changeRefundPaymentMethods;
-            finalInvoiceAmountDue = 0; // Invoice is settled regarding its own amount.
-        } else { // creditToAccount
+            finalInvoiceAmountDue = 0; 
+        } else { 
             overpaymentHandlingToStore = 'creditedToAccount';
-            // finalInvoiceAmountDue remains negative to signify the credit applied to account from this invoice
         }
     }
 
@@ -677,14 +683,13 @@ export function InvoiceEditor() {
             StoredCustomer.outstandingBalance = Math.max(0, StoredCustomer.outstandingBalance - amountPaid);
         } else if (editorMode === 'creditDeposit') {
             StoredCustomer.creditBalance += amountPaid;
-        } else { // Normal invoice
-            if (rawAmountDue > 0) { // Actual underpayment
+        } else { 
+            if (rawAmountDue > 0) { 
                 StoredCustomer.outstandingBalance += rawAmountDue;
-            } else if (rawAmountDue < 0) { // Overpayment
+            } else if (rawAmountDue < 0) { 
                 if (overpaymentHandlingToStore === 'creditedToAccount') {
                     StoredCustomer.creditBalance += overpaymentAmountToStore;
                 }
-                // If 'refunded', customer balance is not affected by the overpayment itself.
             }
         }
         currentCustomersList[customerIndex] = StoredCustomer;
