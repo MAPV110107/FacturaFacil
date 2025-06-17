@@ -48,9 +48,9 @@ const suggestedPalettes: ColorPalette[] = [
   },
   {
     name: "Tema Amarillo",
-    primary: "45 70% 45%",
-    background: "0 0% 98%",
-    accent: "60 90% 70%",
+    primary: "45 70% 45%", // Darker Yellow L=45%
+    background: "0 0% 98%", // Very Light Background
+    accent: "60 90% 70%", // Light Yellow L=70%
   },
   {
     name: "Tema Morado",
@@ -71,7 +71,6 @@ const LOCAL_STORAGE_COMPANY_KEY = "companyDetails";
 const LOCAL_STORAGE_CUSTOMERS_KEY = "customers";
 const LOCAL_STORAGE_INVOICES_KEY = "invoices";
 
-// Keys for import/export status and backup
 const LOCAL_STORAGE_LAST_EXPORT_TIMESTAMP_KEY = "facturafacil_last_export_timestamp";
 const LOCAL_STORAGE_LAST_IMPORT_TIMESTAMP_KEY = "facturafacil_last_import_timestamp";
 const LOCAL_STORAGE_LAST_IMPORT_REVERTED_KEY = "facturafacil_last_import_reverted";
@@ -88,6 +87,28 @@ interface BackupData {
   appName?: string;
   version?: string;
 }
+
+const getLightnessFromHslString = (hslString: string): number => {
+  if (!hslString || typeof hslString !== 'string') return 50; // Default if invalid
+  const parts = hslString.trim().split(" ");
+  if (parts.length >= 3 && parts[2].endsWith('%')) {
+    try {
+      return parseFloat(parts[2].slice(0, -1));
+    } catch (e) {
+      return 50; // Default on parsing error
+    }
+  }
+  // Attempt to parse if it's just a number like '50%'
+  if (parts.length === 1 && parts[0].endsWith('%')) {
+    try {
+      return parseFloat(parts[0].slice(0, -1));
+    } catch (e) {
+      return 50;
+    }
+  }
+  return 50; // Default if format is unexpected
+};
+
 
 export default function SettingsPage() {
   const { toast } = useToast();
@@ -124,22 +145,42 @@ export default function SettingsPage() {
     document.documentElement.style.setProperty('--background', palette.background);
     document.documentElement.style.setProperty('--accent', palette.accent);
     
-    if (palette.background.includes("90%") || palette.background.includes("96%") || palette.background.includes("98%") || palette.background.includes("100%")) {
+    const primaryLightness = getLightnessFromHslString(palette.primary);
+    const accentLightness = getLightnessFromHslString(palette.accent);
+    const backgroundLightness = getLightnessFromHslString(palette.background);
+
+    // Set primary foreground based on primary color's lightness
+    if (primaryLightness > 55) { // Primary is light
+      document.documentElement.style.setProperty('--primary-foreground', '0 0% 3.9%'); // Dark text
+    } else { // Primary is dark
+      document.documentElement.style.setProperty('--primary-foreground', '0 0% 98%'); // Light text
+    }
+
+    // Set accent foreground based on accent color's lightness
+    if (accentLightness > 55) { // Accent is light
+      document.documentElement.style.setProperty('--accent-foreground', '0 0% 3.9%'); // Dark text
+    } else { // Accent is dark
+      document.documentElement.style.setProperty('--accent-foreground', '0 0% 98%'); // Light text
+    }
+    
+    // Set general foregrounds based on main background lightness
+    if (backgroundLightness > 50) { // Light page background
         document.documentElement.style.setProperty('--foreground', '0 0% 3.9%'); 
         document.documentElement.style.setProperty('--card', '0 0% 100%');
         document.documentElement.style.setProperty('--card-foreground', '0 0% 3.9%');
         document.documentElement.style.setProperty('--popover', '0 0% 100%');
         document.documentElement.style.setProperty('--popover-foreground', '0 0% 3.9%');
-        document.documentElement.style.setProperty('--primary-foreground', '0 0% 98%'); 
-        document.documentElement.style.setProperty('--accent-foreground', '0 0% 98%');
-    } else { 
+        document.documentElement.style.setProperty('--secondary-foreground', '0 0% 9%');
+        document.documentElement.style.setProperty('--muted-foreground', '0 0% 45.1%');
+
+    } else { // Dark page background
         document.documentElement.style.setProperty('--foreground', '0 0% 98%'); 
         document.documentElement.style.setProperty('--card', '0 0% 10%'); 
         document.documentElement.style.setProperty('--card-foreground', '0 0% 98%');
         document.documentElement.style.setProperty('--popover', '0 0% 10%');
         document.documentElement.style.setProperty('--popover-foreground', '0 0% 98%');
-        document.documentElement.style.setProperty('--primary-foreground', '0 0% 98%');
-        document.documentElement.style.setProperty('--accent-foreground', '0 0% 98%');
+        document.documentElement.style.setProperty('--secondary-foreground', '0 0% 98%');
+        document.documentElement.style.setProperty('--muted-foreground', '0 0% 63.9%');
     }
 
     setCurrentDisplayColors(palette);
@@ -198,7 +239,7 @@ export default function SettingsPage() {
             invoices: invoices ? JSON.parse(invoices) : [],
             exportDate: new Date().toISOString(),
             appName: "FacturaFacil",
-            version: "1.4.0", 
+            version: "1.5.0", 
         };
 
         const jsonString = JSON.stringify(backupData, null, 2);
@@ -241,7 +282,6 @@ export default function SettingsPage() {
     setIsImporting(true);
     setImportMessages(["Iniciando proceso de importación y fusión..."]);
 
-    // Backup current data before import
     const currentCompanyJson = localStorage.getItem(LOCAL_STORAGE_COMPANY_KEY);
     const currentCustomersJson = localStorage.getItem(LOCAL_STORAGE_CUSTOMERS_KEY);
     const currentInvoicesJson = localStorage.getItem(LOCAL_STORAGE_INVOICES_KEY);
@@ -253,7 +293,6 @@ export default function SettingsPage() {
     if (currentInvoicesJson) localStorage.setItem(LOCAL_STORAGE_PRE_IMPORT_INVOICES_KEY, currentInvoicesJson);
     else localStorage.removeItem(LOCAL_STORAGE_PRE_IMPORT_INVOICES_KEY);
     
-    // Load initial local data for consolidation
     let consolidatedCompanyDetails: CompanyDetails | null = currentCompanyJson ? JSON.parse(currentCompanyJson) : null;
     let consolidatedCustomers: CustomerDetails[] = currentCustomersJson ? JSON.parse(currentCustomersJson) : [];
     let consolidatedInvoices: Invoice[] = currentInvoicesJson ? JSON.parse(currentInvoicesJson) : [];
@@ -275,7 +314,6 @@ export default function SettingsPage() {
           continue;
         }
 
-        // Import Company Details (last valid one wins)
         if (data.companyDetails) {
           if (data.companyDetails.name && data.companyDetails.rif) { 
             consolidatedCompanyDetails = { ...data.companyDetails, id: DEFAULT_COMPANY_ID };
@@ -286,7 +324,6 @@ export default function SettingsPage() {
           }
         }
 
-        // Import and Merge Customers
         if (data.customers && Array.isArray(data.customers)) {
           for (const importedCustomer of data.customers) {
             if (!importedCustomer.rif || !importedCustomer.name) {
@@ -307,6 +344,7 @@ export default function SettingsPage() {
               existingCustomer.phone = importedCustomer.phone || existingCustomer.phone;
               existingCustomer.email = importedCustomer.email || existingCustomer.email;
               if (importedCustomer.id && existingCustomer.id !== importedCustomer.id) {
+                 localMessages.push(`  - Cliente RIF ${importedCustomer.rif}: ID local ${existingCustomer.id} actualizado a ${importedCustomer.id} desde archivo.`);
                 existingCustomer.id = importedCustomer.id;
               }
 
@@ -330,7 +368,6 @@ export default function SettingsPage() {
           }
         }
         
-        // Import and Merge Invoices (by ID)
         if (data.invoices && Array.isArray(data.invoices)) {
           for (const importedInvoice of data.invoices) {
             if (!importedInvoice.id || !importedInvoice.invoiceNumber) {
@@ -353,10 +390,9 @@ export default function SettingsPage() {
       }
     }
 
-    // Save consolidated data to localStorage
     if (companyUpdatedThisImport && consolidatedCompanyDetails) {
         localStorage.setItem(LOCAL_STORAGE_COMPANY_KEY, JSON.stringify(consolidatedCompanyDetails));
-    } else if (!consolidatedCompanyDetails && companyUpdatedThisImport) { // Case where company details were cleared
+    } else if (!consolidatedCompanyDetails && companyUpdatedThisImport) { 
         localStorage.removeItem(LOCAL_STORAGE_COMPANY_KEY);
     }
     localStorage.setItem(LOCAL_STORAGE_CUSTOMERS_KEY, JSON.stringify(consolidatedCustomers));
@@ -411,7 +447,6 @@ export default function SettingsPage() {
     if (backupInvoices) localStorage.setItem(LOCAL_STORAGE_INVOICES_KEY, backupInvoices);
     else localStorage.setItem(LOCAL_STORAGE_INVOICES_KEY, JSON.stringify([]));
 
-    // Mark as reverted and clear backup
     localStorage.setItem(LOCAL_STORAGE_LAST_IMPORT_REVERTED_KEY, 'true');
     localStorage.removeItem(LOCAL_STORAGE_PRE_IMPORT_COMPANY_KEY);
     localStorage.removeItem(LOCAL_STORAGE_PRE_IMPORT_CUSTOMERS_KEY);
@@ -468,9 +503,9 @@ export default function SettingsPage() {
             <div>
               <h3 className="font-semibold text-foreground mb-2">Colores Actuales del Tema ({activeThemeName || "Desconocido"}):</h3>
               <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground ml-4">
-                <li><strong>Primario:</strong> <code>{currentDisplayColors.primary}</code></li>
+                <li><strong>Primario:</strong> <code>{currentDisplayColors.primary}</code> (Texto en botón: <code style={{color: `hsl(${getLightnessFromHslString(currentDisplayColors.primary) > 55 ? 'var(--foreground)' : 'var(--primary-foreground)'})`}}>{getLightnessFromHslString(currentDisplayColors.primary) > 55 ? 'Oscuro' : 'Claro'}</code>)</li>
                 <li><strong>Fondo:</strong> <code>{currentDisplayColors.background}</code></li>
-                <li><strong>Acento:</strong> <code>{currentDisplayColors.accent}</code></li>
+                <li><strong>Acento:</strong> <code>{currentDisplayColors.accent}</code> (Texto en botón: <code style={{color: `hsl(${getLightnessFromHslString(currentDisplayColors.accent) > 55 ? 'var(--foreground)' : 'var(--primary-foreground)'})`}}>{getLightnessFromHslString(currentDisplayColors.accent) > 55 ? 'Oscuro' : 'Claro'}</code>)</li>
               </ul>
             </div>
           )}
@@ -761,6 +796,7 @@ export default function SettingsPage() {
               <AccordionTrigger>Configuración de Empresa</AccordionTrigger>
               <AccordionContent className="space-y-2 text-sm text-muted-foreground">
                 <p>En la sección <Link href="/company" className="text-primary hover:underline">Empresa</Link> (<SettingsIcon className="inline h-4 w-4" />), puede configurar los datos de su negocio que aparecerán en todos los documentos emitidos. Asegúrese de que sean correctos y estén actualizados.</p>
+                 <p>También puede subir un logo para su empresa. Este logo aparecerá en la parte superior de las facturas impresas.</p>
               </AccordionContent>
             </AccordionItem>
 
@@ -820,7 +856,7 @@ export default function SettingsPage() {
           </div>
           <div className="flex justify-between">
             <span className="font-semibold text-foreground">Versión:</span>
-            <span className="text-muted-foreground">1.4.0 (Con Fusión Completa, Reversión de Importación e Indicadores)</span>
+            <span className="text-muted-foreground">1.5.0 (Gestión de Datos Mejorada, Temas Dinámicos)</span>
           </div>
           <div className="flex justify-between">
             <span className="font-semibold text-foreground">Desarrollado con:</span>

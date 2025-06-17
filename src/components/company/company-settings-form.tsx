@@ -21,8 +21,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Save, XCircle } from "lucide-react";
-import React from "react";
+import { Save, XCircle, Upload } from "lucide-react";
+import React, { useRef } from "react";
 
 const defaultCompanyDetails: CompanyDetails = {
   id: DEFAULT_COMPANY_ID,
@@ -40,6 +40,7 @@ export function CompanySettingsForm() {
     defaultCompanyDetails
   );
   const { toast } = useToast();
+  const logoFileInputRef = useRef<HTMLInputElement>(null);
 
   const form = useForm<z.infer<typeof companyDetailsSchema>>({
     resolver: zodResolver(companyDetailsSchema),
@@ -47,7 +48,6 @@ export function CompanySettingsForm() {
   });
 
   React.useEffect(() => {
-    // Ensure form is reset if companyDetails from localStorage changes (e.g., initial load)
     form.reset(companyDetails || defaultCompanyDetails);
   }, [companyDetails, form]);
 
@@ -61,13 +61,49 @@ export function CompanySettingsForm() {
   }
 
   function handleCancel() {
-    form.reset(companyDetails || defaultCompanyDetails); // Reset to last saved/loaded values
+    form.reset(companyDetails || defaultCompanyDetails);
     toast({
       title: "Cancelado",
       description: "Los cambios no guardados han sido descartados.",
       variant: "default",
     });
   }
+
+  const handleLogoFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) { // Max 2MB
+        toast({
+          variant: "destructive",
+          title: "Archivo muy grande",
+          description: "El logo no debe exceder los 2MB.",
+        });
+        if (logoFileInputRef.current) {
+          logoFileInputRef.current.value = "";
+        }
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        form.setValue("logoUrl", reader.result as string, { shouldValidate: true, shouldDirty: true });
+        toast({
+          title: "Logo Cargado",
+          description: "El logo se ha cargado y se mostrará en la previsualización. Guarde los cambios para aplicarlo.",
+        });
+      };
+      reader.onerror = () => {
+        toast({
+          variant: "destructive",
+          title: "Error al leer archivo",
+          description: "No se pudo procesar el archivo del logo.",
+        });
+      };
+      reader.readAsDataURL(file);
+      if (logoFileInputRef.current) {
+        logoFileInputRef.current.value = ""; // Reset file input
+      }
+    }
+  };
 
   return (
     <Card className="shadow-lg">
@@ -149,25 +185,44 @@ export function CompanySettingsForm() {
                 )}
               />
             </div>
-             <FormField
-                control={form.control}
-                name="logoUrl"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>URL del Logo (Opcional)</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Ej: https://ejemplo.com/logo.png" {...field} />
+            
+            <FormField
+              control={form.control}
+              name="logoUrl"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Logo de la Empresa</FormLabel>
+                  <div className="flex flex-col sm:flex-row gap-2 items-start">
+                    <FormControl className="flex-grow">
+                      <Input placeholder="https://ejemplo.com/logo.png o suba un archivo" {...field} />
                     </FormControl>
-                    {field.value && (
-                        <div className="mt-2 p-2 border rounded-md bg-muted aspect-video max-w-[200px] flex items-center justify-center">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={field.value} alt="Previsualización del logo" className="max-h-full max-w-full object-contain" data-ai-hint="company logo" />
-                        </div>
-                    )}
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      onClick={() => logoFileInputRef.current?.click()}
+                      className="w-full sm:w-auto"
+                    >
+                      <Upload className="mr-2 h-4 w-4" /> Subir Logo desde Archivo
+                    </Button>
+                    <input 
+                      type="file"
+                      accept="image/png, image/jpeg, image/gif, image/svg+xml"
+                      ref={logoFileInputRef}
+                      onChange={handleLogoFileChange}
+                      className="hidden"
+                    />
+                  </div>
+                  {field.value && (
+                      <div className="mt-2 p-2 border rounded-md bg-muted aspect-video max-w-[200px] flex items-center justify-center">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={field.value} alt="Previsualización del logo" className="max-h-full max-w-full object-contain" data-ai-hint="company logo" />
+                      </div>
+                  )}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <div className="flex flex-col sm:flex-row gap-2 mt-4">
               <Button type="submit" className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground">
                 <Save className="mr-2 h-4 w-4" /> Guardar Cambios
