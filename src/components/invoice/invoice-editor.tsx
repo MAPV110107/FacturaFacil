@@ -169,9 +169,9 @@ export function InvoiceEditor() {
     } else if (mode === 'creditDeposit' && targetCustomer) {
       initialCustomerState = { ...targetCustomer };
       initialInvoiceNumber = `DEP-${Date.now().toString().slice(-6)}`;
-      initialItemsArr = [{ id: uuidv4(), description: "Depósito a Cuenta Cliente", quantity: 1, unitPrice: 0 }]; // User will input amount
+      initialItemsArr = [{ id: uuidv4(), description: "Depósito a Cuenta Cliente", quantity: 1, unitPrice: 0 }]; 
       thankYouMsg = "Gracias por su depósito.";
-      notesMsg = `Depósito a cuenta cliente.`;
+      notesMsg = `Depósito a cuenta cliente. El monto se define en los métodos de pago.`;
       formTaxRate = 0;
       formIsCreditDeposit = true;
       setSelectedCustomerIdForDropdown(targetCustomer.id);
@@ -263,7 +263,7 @@ export function InvoiceEditor() {
         router.replace('/invoice/new', { scroll: false });
       }
     }
-  }, [form, customers, companyDetails, calculateTotals, calculatePaymentSummary, router, pathname, searchParams, toast]);
+  }, [form, customers, companyDetails, calculateTotals, calculatePaymentSummary, router, pathname, searchParams]);
 
 
   useEffect(() => {
@@ -271,12 +271,11 @@ export function InvoiceEditor() {
   }, []);
 
   useEffect(() => {
-    if (!isClient || !customers || customers.length === 0) { // Ensure customers are loaded
-        // If customers are not loaded yet, this effect might re-run when they are.
-        // Or handle initial 'normal' mode setup if no params require special mode.
-        if (!searchParams.get('debtPayment') && !searchParams.get('customerId') && editorMode === 'normal' && !form.getValues('invoiceNumber') && !selectedCustomerIdForDropdown) {
-          resetFormAndState({ mode: 'normal' });
-        }
+    if (!isClient ) return; 
+    
+    if (customers.length === 0 && (searchParams.get('debtPayment') || searchParams.get('customerId'))) {
+        // Customers not loaded yet, but URL params suggest we might need them.
+        // Wait for customers to load (next effect run).
         return;
     }
 
@@ -304,6 +303,8 @@ export function InvoiceEditor() {
         return; 
     }
     
+    // If no params for special mode, and form isn't initialized, reset to normal.
+    // This check ensures we only do this once on initial load or if explicitly reset.
     if (!debtPaymentParam && editorMode === 'normal' && !form.getValues('invoiceNumber') && !selectedCustomerIdForDropdown) {
         resetFormAndState({ mode: 'normal' });
     }
@@ -870,7 +871,13 @@ export function InvoiceEditor() {
                     render={({ field: f }) => (
                       <FormItem>
                         <FormLabel>Descripción</FormLabel>
-                        <FormControl><Input {...f} placeholder="Artículo o Servicio" readOnly={editorMode !== 'normal'} /></FormControl>
+                        <FormControl>
+                          <Input 
+                            {...f} 
+                            placeholder="Artículo o Servicio" 
+                            readOnly={editorMode === 'debtPayment' || editorMode === 'creditDeposit'} 
+                          />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -881,8 +888,16 @@ export function InvoiceEditor() {
                     render={({ field: f }) => (
                       <FormItem>
                         <FormLabel>Cantidad</FormLabel>
-                        <FormControl><Input {...f} type="number" step="0.01" placeholder="1" 
-                         onChange={e => f.onChange(parseFloat(e.target.value) || 0)} readOnly={editorMode !== 'normal'} /></FormControl>
+                        <FormControl>
+                          <Input 
+                            {...f} 
+                            type="number" 
+                            step="0.01" 
+                            placeholder="1" 
+                            onChange={e => f.onChange(parseFloat(e.target.value) || 0)} 
+                            readOnly={editorMode === 'debtPayment' || editorMode === 'creditDeposit'} 
+                          />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -896,19 +911,26 @@ export function InvoiceEditor() {
                         <FormControl>
                           <Input 
                             {...f} 
-                            value={f.value === 0 ? '' : f.value}
+                            value={(editorMode === 'creditDeposit' || (editorMode === 'debtPayment' && f.value === 0)) ? '' : (f.value === 0 ? '' : f.value)}
                             onChange={e => f.onChange(parseFloat(e.target.value) || 0)}
                             type="number" 
                             step="0.01" 
                             placeholder="0.00" 
-                            readOnly={editorMode === 'debtPayment'} 
+                            readOnly={editorMode === 'debtPayment' || editorMode === 'creditDeposit'}
                           />
                         </FormControl> 
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                  <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(index)} className="text-destructive hover:text-destructive/80" disabled={editorMode !== 'normal' || itemFields.length <= 1}>
+                  <Button 
+                    type="button" 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={() => removeItem(index)} 
+                    className="text-destructive hover:text-destructive/80" 
+                    disabled={editorMode !== 'normal' || itemFields.length <= 1}
+                  >
                     <Trash2 className="h-5 w-5" />
                   </Button>
                 </div>
@@ -924,7 +946,9 @@ export function InvoiceEditor() {
                 <div className="flex items-center p-3 rounded-md bg-accent/10 text-accent-foreground border border-accent/30">
                   <Info className="h-5 w-5 mr-2" />
                   <p className="text-sm">
-                    {editorMode === 'debtPayment' ? "Está registrando un abono a una deuda. No se pueden añadir más artículos." : "Está registrando un depósito a cuenta. Ingrese el monto en 'Precio Unit.'"}
+                    {editorMode === 'debtPayment' 
+                      ? "Está registrando un abono a una deuda. No se pueden modificar los artículos." 
+                      : "Está registrando un depósito a cuenta. Los detalles del artículo son fijos. Ingrese el monto del depósito en 'Detalles del Pago'."}
                   </p>
                 </div>
               )}
@@ -1037,7 +1061,7 @@ export function InvoiceEditor() {
                                 type="number" 
                                 step="0.01" 
                                 placeholder="0.00"
-                                disabled={editorMode !== 'normal'} 
+                                readOnly={editorMode !== 'normal'} 
                               />
                             </FormControl>
                              {editorMode !== 'normal' && <p className="text-xs text-muted-foreground mt-1">Los descuentos no aplican en este modo.</p>}
@@ -1051,8 +1075,16 @@ export function InvoiceEditor() {
                     render={({ field }) => (
                         <FormItem>
                             <FormLabel>Tasa de IVA (ej. 0.16 para 16%)</FormLabel>
-                            <FormControl><Input {...field} type="number" step="0.01" placeholder="0.16" 
-                             onChange={e => field.onChange(parseFloat(e.target.value) || 0)} readOnly={editorMode !== 'normal'} /></FormControl>
+                            <FormControl>
+                              <Input 
+                                {...field} 
+                                type="number" 
+                                step="0.01" 
+                                placeholder="0.16" 
+                                onChange={e => field.onChange(parseFloat(e.target.value) || 0)} 
+                                readOnly={editorMode !== 'normal'} 
+                              />
+                            </FormControl>
                              {editorMode !== 'normal' && <p className="text-xs text-muted-foreground mt-1">El IVA no aplica en este modo.</p>}
                             <FormMessage />
                         </FormItem>
@@ -1108,3 +1140,4 @@ export function InvoiceEditor() {
     </div>
   );
 }
+
