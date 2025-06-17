@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { SlidersHorizontal, Palette, Info, CheckCircle, BookOpen, Eye, Undo2, DollarSign, Gift, Users, FilePlus2, History, Settings } from "lucide-react";
+import { SlidersHorizontal, Palette, Info, CheckCircle, BookOpen, Eye, Undo2, DollarSign, Gift, Users, FilePlus2, History, Settings as SettingsIcon, Download, Server } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -61,6 +61,10 @@ const suggestedPalettes: ColorPalette[] = [
 ];
 
 const LOCAL_STORAGE_THEME_KEY = "facturafacil-theme";
+const LOCAL_STORAGE_COMPANY_KEY = "companyDetails";
+const LOCAL_STORAGE_CUSTOMERS_KEY = "customers";
+const LOCAL_STORAGE_INVOICES_KEY = "invoices";
+
 
 export default function SettingsPage() {
   const { toast } = useToast();
@@ -130,6 +134,53 @@ export default function SettingsPage() {
     });
   };
 
+  const handleExportData = () => {
+    if (typeof window === 'undefined') {
+        toast({ title: "Error", description: "La exportación solo puede realizarse en el navegador.", variant: "destructive"});
+        return;
+    }
+    try {
+        const companyDetails = localStorage.getItem(LOCAL_STORAGE_COMPANY_KEY);
+        const customers = localStorage.getItem(LOCAL_STORAGE_CUSTOMERS_KEY);
+        const invoices = localStorage.getItem(LOCAL_STORAGE_INVOICES_KEY);
+
+        const backupData = {
+            companyDetails: companyDetails ? JSON.parse(companyDetails) : null,
+            customers: customers ? JSON.parse(customers) : [],
+            invoices: invoices ? JSON.parse(invoices) : [],
+            exportDate: new Date().toISOString(),
+            appName: "FacturaFacil",
+            version: "1.1.0", // You might want to make this dynamic if app version changes
+        };
+
+        const jsonString = JSON.stringify(backupData, null, 2);
+        const blob = new Blob([jsonString], { type: "application/json" });
+        const href = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = href;
+        const dateSuffix = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+        link.download = `facturafacil_backup_${dateSuffix}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(href);
+
+        toast({
+            title: "Exportación Exitosa",
+            description: "Los datos de la aplicación se han descargado como un archivo JSON.",
+        });
+
+    } catch (error) {
+        console.error("Error al exportar datos:", error);
+        toast({
+            title: "Error de Exportación",
+            description: "No se pudieron exportar los datos. Revise la consola para más detalles.",
+            variant: "destructive",
+        });
+    }
+  };
+
+
   return (
     <div className="space-y-8 max-w-4xl mx-auto">
       <Card className="shadow-lg">
@@ -139,7 +190,7 @@ export default function SettingsPage() {
             <div>
               <CardTitle className="text-2xl font-bold text-primary">Ajustes del Entorno</CardTitle>
               <CardDescription className="text-muted-foreground">
-                Configure la apariencia, vea información de la aplicación y consulte el manual de usuario.
+                Configure la apariencia, gestione datos, vea información de la aplicación y consulte el manual de usuario.
               </CardDescription>
             </div>
           </div>
@@ -231,6 +282,32 @@ export default function SettingsPage() {
 
       <Card>
         <CardHeader>
+          <div className="flex items-center space-x-3">
+            <Server className="h-6 w-6 text-primary" />
+            <CardTitle className="text-xl text-primary">Gestión de Datos</CardTitle>
+          </div>
+          <CardDescription>
+            Exporte los datos de su aplicación para realizar copias de seguridad o transferirlos a otro navegador/ordenador.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+            <div className="p-4 rounded-md bg-accent/10 border border-accent/30 text-accent-foreground">
+                <p className="text-sm font-medium">
+                Haga clic en el botón de abajo para descargar un archivo JSON que contiene la información de su empresa, clientes y todas las facturas.
+                Guarde este archivo en un lugar seguro.
+                </p>
+                <p className="text-xs mt-1">
+                Actualmente, la funcionalidad de importación no está implementada.
+                </p>
+            </div>
+            <Button onClick={handleExportData} className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground">
+                <Download className="mr-2 h-4 w-4" /> Exportar Datos de la Aplicación
+            </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
            <div className="flex items-center space-x-3">
             <BookOpen className="h-6 w-6 text-primary" />
             <CardTitle className="text-xl text-primary">Manual de Usuario Rápido</CardTitle>
@@ -250,7 +327,7 @@ export default function SettingsPage() {
                   <li><strong><Link href="/customers" className="text-primary hover:underline">Gestionar Clientes</Link> (<Users className="inline h-4 w-4" />):</strong> Para añadir, ver, editar información de clientes y consultar sus saldos.</li>
                   <li><strong><Link href="/invoices" className="text-primary hover:underline">Historial de Documentos</Link> (<History className="inline h-4 w-4" />):</strong> Para consultar facturas, notas de crédito, abonos y depósitos emitidos.</li>
                   <li><strong><Link href="/returns" className="text-primary hover:underline">Procesar Devolución / Retiro de Saldo</Link> (<Undo2 className="inline h-4 w-4" />):</strong> Para generar notas de crédito basadas en facturas existentes o procesar retiros de saldo a favor del cliente.</li>
-                  <li><strong><Link href="/company" className="text-primary hover:underline">Configuración de Empresa</Link> (<Settings className="inline h-4 w-4" />):</strong> Para actualizar los datos fiscales de su empresa que aparecen en los documentos.</li>
+                  <li><strong><Link href="/company" className="text-primary hover:underline">Configuración de Empresa</Link> (<SettingsIcon className="inline h-4 w-4" />):</strong> Para actualizar los datos fiscales de su empresa que aparecen en los documentos.</li>
                   <li><strong><Link href="/settings" className="text-primary hover:underline">Ajustes del Entorno</Link> (<SlidersHorizontal className="inline h-4 w-4" />):</strong> Donde se encuentra ahora, para cambiar temas, ver información de la app y este manual.</li>
                 </ul>
               </AccordionContent>
@@ -302,6 +379,7 @@ export default function SettingsPage() {
                         <ul className="list-disc pl-5">
                           <li>Agregue métodos de pago.</li>
                           <li>Si el cliente tiene <strong>Saldo a Favor</strong>, aparecerá como opción. Puede usarlo para cubrir parte o todo el monto de la factura. El sistema autocompletará el monto a usar, pero puede editarlo (sin exceder el crédito disponible).</li>
+                           <li>Si el cliente paga <strong>de más</strong>, puede elegir si el excedente se abona al saldo a favor del cliente o si se procesa el vuelto inmediatamente.</li>
                         </ul>
                       </li>
                       <li>Configure descuento, IVA, mensaje de agradecimiento y notas.</li>
@@ -370,7 +448,7 @@ export default function SettingsPage() {
             <AccordionItem value="item-6">
               <AccordionTrigger>Configuración de Empresa</AccordionTrigger>
               <AccordionContent className="space-y-2 text-sm text-muted-foreground">
-                <p>En la sección <Link href="/company" className="text-primary hover:underline">Empresa</Link> (<Settings className="inline h-4 w-4" />), puede configurar los datos de su negocio que aparecerán en todos los documentos emitidos. Asegúrese de que sean correctos y estén actualizados. Puede cancelar los cambios no guardados con el botón "Cancelar".</p>
+                <p>En la sección <Link href="/company" className="text-primary hover:underline">Empresa</Link> (<SettingsIcon className="inline h-4 w-4" />), puede configurar los datos de su negocio que aparecerán en todos los documentos emitidos. Asegúrese de que sean correctos y estén actualizados. Puede cancelar los cambios no guardados con el botón "Cancelar".</p>
               </AccordionContent>
             </AccordionItem>
 
@@ -387,14 +465,16 @@ export default function SettingsPage() {
             </AccordionItem>
 
             <AccordionItem value="item-8">
-              <AccordionTrigger>Almacenamiento de Datos y Temas</AccordionTrigger>
+              <AccordionTrigger>Almacenamiento y Gestión de Datos</AccordionTrigger>
               <AccordionContent className="space-y-2 text-sm text-muted-foreground">
                 <p>FacturaFacil utiliza el almacenamiento local de su navegador (<code>localStorage</code>) para guardar la configuración de la empresa, lista de clientes, todos los documentos generados y su preferencia de tema de color.</p>
+                 <p>En la sección <Link href="/settings" className="text-primary hover:underline">Ajustes del Entorno</Link> (<SlidersHorizontal className="inline h-4 w-4" />) &gt; "Gestión de Datos", encontrará una opción para <strong className="text-foreground">Exportar Datos</strong>. Esto le permite descargar un archivo JSON con toda la información de su aplicación (empresa, clientes, facturas) para tener una copia de seguridad o para transferir a otro navegador/ordenador.</p>
                 <p><strong>Consideraciones Importantes:</strong></p>
                 <ul className="list-disc pl-5">
                   <li>Los datos se guardan <strong>exclusivamente en el navegador y dispositivo</strong> que está utilizando.</li>
-                  <li>Si limpia la caché o datos de navegación, <strong>perderá toda la información</strong>.</li>
-                  <li>Se recomienda <strong>realizar copias de seguridad periódicas</strong> de sus documentos guardándolos como PDF.</li>
+                  <li>Si limpia la caché o datos de navegación, <strong>perderá toda la información</strong> (a menos que tenga una copia exportada).</li>
+                  <li>Se recomienda <strong>realizar exportaciones periódicas</strong> de sus datos y guardarlas en un lugar seguro.</li>
+                   <li>La funcionalidad de <strong>Importar Datos</strong> desde un archivo de respaldo aún no está implementada.</li>
                 </ul>
               </AccordionContent>
             </AccordionItem>
@@ -417,7 +497,7 @@ export default function SettingsPage() {
           </div>
           <div className="flex justify-between">
             <span className="font-semibold text-foreground">Versión:</span>
-            <span className="text-muted-foreground">1.1.0 (Con Gestión de Saldos)</span>
+            <span className="text-muted-foreground">1.1.0 (Con Gestión de Saldos y Exportación)</span>
           </div>
           <div className="flex justify-between">
             <span className="font-semibold text-foreground">Desarrollado con:</span>
