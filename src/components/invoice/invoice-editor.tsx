@@ -420,7 +420,7 @@ export function InvoiceEditor() {
     appendChangePayment, 
     replaceChangePayments, 
     updateChangePayment,
-    form // Added form to dependency array
+    form 
 ]);
 
 
@@ -816,7 +816,7 @@ export function InvoiceEditor() {
                     control={form.control}
                     name="date"
                     render={({ field }) => (
-                      <FormItem className="flex flex-col">
+                      <FormItem>
                         <FormLabel htmlFor="date">Fecha</FormLabel>
                         <Popover>
                           <PopoverTrigger asChild>
