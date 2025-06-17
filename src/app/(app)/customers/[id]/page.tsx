@@ -9,7 +9,7 @@ import type { Invoice, CustomerDetails } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, User, FileText, DollarSign, CreditCard, ShoppingBag, Eye, History, FileText as PageIcon, Undo2 as ReturnIcon, FileText as SaleIcon } from "lucide-react";
+import { ArrowLeft, User, FileText, DollarSign, CreditCard, ShoppingBag, Eye, History, FileText as PageIcon, Undo2 as ReturnIcon, FileText as SaleIcon, Gift } from "lucide-react";
 import { CURRENCY_SYMBOL } from "@/lib/constants";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -130,19 +130,39 @@ export default function CustomerSummaryPage() {
             </div>
             <p className="text-2xl font-bold text-primary">{formatCurrency(totalSpent)}</p>
           </div>
+          
           <div className="p-4 rounded-lg bg-muted/50 border">
-            <div className="flex items-center text-muted-foreground mb-1">
-              <DollarSign className="h-5 w-5 mr-2" />
-              <span className="text-sm font-medium">Saldo Pendiente</span>
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center text-muted-foreground">
+                <DollarSign className="h-5 w-5 mr-2" />
+                <span className="text-sm font-medium">Saldo Pendiente</span>
+              </div>
+              {(customer.outstandingBalance ?? 0) > 0 && (
+                <Button asChild variant="link" size="sm" className="text-xs h-auto p-0 text-primary hover:text-primary/80" title="Saldar Deuda">
+                  <Link href={`/invoice/new?customerId=${customer.id}&debtPayment=true&amount=${customer.outstandingBalance}`}>
+                    Pagar Deuda
+                  </Link>
+                </Button>
+              )}
             </div>
             <p className={cn("text-2xl font-bold", (customer.outstandingBalance ?? 0) > 0 ? "text-destructive" : "text-primary")}>
                 {formatCurrency(customer.outstandingBalance)}
             </p>
           </div>
+
           <div className="p-4 rounded-lg bg-muted/50 border">
-            <div className="flex items-center text-muted-foreground mb-1">
-              <CreditCard className="h-5 w-5 mr-2" />
-              <span className="text-sm font-medium">Saldo a Favor</span>
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center text-muted-foreground">
+                <CreditCard className="h-5 w-5 mr-2" />
+                <span className="text-sm font-medium">Saldo a Favor</span>
+              </div>
+               {(customer.creditBalance ?? 0) > 0 && (
+                <Button asChild variant="link" size="sm" className="text-xs h-auto p-0 text-green-600 hover:text-green-700" title="Retirar Saldo">
+                  <Link href={`/returns?mode=creditWithdrawal&customerId=${customer.id}&availableCredit=${customer.creditBalance}`}>
+                     Retirar Saldo
+                  </Link>
+                </Button>
+              )}
             </div>
             <p className={cn("text-2xl font-bold", (customer.creditBalance ?? 0) > 0 ? "text-green-600" : "text-primary")}>
                 {formatCurrency(customer.creditBalance)}
