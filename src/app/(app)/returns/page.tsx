@@ -30,6 +30,11 @@ import {
 
 type EditorMode = 'invoiceReturn' | 'creditWithdrawal';
 
+const formatCurrency = (amount: number | undefined | null) => {
+  if (amount === undefined || amount === null) return `${CURRENCY_SYMBOL}0.00`;
+  return `${CURRENCY_SYMBOL}${amount.toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,')}`;
+};
+
 export default function ReturnsPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -426,7 +431,7 @@ export default function ReturnsPage() {
                   </h3>
                   <p className="text-sm text-muted-foreground text-center">
                       Al hacer clic en "Generar Nota de Crédito", se creará un documento de Nota de Crédito
-                      por el valor total de {editorMode === 'creditWithdrawal' ? "este retiro" : "esta factura"} ({CURRENCY_SYMBOL}{foundInvoice.totalAmount.toFixed(2)}). Este nuevo documento se guardará en el historial.
+                      por el valor total de {editorMode === 'creditWithdrawal' ? "este retiro" : "esta factura"} ({formatCurrency(foundInvoice.totalAmount)}). Este nuevo documento se guardará en el historial.
                   </p>
                   {editorMode === 'invoiceReturn' && (
                     <p className="text-xs text-muted-foreground text-center mt-2">
@@ -452,7 +457,7 @@ export default function ReturnsPage() {
               {editorMode === 'creditWithdrawal' 
                 ? ` el retiro de saldo de ${foundInvoice?.customerDetails.name}` 
                 : ` la factura ${foundInvoice?.invoiceNumber}`}?
-              Esta acción generará una nota de crédito por {CURRENCY_SYMBOL}{foundInvoice?.totalAmount.toFixed(2)}.
+              Esta acción generará una nota de crédito por {formatCurrency(foundInvoice?.totalAmount)}.
               Los detalles del reembolso (método, referencia, cajero, vendedor) serán los que acaba de ingresar.
               {editorMode === 'creditWithdrawal' && ` El saldo a favor del cliente ${foundInvoice?.customerDetails.name} se reducirá en este monto.`}
             </AlertDialogDescription>
