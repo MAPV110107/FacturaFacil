@@ -241,10 +241,10 @@ export function InvoiceEditor() {
       changeRefundPaymentMethods: formValuesToReset.changeRefundPaymentMethods as PaymentDetails[],
     });
     
-    if (callingEffectRef) { // Clear the flag of the calling effect
+    if (callingEffectRef) { 
         callingEffectRef.current = false;
     }
-    if (mode === 'normal' && !customerId) { // Specifically for blank normal reset
+    if (mode === 'normal' && !customerId) { 
       initialNormalResetDoneRef.current = true;
     }
 
@@ -258,46 +258,28 @@ export function InvoiceEditor() {
   useEffect(() => {
     if (!isClient) return;
 
-    // Wait for customers if customerId is in params and customers haven't been loaded/attempted
     if (searchParams.get('customerId') && customers.length === 0 && !initialCustomersLoadAttemptedRef.current) {
-        initialCustomersLoadAttemptedRef.current = true; // Mark that we've seen this state and are waiting
+        initialCustomersLoadAttemptedRef.current = true; 
         return;
     }
-    // If we previously waited for customers but they are still empty, proceed (might lead to "not found")
-    // This prevents getting stuck if customers never load or if param is for a non-existent customer.
 
     const customerIdParam = searchParams.get('customerId');
     const debtPaymentParam = searchParams.get('debtPayment') === 'true';
     const amountStrParam = searchParams.get('amount');
     const amountParam = parseFloat(amountStrParam || '0');
 
-    // Handle Debt Payment Mode from URL
     if (debtPaymentParam && customerIdParam && amountParam > 0) {
-        if (isInitializingDebtPaymentRef.current) { // Already processing this specific setup
+        if (isInitializingDebtPaymentRef.current) {
             return;
         }
-
-        const isAlreadyCorrectlySetup =
-            editorMode === 'debtPayment' &&
-            selectedCustomerIdForDropdown === customerIdParam &&
-            currentDebtOrCreditAmount === amountParam &&
-            form.getValues('isDebtPayment') === true;
-
-        if (isAlreadyCorrectlySetup) {
-            if (pathname === '/invoice/new' && searchParams.has('debtPayment')) {
-                router.replace('/invoice/new', { scroll: false }); // Clean URL
-            }
-            return; // Already set up correctly, do nothing
-        }
-        
-        isInitializingDebtPaymentRef.current = true; // Signal that we are starting setup
+        isInitializingDebtPaymentRef.current = true;
         const targetCustomer = customers.find(c => c.id === customerIdParam);
 
         if (targetCustomer) {
             setEditorMode('debtPayment');
             setCurrentDebtOrCreditAmount(amountParam);
             setSelectedCustomerIdForDropdown(customerIdParam);
-            setCustomerRifInput(targetCustomer.rif); // Update UI state for RIF input
+            setCustomerRifInput(targetCustomer.rif);
             setCustomerSearchMessage(`Pagando deuda de: ${targetCustomer.name}`);
             setShowNewCustomerFields(false);
             resetFormAndState({ mode: 'debtPayment', customerId: customerIdParam, amount: amountParam, callingEffectRef: isInitializingDebtPaymentRef });
@@ -309,36 +291,31 @@ export function InvoiceEditor() {
             setCustomerRifInput("");
             setCustomerSearchMessage(null);
             setShowNewCustomerFields(false);
-            resetFormAndState({ mode: 'normal', callingEffectRef: isInitializingDebtPaymentRef }); // Reset ref
-            if (pathname === '/invoice/new' && searchParams.has('debtPayment')) {
-                router.replace('/invoice/new', { scroll: false }); // Clean URL
-            }
+            resetFormAndState({ mode: 'normal', callingEffectRef: isInitializingDebtPaymentRef }); 
         }
-        return; // Exit after handling or attempting debt payment mode
+        if (pathname === '/invoice/new' && searchParams.has('debtPayment')) {
+             router.replace('/invoice/new', { scroll: false }); 
+        }
+        return;
     }
     
-    // If not triggered by debtPaymentParam, ensure the initializing ref is false
     isInitializingDebtPaymentRef.current = false;
 
-    // Reset to normal mode if currently in a special mode but URL params no longer support it
-    if ((editorMode === 'debtPayment' || editorMode === 'creditDeposit') && !debtPaymentParam /* Add checks for other URL-driven modes if any */) {
+    if ((editorMode === 'debtPayment' || editorMode === 'creditDeposit') && !debtPaymentParam) {
         setEditorMode('normal');
         setCurrentDebtOrCreditAmount(0);
-        // Do not clear customer if one was selected; resetFormAndState will use selectedCustomerIdForDropdown
         resetFormAndState({ mode: 'normal', customerId: selectedCustomerIdForDropdown });
-        if (pathname === '/invoice/new' && searchParams.has('debtPayment')) { // Clean URL
+        if (pathname === '/invoice/new' && searchParams.has('debtPayment')) { 
              router.replace('/invoice/new', { scroll: false });
         }
     }
-    // Standard initial reset for a completely new invoice if no params, currently normal mode, no customer selected, and not done before
-    else if (editorMode === 'normal' && !form.getValues('invoiceNumber') && !selectedCustomerIdForDropdown && !initialNormalResetDoneRef.current) {
-        resetFormAndState({ mode: 'normal' }); 
-        // initialNormalResetDoneRef is set inside resetFormAndState for this specific case
+    else if (editorMode === 'normal' && (!form.getValues('invoiceNumber') || form.getValues('invoiceNumber').startsWith("PAGO-") || form.getValues('invoiceNumber').startsWith("DEP-")) && !selectedCustomerIdForDropdown && !initialNormalResetDoneRef.current) {
+       resetFormAndState({ mode: 'normal' });
     }
 
 }, [
-    isClient, searchParams, customers, editorMode, selectedCustomerIdForDropdown, currentDebtOrCreditAmount,
-    resetFormAndState, toast, pathname, router, form // form for getValues()
+    isClient, searchParams, customers, editorMode, selectedCustomerIdForDropdown, 
+    resetFormAndState, toast, pathname, router, form
 ]);
 
 
@@ -427,23 +404,23 @@ export function InvoiceEditor() {
         if (changePaymentFields.length === 0) {
             appendChangePayment({ method: "Efectivo", amount: actualOverpaymentAmount, reference: "" });
         } else if (changePaymentFields.length === 1) {
-            // Only update if the amount is different to prevent loops
             if (changePaymentFields[0].amount !== actualOverpaymentAmount) {
                  updateChangePayment(0, { ...changePaymentFields[0], method: changePaymentFields[0].method || "Efectivo", amount: actualOverpaymentAmount });
             }
         }
     } else if (watchedOverpaymentHandlingChoice === 'creditToAccount') {
-        if (changePaymentFields.length > 0) { // Only clear if not already empty
+        if (changePaymentFields.length > 0) {
             replaceChangePayments([]);
         }
     }
   }, [
-    form.watch("overpaymentHandlingChoice"), // Keep watching this directly
-    liveInvoicePreview.overpaymentAmount, // This comes from state, generally fine
-    changePaymentFields, // This is the tricky one, direct use can cause loops
+    form.watch("overpaymentHandlingChoice"), 
+    liveInvoicePreview.overpaymentAmount, 
+    changePaymentFields, 
     appendChangePayment, 
     replaceChangePayments, 
-    updateChangePayment
+    updateChangePayment,
+    form // Added form to dependency array
 ]);
 
 
@@ -500,7 +477,7 @@ export function InvoiceEditor() {
         toast({title: "Modo especial activo", description: "Cancele el modo especial actual para cambiar de cliente.", variant: "destructive"});
         return;
     }
-    setSelectedCustomerIdForDropdown(customerId); // Update state for the dropdown value
+    setSelectedCustomerIdForDropdown(customerId); 
     const customer = customers.find((c) => c.id === customerId);
     if (customer) {
       form.setValue("customerDetails", { ...customer }, { shouldValidate: true });
@@ -509,8 +486,6 @@ export function InvoiceEditor() {
       setCustomerSearchMessage(`Cliente seleccionado: ${customer.name}`);
       setSelectedCustomerAvailableCredit(customer.creditBalance || 0);
     } else {
-      // This case should ideally not happen if customerId comes from the list of existing customers
-      // But as a fallback, reset to new customer entry
       form.reset({ 
         ...form.getValues(), 
         customerDetails: { ...defaultCustomer, rif: "" } 
@@ -545,8 +520,6 @@ export function InvoiceEditor() {
   const handleEnterDebtPaymentMode = () => {
     const customer = form.getValues("customerDetails");
     if (customer && customer.id && (customer.outstandingBalance ?? 0) > 0) {
-      // Trigger main useEffect by updating URL or a dedicated state if preferred
-      // For now, directly setting mode and calling reset
       setEditorMode('debtPayment');
       setCurrentDebtOrCreditAmount(customer.outstandingBalance ?? 0);
       setSelectedCustomerIdForDropdown(customer.id);
@@ -564,7 +537,7 @@ export function InvoiceEditor() {
     const customer = form.getValues("customerDetails");
     if (customer && customer.id) {
       setEditorMode('creditDeposit');
-      setCurrentDebtOrCreditAmount(0); // No specific amount for credit deposit itself, it's from payment
+      setCurrentDebtOrCreditAmount(0); 
       setSelectedCustomerIdForDropdown(customer.id);
       setCustomerRifInput(customer.rif);
       setCustomerSearchMessage(`Registrando depósito para: ${customer.name}`);
@@ -617,7 +590,6 @@ export function InvoiceEditor() {
                      form.setError(`paymentMethods.${index}.amount`, { type: "manual", message: `Monto de saldo a favor no puede ser negativo.`});
                      creditUsageError = true;
                 }
-                // Ensure selectedCustomerAvailableCredit is up-to-date for this check
                 const currentCust = customers.find(c => c.id === customerToSaveOnInvoice.id);
                 const availableCredit = currentCust?.creditBalance || 0;
 
@@ -763,15 +735,15 @@ export function InvoiceEditor() {
       ),
     });
     
-    setEditorMode('normal'); // Reset mode state
-    setCurrentDebtOrCreditAmount(0); // Reset amount state
-    setSelectedCustomerIdForDropdown(undefined); // Reset selected customer state
-    setCustomerRifInput(""); // Clear RIF input
-    setCustomerSearchMessage(null); // Clear search message
-    setShowNewCustomerFields(false); // Hide new customer fields
-    initialNormalResetDoneRef.current = false; // Allow initial reset for next new invoice
+    setEditorMode('normal'); 
+    setCurrentDebtOrCreditAmount(0); 
+    setSelectedCustomerIdForDropdown(undefined); 
+    setCustomerRifInput(""); 
+    setCustomerSearchMessage(null); 
+    setShowNewCustomerFields(false); 
+    initialNormalResetDoneRef.current = false; 
     resetFormAndState({ mode: 'normal' }); 
-    if (pathname === '/invoice/new' && searchParams.has('debtPayment')) { // Clean URL
+    if (pathname === '/invoice/new' && searchParams.has('debtPayment')) { 
         router.replace('/invoice/new', { scroll: false });
     }
   }
@@ -789,7 +761,7 @@ export function InvoiceEditor() {
         title: "Creación Cancelada",
         description: "El documento ha sido descartado.",
     });
-    if (pathname === '/invoice/new' && searchParams.has('debtPayment')) { // Clean URL
+    if (pathname === '/invoice/new' && searchParams.has('debtPayment')) { 
         router.replace('/invoice/new', { scroll: false });
     }
     router.push('/dashboard'); 
@@ -826,7 +798,7 @@ export function InvoiceEditor() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:items-start">
                   <FormField
                     control={form.control}
                     name="invoiceNumber"
@@ -877,7 +849,7 @@ export function InvoiceEditor() {
                     )}
                   />
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:items-start">
                   <FormField
                     control={form.control}
                     name="cashierNumber"
@@ -1009,7 +981,6 @@ export function InvoiceEditor() {
                       <Button type="button" variant="outline" onClick={() => {
                         setEditorMode('normal');
                         setCurrentDebtOrCreditAmount(0);
-                        // Don't clear selectedCustomerIdForDropdown here, resetFormAndState will use it
                         resetFormAndState({mode: 'normal', customerId: selectedCustomerIdForDropdown });
                         initialNormalResetDoneRef.current = true;
                       }} className="w-full">
