@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { SlidersHorizontal, Palette, Info, CheckCircle, BookOpen, Eye, Undo2, DollarSign, Gift, Users, FilePlus2, History, Settings as SettingsIcon, Download, Upload, Server, AlertTriangle } from "lucide-react";
+import { SlidersHorizontal, Palette, Info, CheckCircle, BookOpen, Eye, Undo, DollarSign, Gift, Users, FilePlus2, History, Settings as SettingsIcon, Download, Upload, Server, AlertTriangle, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -16,7 +16,9 @@ import {
 } from "@/components/ui/accordion";
 import type { CompanyDetails, CustomerDetails, Invoice } from "@/lib/types";
 import { DEFAULT_COMPANY_ID } from "@/lib/types";
-import { v4 as uuidv4 } from "uuid"; // Import uuid
+import { v4 as uuidv4 } from "uuid";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
 
 interface ColorPalette {
   name: string;
@@ -69,6 +71,15 @@ const LOCAL_STORAGE_COMPANY_KEY = "companyDetails";
 const LOCAL_STORAGE_CUSTOMERS_KEY = "customers";
 const LOCAL_STORAGE_INVOICES_KEY = "invoices";
 
+// Keys for import/export status and backup
+const LOCAL_STORAGE_LAST_EXPORT_TIMESTAMP_KEY = "facturafacil_last_export_timestamp";
+const LOCAL_STORAGE_LAST_IMPORT_TIMESTAMP_KEY = "facturafacil_last_import_timestamp";
+const LOCAL_STORAGE_LAST_IMPORT_REVERTED_KEY = "facturafacil_last_import_reverted";
+const LOCAL_STORAGE_PRE_IMPORT_COMPANY_KEY = "facturafacil_pre_import_companyDetails";
+const LOCAL_STORAGE_PRE_IMPORT_CUSTOMERS_KEY = "facturafacil_pre_import_customers";
+const LOCAL_STORAGE_PRE_IMPORT_INVOICES_KEY = "facturafacil_pre_import_invoices";
+
+
 interface BackupData {
   companyDetails?: CompanyDetails | null;
   customers?: CustomerDetails[] | null;
@@ -85,6 +96,28 @@ export default function SettingsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importMessages, setImportMessages] = useState<string[]>([]);
   const [isImporting, setIsImporting] = useState(false);
+
+  const [lastExportTimestamp, setLastExportTimestamp] = useState<string | null>(null);
+  const [lastImportTimestamp, setLastImportTimestamp] = useState<string | null>(null);
+  const [isLastImportReverted, setIsLastImportReverted] = useState<boolean>(false);
+  const [canRevertImport, setCanRevertImport] = useState<boolean>(false);
+
+
+  const updateStatusIndicators = useCallback(() => {
+    if (typeof window !== 'undefined') {
+      setLastExportTimestamp(localStorage.getItem(LOCAL_STORAGE_LAST_EXPORT_TIMESTAMP_KEY));
+      setLastImportTimestamp(localStorage.getItem(LOCAL_STORAGE_LAST_IMPORT_TIMESTAMP_KEY));
+      const reverted = localStorage.getItem(LOCAL_STORAGE_LAST_IMPORT_REVERTED_KEY) === 'true';
+      setIsLastImportReverted(reverted);
+      const preImportBackupExists = !!localStorage.getItem(LOCAL_STORAGE_PRE_IMPORT_COMPANY_KEY);
+      setCanRevertImport(preImportBackupExists && !reverted);
+    }
+  }, []);
+
+  useEffect(() => {
+    updateStatusIndicators();
+  }, [updateStatusIndicators]);
+
 
   const applyThemeToDOM = useCallback((palette: ColorPalette) => {
     document.documentElement.style.setProperty('--primary', palette.primary);
@@ -122,7 +155,7 @@ export default function SettingsPage() {
       return fallback;
     };
     
-    const savedThemeName = localStorage.getItem(LOCAL_STORAGE_THEME_KEY);
+    const savedThemeName = typeof window !== 'undefined' ? localStorage.getItem(LOCAL_STORAGE_THEME_KEY) : null;
     const themeToApply = suggestedPalettes.find(p => p.name === savedThemeName) || 
                          suggestedPalettes.find(p => p.name === "Tema Azul Original") || 
                          suggestedPalettes[0];
@@ -165,7 +198,7 @@ export default function SettingsPage() {
             invoices: invoices ? JSON.parse(invoices) : [],
             exportDate: new Date().toISOString(),
             appName: "FacturaFacil",
-            version: "1.3.0", 
+            version: "1.4.0", 
         };
 
         const jsonString = JSON.stringify(backupData, null, 2);
@@ -179,6 +212,9 @@ export default function SettingsPage() {
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(href);
+
+        localStorage.setItem(LOCAL_STORAGE_LAST_EXPORT_TIMESTAMP_KEY, new Date().toISOString());
+        updateStatusIndicators();
 
         toast({
             title: "Exportación Exitosa",
@@ -205,10 +241,22 @@ export default function SettingsPage() {
     setIsImporting(true);
     setImportMessages(["Iniciando proceso de importación y fusión..."]);
 
-    // Load initial local data
-    let consolidatedCompanyDetails: CompanyDetails | null = JSON.parse(localStorage.getItem(LOCAL_STORAGE_COMPANY_KEY) || 'null');
-    let consolidatedCustomers: CustomerDetails[] = JSON.parse(localStorage.getItem(LOCAL_STORAGE_CUSTOMERS_KEY) || '[]');
-    let consolidatedInvoices: Invoice[] = JSON.parse(localStorage.getItem(LOCAL_STORAGE_INVOICES_KEY) || '[]');
+    // Backup current data before import
+    const currentCompanyJson = localStorage.getItem(LOCAL_STORAGE_COMPANY_KEY);
+    const currentCustomersJson = localStorage.getItem(LOCAL_STORAGE_CUSTOMERS_KEY);
+    const currentInvoicesJson = localStorage.getItem(LOCAL_STORAGE_INVOICES_KEY);
+
+    if (currentCompanyJson) localStorage.setItem(LOCAL_STORAGE_PRE_IMPORT_COMPANY_KEY, currentCompanyJson);
+    else localStorage.removeItem(LOCAL_STORAGE_PRE_IMPORT_COMPANY_KEY);
+    if (currentCustomersJson) localStorage.setItem(LOCAL_STORAGE_PRE_IMPORT_CUSTOMERS_KEY, currentCustomersJson);
+    else localStorage.removeItem(LOCAL_STORAGE_PRE_IMPORT_CUSTOMERS_KEY);
+    if (currentInvoicesJson) localStorage.setItem(LOCAL_STORAGE_PRE_IMPORT_INVOICES_KEY, currentInvoicesJson);
+    else localStorage.removeItem(LOCAL_STORAGE_PRE_IMPORT_INVOICES_KEY);
+    
+    // Load initial local data for consolidation
+    let consolidatedCompanyDetails: CompanyDetails | null = currentCompanyJson ? JSON.parse(currentCompanyJson) : null;
+    let consolidatedCustomers: CustomerDetails[] = currentCustomersJson ? JSON.parse(currentCustomersJson) : [];
+    let consolidatedInvoices: Invoice[] = currentInvoicesJson ? JSON.parse(currentInvoicesJson) : [];
     
     let companyUpdatedThisImport = false;
     let customersAddedCount = 0;
@@ -229,7 +277,7 @@ export default function SettingsPage() {
 
         // Import Company Details (last valid one wins)
         if (data.companyDetails) {
-          if (data.companyDetails.name && data.companyDetails.rif) { // Basic check for validity
+          if (data.companyDetails.name && data.companyDetails.rif) { 
             consolidatedCompanyDetails = { ...data.companyDetails, id: DEFAULT_COMPANY_ID };
             companyUpdatedThisImport = true;
             localMessages.push(`- Detalles de la empresa actualizados desde ${file.name}.`);
@@ -245,35 +293,31 @@ export default function SettingsPage() {
               localMessages.push(`- Cliente sin RIF o nombre en ${file.name} omitido.`);
               continue;
             }
-            // Normalize RIF for reliable matching
             const importedRifClean = importedCustomer.rif.toUpperCase().replace(/[^A-Z0-9]/gi, '');
             
             const existingCustomerIndex = consolidatedCustomers.findIndex(
               c => c.rif.toUpperCase().replace(/[^A-Z0-9]/gi, '') === importedRifClean
             );
 
-            if (existingCustomerIndex !== -1) { // Customer found by RIF in consolidated list
+            if (existingCustomerIndex !== -1) { 
               const existingCustomer = consolidatedCustomers[existingCustomerIndex];
               
-              // Update demographics
               existingCustomer.name = importedCustomer.name || existingCustomer.name;
               existingCustomer.address = importedCustomer.address || existingCustomer.address;
               existingCustomer.phone = importedCustomer.phone || existingCustomer.phone;
               existingCustomer.email = importedCustomer.email || existingCustomer.email;
               if (importedCustomer.id && existingCustomer.id !== importedCustomer.id) {
-                 // Prefer imported ID if different, to help consolidate on one ID for this RIF
                 existingCustomer.id = importedCustomer.id;
               }
 
-              // SUM balances
               existingCustomer.outstandingBalance = (existingCustomer.outstandingBalance || 0) + (importedCustomer.outstandingBalance || 0);
               existingCustomer.creditBalance = (existingCustomer.creditBalance || 0) + (importedCustomer.creditBalance || 0);
               
               consolidatedCustomers[existingCustomerIndex] = existingCustomer;
               customersMergedCount++;
               localMessages.push(`  - Cliente RIF ${importedCustomer.rif} (${importedCustomer.name}) fusionado. Balances sumados.`);
-            } else { // New customer (not found by RIF)
-              const newCustId = importedCustomer.id || uuidv4(); // Ensure an ID
+            } else { 
+              const newCustId = importedCustomer.id || uuidv4(); 
               consolidatedCustomers.push({
                 ...importedCustomer,
                 id: newCustId,
@@ -312,9 +356,15 @@ export default function SettingsPage() {
     // Save consolidated data to localStorage
     if (companyUpdatedThisImport && consolidatedCompanyDetails) {
         localStorage.setItem(LOCAL_STORAGE_COMPANY_KEY, JSON.stringify(consolidatedCompanyDetails));
+    } else if (!consolidatedCompanyDetails && companyUpdatedThisImport) { // Case where company details were cleared
+        localStorage.removeItem(LOCAL_STORAGE_COMPANY_KEY);
     }
     localStorage.setItem(LOCAL_STORAGE_CUSTOMERS_KEY, JSON.stringify(consolidatedCustomers));
     localStorage.setItem(LOCAL_STORAGE_INVOICES_KEY, JSON.stringify(consolidatedInvoices));
+    
+    localStorage.setItem(LOCAL_STORAGE_LAST_IMPORT_TIMESTAMP_KEY, new Date().toISOString());
+    localStorage.setItem(LOCAL_STORAGE_LAST_IMPORT_REVERTED_KEY, 'false');
+    updateStatusIndicators();
     
     localMessages.push("--- Resumen de Importación y Fusión ---");
     if (companyUpdatedThisImport) localMessages.push("Información de la empresa actualizada con el último archivo válido.");
@@ -329,14 +379,62 @@ export default function SettingsPage() {
     toast({
       title: "Importación y Fusión Finalizada",
       description: "Los datos han sido procesados. Revise los mensajes para detalles. Recargue la página.",
-      duration: 10000, // Longer duration for this important message
+      duration: 10000, 
     });
 
     if (fileInputRef.current) {
-      fileInputRef.current.value = ""; // Reset file input
+      fileInputRef.current.value = ""; 
     }
   };
 
+  const handleRevertLastImport = () => {
+    if (typeof window === 'undefined' || !canRevertImport) {
+        toast({ title: "Error", description: "No hay importación previa para revertir o la acción no está disponible.", variant: "destructive"});
+        return;
+    }
+
+    const backupCompany = localStorage.getItem(LOCAL_STORAGE_PRE_IMPORT_COMPANY_KEY);
+    const backupCustomers = localStorage.getItem(LOCAL_STORAGE_PRE_IMPORT_CUSTOMERS_KEY);
+    const backupInvoices = localStorage.getItem(LOCAL_STORAGE_PRE_IMPORT_INVOICES_KEY);
+
+    if (backupCompany === null && backupCustomers === null && backupInvoices === null) {
+        toast({ title: "Error", description: "No se encontró un respaldo válido de la importación anterior.", variant: "destructive"});
+        return;
+    }
+
+    if (backupCompany) localStorage.setItem(LOCAL_STORAGE_COMPANY_KEY, backupCompany);
+    else localStorage.removeItem(LOCAL_STORAGE_COMPANY_KEY);
+
+    if (backupCustomers) localStorage.setItem(LOCAL_STORAGE_CUSTOMERS_KEY, backupCustomers);
+    else localStorage.setItem(LOCAL_STORAGE_CUSTOMERS_KEY, JSON.stringify([]));
+
+    if (backupInvoices) localStorage.setItem(LOCAL_STORAGE_INVOICES_KEY, backupInvoices);
+    else localStorage.setItem(LOCAL_STORAGE_INVOICES_KEY, JSON.stringify([]));
+
+    // Mark as reverted and clear backup
+    localStorage.setItem(LOCAL_STORAGE_LAST_IMPORT_REVERTED_KEY, 'true');
+    localStorage.removeItem(LOCAL_STORAGE_PRE_IMPORT_COMPANY_KEY);
+    localStorage.removeItem(LOCAL_STORAGE_PRE_IMPORT_CUSTOMERS_KEY);
+    localStorage.removeItem(LOCAL_STORAGE_PRE_IMPORT_INVOICES_KEY);
+    
+    updateStatusIndicators();
+
+    toast({
+        title: "Importación Revertida",
+        description: "Los datos han sido restaurados al estado previo a la última importación. Se recomienda recargar la página.",
+        duration: 7000,
+    });
+    setImportMessages(["La última importación ha sido revertida."]);
+  };
+
+  const formatTimestamp = (timestamp: string | null) => {
+    if (!timestamp) return "N/A";
+    try {
+      return format(new Date(timestamp), "PPPpp", { locale: es });
+    } catch (e) {
+      return "Fecha inválida";
+    }
+  };
 
   return (
     <div className="space-y-8 max-w-4xl mx-auto">
@@ -444,11 +542,24 @@ export default function SettingsPage() {
             <CardTitle className="text-xl text-primary">Gestión de Datos</CardTitle>
           </div>
           <CardDescription>
-            Exporte o importe los datos de su aplicación.
-             Es recomendable exportar sus datos actuales antes de realizar una importación para evitar pérdida de información.
+            Exporte o importe los datos de su aplicación. Es recomendable exportar sus datos actuales antes de una importación.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+            <div className="p-4 rounded-md border bg-card text-card-foreground">
+                <h3 className="font-semibold text-lg mb-2 text-primary">Estado de Datos</h3>
+                <ul className="space-y-1 text-sm text-muted-foreground">
+                    <li>Última Exportación: <span className="font-medium text-foreground">{formatTimestamp(lastExportTimestamp)}</span></li>
+                    <li>Última Importación: <span className="font-medium text-foreground">{formatTimestamp(lastImportTimestamp)}</span></li>
+                    <li>
+                        Estado Última Importación: 
+                        <span className={`font-medium ${isLastImportReverted ? 'text-destructive' : 'text-green-600'}`}>
+                            {lastImportTimestamp ? (isLastImportReverted ? ' Revertida' : ' Aplicada') : ' N/A'}
+                        </span>
+                    </li>
+                </ul>
+            </div>
+
             <div className="p-4 rounded-md bg-accent/10 border border-accent/30 text-accent-foreground space-y-3">
                 <div>
                     <h3 className="font-semibold text-lg mb-2">Exportar Datos</h3>
@@ -475,10 +586,11 @@ export default function SettingsPage() {
                     <p className="text-xs mb-2">
                         <strong>Advertencia Importante:</strong> Esta acción modificará los datos actuales.
                         <ul className="list-disc pl-5 mt-1">
-                          <li><strong>RESPALDE PRIMERO:</strong> Siempre exporte sus datos actuales como respaldo antes de proceder con una importación.</li>
+                          <li><strong>RESPALDE PRIMERO:</strong> Siempre exporte sus datos actuales como respaldo antes de proceder con una importación. La importación actual reemplazará el respaldo pre-importación anterior.</li>
                           <li><strong>Clientes:</strong> Si un cliente importado (por RIF) ya existe, sus datos demográficos se actualizarán, y sus saldos (pendiente y a favor) se <strong>sumarán</strong> a los saldos existentes. Los clientes nuevos se añadirán.</li>
                           <li><strong>Facturas/Notas de Crédito:</strong> Las transacciones se añadirán si no existen por ID interno, evitando duplicados exactos.</li>
                           <li><strong>Empresa:</strong> La información de la empresa se tomará del último archivo procesado.</li>
+                          <li><strong>Reversión:</strong> Puede revertir la *última* importación si el resultado no es el esperado, usando el botón "Revertir Última Importación".</li>
                         </ul>
                     </p>
                     <Input
@@ -490,7 +602,10 @@ export default function SettingsPage() {
                         className="mb-2"
                         disabled={isImporting}
                     />
-                     {isImporting && <p className="text-sm font-semibold">Importando y fusionando datos, por favor espere...</p>}
+                    <Button onClick={handleRevertLastImport} className="w-full sm:w-auto mt-2" variant="outline" disabled={!canRevertImport || isImporting}>
+                        <RotateCcw className="mr-2 h-4 w-4" /> Revertir Última Importación
+                    </Button>
+                     {isImporting && <p className="text-sm font-semibold mt-2">Importando y fusionando datos, por favor espere...</p>}
                     {importMessages.length > 0 && (
                         <div className="mt-3 p-3 border rounded-md bg-background/50 max-h-60 overflow-y-auto text-xs">
                             <h4 className="font-semibold mb-1">Resultado de la Importación y Fusión:</h4>
@@ -524,9 +639,9 @@ export default function SettingsPage() {
                   <li><strong><Link href="/invoice/new" className="text-primary hover:underline">Nueva Factura</Link> (<FilePlus2 className="inline h-4 w-4" />):</strong> Para crear y emitir facturas fiscales, registrar abonos a deudas o depósitos a cuenta.</li>
                   <li><strong><Link href="/customers" className="text-primary hover:underline">Gestionar Clientes</Link> (<Users className="inline h-4 w-4" />):</strong> Para añadir, ver, editar información de clientes y consultar sus saldos.</li>
                   <li><strong><Link href="/invoices" className="text-primary hover:underline">Historial de Documentos</Link> (<History className="inline h-4 w-4" />):</strong> Para consultar facturas, notas de crédito, abonos y depósitos emitidos.</li>
-                  <li><strong><Link href="/returns" className="text-primary hover:underline">Procesar Devolución / Retiro de Saldo</Link> (<Undo2 className="inline h-4 w-4" />):</strong> Para generar notas de crédito basadas en facturas existentes o procesar retiros de saldo a favor del cliente.</li>
+                  <li><strong><Link href="/returns" className="text-primary hover:underline">Procesar Devolución / Retiro de Saldo</Link> (<Undo className="inline h-4 w-4" />):</strong> Para generar notas de crédito basadas en facturas existentes o procesar retiros de saldo a favor del cliente.</li>
                   <li><strong><Link href="/company" className="text-primary hover:underline">Configuración de Empresa</Link> (<SettingsIcon className="inline h-4 w-4" />):</strong> Para actualizar los datos fiscales de su empresa que aparecen en los documentos.</li>
-                  <li><strong><Link href="/settings" className="text-primary hover:underline">Ajustes del Entorno</Link> (<SlidersHorizontal className="inline h-4 w-4" />):</strong> Donde se encuentra ahora, para cambiar temas, gestionar datos (exportar/importar), ver información de la app y este manual.</li>
+                  <li><strong><Link href="/settings" className="text-primary hover:underline">Ajustes del Entorno</Link> (<SlidersHorizontal className="inline h-4 w-4" />):</strong> Donde se encuentra ahora, para cambiar temas, gestionar datos (exportar/importar/revertir), ver información de la app y este manual.</li>
                 </ul>
               </AccordionContent>
             </AccordionItem>
@@ -539,8 +654,8 @@ export default function SettingsPage() {
                   <li>Puede ver una lista de todos sus clientes, buscar, añadir nuevos y editar existentes.</li>
                   <li><strong>Saldos del Cliente:</strong> En la lista, verá las columnas "S. Pendiente" (Saldo Pendiente) y "S. a Favor" (Saldo a Favor).
                     <ul className="list-disc pl-5">
-                      <li>El <strong>Saldo Pendiente</strong> se incrementa si un cliente paga menos del total de una factura.</li>
-                      <li>El <strong>Saldo a Favor</strong> se incrementa si un cliente paga más del total de una factura o si realiza un depósito directo a su cuenta.</li>
+                      <li>El <strong>Saldo Pendiente</strong> se incrementa si un cliente paga menos del total de una factura. Se reduce al registrar abonos.</li>
+                      <li>El <strong>Saldo a Favor</strong> se incrementa si un cliente paga más del total de una factura (y se elige abonar a cuenta) o si realiza un depósito directo. Se reduce al usarlo en una compra o al procesar un retiro de saldo.</li>
                     </ul>
                   </li>
                   <li><strong>Acciones Rápidas en la Lista:</strong>
@@ -556,7 +671,7 @@ export default function SettingsPage() {
                   <p>Al hacer clic en el nombre de un cliente o en el icono <Eye className="inline h-4 w-4" />, accederá a una página detallada con:</p>
                   <ul className="list-disc pl-5 space-y-1">
                     <li>Información de contacto del cliente.</li>
-                    <li><strong>Resumen Financiero:</strong> Total Gastado en Tienda, Saldo Pendiente (con botón para pagar), y Saldo a Favor (con botón para retirar).</li>
+                    <li><strong>Resumen Financiero:</strong> Total Gastado en Tienda, Saldo Pendiente (con botón para pagar), y Saldo a Favor (con botón para retirar). El "Total Gastado" se calcula sumando todas sus facturas (no abonos ni depósitos).</li>
                     <li><strong>Historial de Transacciones:</strong> Una tabla con todas las facturas, notas de crédito, abonos y depósitos asociados a ese cliente, con opción de ver cada documento.</li>
                   </ul>
                 </div>
@@ -576,8 +691,8 @@ export default function SettingsPage() {
                       <li><strong>Detalles del Pago:</strong>
                         <ul className="list-disc pl-5">
                           <li>Agregue métodos de pago.</li>
-                          <li>Si el cliente tiene <strong>Saldo a Favor</strong>, aparecerá como opción. Puede usarlo para cubrir parte o todo el monto de la factura. El sistema autocompletará el monto a usar, pero puede editarlo (sin exceder el crédito disponible).</li>
-                           <li>Si el cliente paga <strong>de más</strong>, puede elegir si el excedente se abona al saldo a favor del cliente (predeterminado) o si se procesa el vuelto inmediatamente (con sus propios métodos de pago).</li>
+                          <li>Si el cliente tiene <strong>Saldo a Favor</strong>, aparecerá como opción. Puede usarlo para cubrir parte o todo el monto de la factura.</li>
+                           <li>Si el cliente paga <strong>de más</strong>, puede elegir si el excedente se abona al saldo a favor del cliente (predeterminado) o si se procesa el vuelto inmediatamente (registrando los métodos de pago para el vuelto).</li>
                         </ul>
                       </li>
                       <li>Configure descuento, IVA, mensaje de agradecimiento y notas.</li>
@@ -587,15 +702,14 @@ export default function SettingsPage() {
                   <li><strong>Registrar Abono a Deuda:</strong>
                      <ul className="list-disc pl-5">
                       <li>Se accede desde la lista de clientes (<DollarSign className="inline h-4 w-4" />), el resumen del cliente, o desde el editor de facturas si el cliente seleccionado tiene deuda.</li>
-                      <li>El cliente y el monto de la deuda se precargan.</li>
-                      <li>El concepto es "Abono a Deuda Pendiente". No se añaden más artículos. IVA y descuento son cero.</li>
+                      <li>El cliente y el monto de la deuda se precargan. El concepto es "Abono a Deuda Pendiente". No se añaden más artículos. IVA y descuento son cero.</li>
                       <li>Ingrese los detalles del pago. Al guardar, el Saldo Pendiente del cliente se reduce.</li>
                     </ul>
                   </li>
                   <li><strong>Registrar Depósito a Cuenta Cliente:</strong>
                     <ul className="list-disc pl-5">
                       <li>Se accede desde el editor de facturas (botón "Registrar Depósito a Cuenta") si hay un cliente seleccionado.</li>
-                      <li>El cliente se precarga. El concepto es "Depósito a Cuenta Cliente", con cantidad 1 y precio unitario cero (no editable).</li>
+                      <li>El cliente se precarga. El concepto es "Depósito a Cuenta Cliente", con cantidad 1 y precio unitario cero.</li>
                       <li>El monto del depósito se define en la sección "Detalles del Pago". IVA y descuento son cero.</li>
                       <li>Al guardar, el Saldo a Favor del cliente se incrementa.</li>
                     </ul>
@@ -611,9 +725,9 @@ export default function SettingsPage() {
                 <p>La sección <Link href="/invoices" className="text-primary hover:underline">Historial de Documentos</Link> (<History className="inline h-4 w-4" />) le permite:</p>
                 <ul className="list-disc pl-5 space-y-1">
                   <li>Consultar un listado de todos los documentos (facturas, notas de crédito, abonos, depósitos), ordenados por fecha.</li>
-                  <li>Ver el tipo de documento, cliente, y monto.</li>
+                  <li>Ver el tipo de documento (con iconos distintivos para abonos/depósitos), cliente, y monto.</li>
                   <li>Hacer clic en el icono del ojo (<Eye className="inline h-4 w-4" />) para ver el detalle completo e imprimir.</li>
-                  <li>Para facturas de venta que no sean abonos/depósitos y no tengan nota de crédito, un icono (<Undo2 className="inline h-4 w-4" />) permite procesar una devolución.</li>
+                  <li>Para facturas de venta que no sean abonos/depósitos y no tengan nota de crédito, un icono (<Undo className="inline h-4 w-4" />) permite procesar una devolución.</li>
                 </ul>
               </AccordionContent>
             </AccordionItem>
@@ -621,19 +735,19 @@ export default function SettingsPage() {
             <AccordionItem value="item-5">
               <AccordionTrigger>Procesar Devoluciones y Retiros de Saldo</AccordionTrigger>
               <AccordionContent className="space-y-3 text-sm text-muted-foreground">
-                <p>La sección "Procesar Devolución / Retiro de Saldo" (<Undo2 className="inline h-4 w-4" />) maneja dos escenarios:</p>
+                <p>La sección "Procesar Devolución / Retiro de Saldo" (<Undo className="inline h-4 w-4" />) maneja dos escenarios:</p>
                 <ol className="list-decimal pl-5 space-y-2">
                   <li><strong>Devolución de Factura (Nota de Crédito):</strong>
                     <ul className="list-disc pl-5">
-                      <li>Acceda desde el <Link href="/invoices" className="text-primary hover:underline">Historial</Link> (<Undo2 className="inline h-4 w-4" />) o buscando la factura original.</li>
+                      <li>Acceda desde el <Link href="/invoices" className="text-primary hover:underline">Historial</Link> (<Undo className="inline h-4 w-4" />) o buscando la factura original en "Devoluciones".</li>
                       <li>Se previsualiza la factura original. Especifique los detalles del reembolso.</li>
                       <li>Al confirmar, se genera una Nota de Crédito por el total de la factura original y se guarda en el historial.</li>
-                      <li>El sistema no actualiza automáticamente saldos pendientes o a favor basados en la devolución de una factura estándar; estos ajustes, si son necesarios (ej. si la factura original generó deuda), deberían manejarse manualmente o mediante un abono/depósito posterior.</li>
+                      <li>Si el reembolso se hace a "Crédito a Cuenta Cliente", el saldo a favor del cliente se incrementará. Otros métodos de reembolso no afectan directamente los saldos del cliente aquí.</li>
                     </ul>
                   </li>
                   <li><strong>Retiro de Saldo a Favor:</strong>
                     <ul className="list-disc pl-5">
-                      <li>Acceda desde la lista de clientes (<Gift className="inline h-4 w-4" />) o el resumen del cliente.</li>
+                      <li>Acceda desde la lista de clientes (<Gift className="inline h-4 w-4" />), el resumen del cliente, o directamente en "Devoluciones" si conoce los datos.</li>
                       <li>Se le pedirá ingresar el monto a retirar (hasta el saldo disponible del cliente).</li>
                       <li>Confirme los detalles del reembolso.</li>
                       <li>Se genera una Nota de Crédito especial por el monto retirado, y el Saldo a Favor del cliente se reduce.</li>
@@ -646,7 +760,7 @@ export default function SettingsPage() {
             <AccordionItem value="item-6">
               <AccordionTrigger>Configuración de Empresa</AccordionTrigger>
               <AccordionContent className="space-y-2 text-sm text-muted-foreground">
-                <p>En la sección <Link href="/company" className="text-primary hover:underline">Empresa</Link> (<SettingsIcon className="inline h-4 w-4" />), puede configurar los datos de su negocio que aparecerán en todos los documentos emitidos. Asegúrese de que sean correctos y estén actualizados. Puede cancelar los cambios no guardados con el botón "Cancelar".</p>
+                <p>En la sección <Link href="/company" className="text-primary hover:underline">Empresa</Link> (<SettingsIcon className="inline h-4 w-4" />), puede configurar los datos de su negocio que aparecerán en todos los documentos emitidos. Asegúrese de que sean correctos y estén actualizados.</p>
               </AccordionContent>
             </AccordionItem>
 
@@ -657,38 +771,33 @@ export default function SettingsPage() {
                 <ul className="list-disc pl-5 space-y-1">
                   <li>Al visualizar un documento, encontrará un botón "Imprimir".</li>
                   <li>Esto abre el diálogo de impresión de su sistema, donde puede seleccionar una impresora física o "Guardar como PDF".</li>
-                  <li>El formato está adaptado para impresoras térmicas de recibos y también funciona bien en impresoras de página completa.</li>
+                  <li>El formato está adaptado para impresoras térmicas de recibos (aprox. 78mm de ancho) y también funciona bien en impresoras de página completa.</li>
                 </ul>
               </AccordionContent>
             </AccordionItem>
 
             <AccordionItem value="item-8">
-              <AccordionTrigger>Almacenamiento y Gestión de Datos (Exportar/Importar)</AccordionTrigger>
+              <AccordionTrigger>Almacenamiento y Gestión de Datos (Exportar/Importar/Revertir)</AccordionTrigger>
               <AccordionContent className="space-y-2 text-sm text-muted-foreground">
                 <p>FacturaFacil utiliza el almacenamiento local de su navegador (<code>localStorage</code>) para guardar la configuración de la empresa, lista de clientes, todos los documentos generados y su preferencia de tema de color.</p>
                 <p>En la sección <Link href="/settings" className="text-primary hover:underline">Ajustes del Entorno</Link> (<SlidersHorizontal className="inline h-4 w-4" />) &gt; "Gestión de Datos", encontrará opciones para:</p>
                 <ul className="list-disc pl-5">
-                    <li><strong className="text-foreground">Exportar Datos:</strong> Descarga un archivo JSON con toda la información de su aplicación (empresa, clientes, facturas/notas de crédito). Es crucial para tener copias de seguridad o para transferir/fusionar datos.</li>
-                    <li><strong className="text-foreground">Importar y Fusionar Datos:</strong> Permite seleccionar uno o más archivos JSON de respaldo (generados por la función de exportar) para fusionarlos con los datos existentes en el navegador actual. 
+                    <li><strong className="text-foreground">Exportar Datos:</strong> Descarga un archivo JSON con toda la información de su aplicación. Es crucial para tener copias de seguridad o para transferir/fusionar datos.</li>
+                    <li><strong className="text-foreground">Importar y Fusionar Datos:</strong> Permite seleccionar uno o más archivos JSON de respaldo para fusionarlos con los datos existentes. 
                         <ul className="list-disc pl-5">
-                            <li>La información de la empresa se tomará del último archivo procesado que contenga datos válidos.</li>
-                            <li>Los clientes se fusionan por RIF/Cédula:
-                                <ul className="list-disc pl-5">
-                                    <li>Si un cliente importado ya existe, sus datos demográficos se actualizan y sus saldos (pendiente y a favor) se <strong>suman</strong> a los saldos existentes.</li>
-                                    <li>Los clientes nuevos (por RIF) se añaden con sus datos y saldos del archivo.</li>
-                                </ul>
-                            </li>
-                            <li>Las facturas/notas de crédito se añaden si no existen por ID interno, evitando duplicados exactos.</li>
-                            <li><strong className="text-destructive">Importante:</strong> Siempre exporte sus datos actuales como respaldo ANTES de importar para evitar pérdida de información. Se recomienda recargar la página después de la importación.</li>
+                            <li>La información de la empresa se tomará del último archivo procesado.</li>
+                            <li>Los clientes se fusionan por RIF/Cédula: datos demográficos se actualizan y sus saldos (pendiente y a favor) se <strong>suman</strong>. Clientes nuevos se añaden.</li>
+                            <li>Las facturas/notas de crédito se añaden si no existen por ID interno.</li>
                         </ul>
                     </li>
+                     <li><strong className="text-foreground">Revertir Última Importación:</strong> Si el resultado de una importación no es el esperado, puede usar esta opción para restaurar los datos al estado exacto en que se encontraban *antes* de la última operación de importación. Esta opción solo está disponible para la importación más reciente y si no ha sido ya revertida. Una nueva importación creará un nuevo punto de restauración.</li>
                 </ul>
                 <p className="font-semibold text-destructive mt-2">Consideraciones Clave del Almacenamiento Local:</p>
                 <ul className="list-disc pl-5">
                   <li>Los datos se guardan <strong>exclusivamente en el navegador y dispositivo</strong> que está utilizando.</li>
                   <li>Si limpia la caché o datos de navegación, <strong>perderá toda la información</strong> (a menos que tenga una copia exportada).</li>
                   <li>Se recomienda <strong>realizar exportaciones periódicas</strong> de sus datos y guardarlas en un lugar seguro, especialmente si opera en múltiples cajas.</li>
-                  <li>Tras una importación, se recomienda recargar la aplicación para asegurar que todos los cambios se reflejen correctamente.</li>
+                  <li>Tras una importación o reversión, se recomienda recargar la aplicación para asegurar que todos los cambios se reflejen correctamente.</li>
                 </ul>
               </AccordionContent>
             </AccordionItem>
@@ -711,7 +820,7 @@ export default function SettingsPage() {
           </div>
           <div className="flex justify-between">
             <span className="font-semibold text-foreground">Versión:</span>
-            <span className="text-muted-foreground">1.3.0 (Con Fusión Completa de Datos en Importación)</span>
+            <span className="text-muted-foreground">1.4.0 (Con Fusión Completa, Reversión de Importación e Indicadores)</span>
           </div>
           <div className="flex justify-between">
             <span className="font-semibold text-foreground">Desarrollado con:</span>
@@ -726,4 +835,3 @@ export default function SettingsPage() {
     </div>
   );
 }
-
