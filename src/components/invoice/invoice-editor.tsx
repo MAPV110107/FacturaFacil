@@ -271,7 +271,14 @@ export function InvoiceEditor() {
   }, []);
 
   useEffect(() => {
-    if (!isClient) return;
+    if (!isClient || !customers || customers.length === 0) { // Ensure customers are loaded
+        // If customers are not loaded yet, this effect might re-run when they are.
+        // Or handle initial 'normal' mode setup if no params require special mode.
+        if (!searchParams.get('debtPayment') && !searchParams.get('customerId') && editorMode === 'normal' && !form.getValues('invoiceNumber') && !selectedCustomerIdForDropdown) {
+          resetFormAndState({ mode: 'normal' });
+        }
+        return;
+    }
 
     const customerIdParam = searchParams.get('customerId');
     const debtPaymentParam = searchParams.get('debtPayment') === 'true';
@@ -279,34 +286,24 @@ export function InvoiceEditor() {
     const amountParam = parseFloat(amountStrParam || '0');
 
     if (debtPaymentParam && customerIdParam && amountParam > 0) {
-        if (customers.length > 0) { // Customers are loaded
-            const targetCustomer = customers.find(c => c.id === customerIdParam);
-            if (targetCustomer) {
-                // Check if already in the correct mode to avoid redundant resets
-                const currentFormValues = form.getValues();
-                const isAlreadyCorrectlySetup = editorMode === 'debtPayment' &&
-                                             currentFormValues.customerDetails.id === customerIdParam &&
-                                             currentFormValues.items[0]?.unitPrice === amountParam &&
-                                             currentFormValues.items[0]?.description === "Abono a Deuda Pendiente";
-
-                if (!isAlreadyCorrectlySetup) {
-                    resetFormAndState({ mode: 'debtPayment', customerId: customerIdParam, amount: amountParam });
-                }
-            } else {
-                // Customers loaded, but specific customer not found
-                toast({ variant: "destructive", title: "Cliente no encontrado", description: "No se pudo encontrar el cliente especificado para el pago de deuda." });
-                if (pathname === '/invoice/new') router.replace('/invoice/new', { scroll: false }); // Clean URL
-                resetFormAndState({ mode: 'normal' }); // Reset to a clean normal state
+        const targetCustomer = customers.find(c => c.id === customerIdParam);
+        if (targetCustomer) {
+            const currentFormValues = form.getValues();
+            const isAlreadyCorrectlySetup = editorMode === 'debtPayment' &&
+                                         currentFormValues.customerDetails.id === customerIdParam &&
+                                         currentFormValues.items[0]?.unitPrice === amountParam &&
+                                         currentFormValues.items[0]?.description === "Abono a Deuda Pendiente";
+            if (!isAlreadyCorrectlySetup) {
+                resetFormAndState({ mode: 'debtPayment', customerId: customerIdParam, amount: amountParam });
             }
+        } else {
+            toast({ variant: "destructive", title: "Cliente no encontrado", description: "No se pudo encontrar el cliente para el pago de deuda." });
+            if (pathname === '/invoice/new') router.replace('/invoice/new', { scroll: false });
+            resetFormAndState({ mode: 'normal' });
         }
-        // If customers.length is 0, this effect will re-run when `customers` state updates.
-        // We don't reset to 'normal' here, to give `customers` a chance to load.
-        return; // Explicitly return to avoid falling into the 'normal reset' case below if debt params are present.
+        return; 
     }
     
-    // If no special parameters are trying to set a mode, and the form is "empty"
-    // and we are in 'normal' mode, ensure it's a clean initial state.
-    // This prevents resetting if we are already in a special mode set by user interaction within the page.
     if (!debtPaymentParam && editorMode === 'normal' && !form.getValues('invoiceNumber') && !selectedCustomerIdForDropdown) {
         resetFormAndState({ mode: 'normal' });
     }
@@ -451,13 +448,13 @@ export function InvoiceEditor() {
     const paymentMethods = form.getValues("paymentMethods");
     const currentPayment = paymentMethods[index];
     
-    updatePayment(index, { ...currentPayment, method: newMethod });
+    updatePayment(index, { ...currentPayment, method: newMethod, amount: 0 }); // Reset amount to 0 when method changes
 
     if (newMethod === "Saldo a Favor" && editorMode === 'normal' && selectedCustomerAvailableCredit > 0) {
         const invoiceTotal = liveInvoicePreview.totalAmount || 0;
         let otherPaymentsTotal = 0;
         paymentMethods.forEach((pm, i) => {
-            if (i !== index) { // Exclude the current line being changed
+            if (i !== index) { 
                 otherPaymentsTotal += pm.amount || 0;
             }
         });
@@ -896,8 +893,17 @@ export function InvoiceEditor() {
                     render={({ field: f }) => (
                       <FormItem>
                         <FormLabel>Precio Unit. ({CURRENCY_SYMBOL})</FormLabel>
-                        <FormControl><Input {...f} type="number" step="0.01" placeholder="0.00" 
-                         onChange={e => f.onChange(parseFloat(e.target.value) || 0)} readOnly={editorMode === 'debtPayment'} /></FormControl> 
+                        <FormControl>
+                          <Input 
+                            {...f} 
+                            value={f.value === 0 ? '' : f.value}
+                            onChange={e => f.onChange(parseFloat(e.target.value) || 0)}
+                            type="number" 
+                            step="0.01" 
+                            placeholder="0.00" 
+                            readOnly={editorMode === 'debtPayment'} 
+                          />
+                        </FormControl> 
                         <FormMessage />
                       </FormItem>
                     )}
@@ -971,10 +977,17 @@ export function InvoiceEditor() {
                             render={({ field: f }) => (
                                 <FormItem>
                                     <FormLabel>Monto ({CURRENCY_SYMBOL})</FormLabel>
-                                    <FormControl><Input {...f} type="number" step="0.01" placeholder="0.00" 
-                                     onChange={e => f.onChange(parseFloat(e.target.value) || 0)} 
-                                     readOnly={form.getValues(`paymentMethods.${index}.method`) === 'Saldo a Favor' && editorMode === 'normal' && (liveInvoicePreview.totalAmount || 0) <= selectedCustomerAvailableCredit} // Slightly different logic might be needed if user can edit
-                                     /></FormControl>
+                                    <FormControl>
+                                      <Input 
+                                        {...f} 
+                                        value={f.value === 0 ? '' : f.value}
+                                        onChange={e => f.onChange(parseFloat(e.target.value) || 0)}
+                                        type="number" 
+                                        step="0.01" 
+                                        placeholder="0.00"
+                                        readOnly={form.getValues(`paymentMethods.${index}.method`) === 'Saldo a Favor' && editorMode === 'normal' && (liveInvoicePreview.totalAmount || 0) <= selectedCustomerAvailableCredit} 
+                                      />
+                                    </FormControl>
                                      <FormMessage />
                                 </FormItem>
                             )}
@@ -1016,8 +1029,17 @@ export function InvoiceEditor() {
                               <Percent className="mr-2 h-4 w-4 text-muted-foreground" />
                               Monto de Descuento ({CURRENCY_SYMBOL}) (Opcional)
                             </FormLabel>
-                            <FormControl><Input {...field} type="number" step="0.01" placeholder="0.00" 
-                             onChange={e => field.onChange(parseFloat(e.target.value) || 0)} disabled={editorMode !== 'normal'} /></FormControl>
+                            <FormControl>
+                              <Input 
+                                {...field} 
+                                value={field.value === 0 ? '' : field.value}
+                                onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
+                                type="number" 
+                                step="0.01" 
+                                placeholder="0.00"
+                                disabled={editorMode !== 'normal'} 
+                              />
+                            </FormControl>
                              {editorMode !== 'normal' && <p className="text-xs text-muted-foreground mt-1">Los descuentos no aplican en este modo.</p>}
                             <FormMessage />
                         </FormItem>
