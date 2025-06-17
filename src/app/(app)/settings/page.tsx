@@ -499,9 +499,9 @@ export default function SettingsPage() {
             <div>
               <h3 className="font-semibold text-foreground mb-2">Colores Actuales del Tema ({activeThemeName || "Desconocido"}):</h3>
               <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground ml-4">
-                <li><strong>Primario:</strong> <code>{currentDisplayColors.primary}</code> (Texto en botón: <code>{getLightnessFromHslString(currentDisplayColors.primary) > 55 ? 'Oscuro' : 'Claro'}</code>)</li>
+                <li><strong>Primario:</strong> <code>{currentDisplayColors.primary}</code> (Texto en botón: <span className="text-foreground">{getLightnessFromHslString(currentDisplayColors.primary) > 55 ? 'Oscuro' : 'Claro'}</span>)</li>
                 <li><strong>Fondo:</strong> <code>{currentDisplayColors.background}</code></li>
-                <li><strong>Acento:</strong> <code>{currentDisplayColors.accent}</code> (Texto en botón: <code>{getLightnessFromHslString(currentDisplayColors.accent) > 55 ? 'Oscuro' : 'Claro'}</code>)</li>
+                <li><strong>Acento:</strong> <code>{currentDisplayColors.accent}</code> (Texto en botón: <span className="text-foreground">{getLightnessFromHslString(currentDisplayColors.accent) > 55 ? 'Oscuro' : 'Claro'}</span>)</li>
               </ul>
             </div>
           )}
@@ -520,9 +520,9 @@ export default function SettingsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {suggestedPalettes.map((palette) => {
                 const palettePrimaryLightness = getLightnessFromHslString(palette.primary);
-                // Use default foreground if palette primary is too light for text on card background
-                const titleColor = palettePrimaryLightness > 65 && getLightnessFromHslString(currentDisplayColors?.card || '0 0% 100%') > 50 
-                                   ? 'hsl(var(--card-foreground))' 
+                const paletteBackgroundLightness = currentDisplayColors ? getLightnessFromHslString(currentDisplayColors.background) : 96; // Assume light background if not yet set
+                const titleColor = palettePrimaryLightness > 65 && paletteBackgroundLightness > 50 
+                                   ? 'hsl(var(--foreground))' 
                                    : `hsl(${palette.primary})`;
                 return (
                   <Card key={palette.name} className={`shadow-md hover:shadow-lg transition-shadow relative overflow-hidden ${activeThemeName === palette.name ? 'border-2 border-primary ring-2 ring-primary' : 'border'}`}>
@@ -621,8 +621,8 @@ export default function SettingsPage() {
                         Seleccione uno o más archivos JSON de respaldo (<code>facturafacil_backup_*.json</code>) para importar y fusionar datos en esta instancia del navegador.
                         Esta función está diseñada para consolidar información de múltiples cajas o respaldos.
                     </p>
-                    <p className="text-xs mb-2">
-                        <strong>Advertencia Importante:</strong> Esta acción modificará los datos actuales.
+                    <div className="text-xs mb-2">
+                        <p><strong>Advertencia Importante:</strong> Esta acción modificará los datos actuales.</p>
                         <ul className="list-disc pl-5 mt-1">
                           <li><strong>RESPALDE PRIMERO:</strong> Siempre exporte sus datos actuales como respaldo antes de proceder con una importación. La importación actual reemplazará el respaldo pre-importación anterior.</li>
                           <li><strong>Clientes:</strong> Si un cliente importado (por RIF) ya existe, sus datos demográficos se actualizarán, y sus saldos (pendiente y a favor) se <strong>sumarán</strong> a los saldos existentes. Los clientes nuevos se añadirán.</li>
@@ -630,7 +630,7 @@ export default function SettingsPage() {
                           <li><strong>Empresa:</strong> La información de la empresa se tomará del último archivo procesado.</li>
                           <li><strong>Reversión:</strong> Puede revertir la *última* importación si el resultado no es el esperado, usando el botón "Revertir Última Importación".</li>
                         </ul>
-                    </p>
+                    </div>
                     <Input
                         type="file"
                         accept=".json"
