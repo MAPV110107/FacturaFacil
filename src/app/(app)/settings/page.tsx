@@ -1,11 +1,12 @@
 
 'use client';
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { SlidersHorizontal, Palette, Info, CheckCircle, BookOpen, Eye, Undo2, DollarSign, Gift, Users, FilePlus2, History, Settings as SettingsIcon, Download, Server } from "lucide-react";
+import { SlidersHorizontal, Palette, Info, CheckCircle, BookOpen, Eye, Undo2, DollarSign, Gift, Users, FilePlus2, History, Settings as SettingsIcon, Download, Upload, Server, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import {
   Accordion,
@@ -13,6 +14,8 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import type { CompanyDetails, CustomerDetails, Invoice } from "@/lib/types";
+import { DEFAULT_COMPANY_ID } from "@/lib/types";
 
 interface ColorPalette {
   name: string;
@@ -65,11 +68,22 @@ const LOCAL_STORAGE_COMPANY_KEY = "companyDetails";
 const LOCAL_STORAGE_CUSTOMERS_KEY = "customers";
 const LOCAL_STORAGE_INVOICES_KEY = "invoices";
 
+interface BackupData {
+  companyDetails?: CompanyDetails | null;
+  customers?: CustomerDetails[] | null;
+  invoices?: Invoice[] | null;
+  exportDate?: string;
+  appName?: string;
+  version?: string;
+}
 
 export default function SettingsPage() {
   const { toast } = useToast();
   const [activeThemeName, setActiveThemeName] = useState<string | null>(null);
   const [currentDisplayColors, setCurrentDisplayColors] = useState<ColorPalette | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importMessages, setImportMessages] = useState<string[]>([]);
+  const [isImporting, setIsImporting] = useState(false);
 
   const applyThemeToDOM = useCallback((palette: ColorPalette) => {
     document.documentElement.style.setProperty('--primary', palette.primary);
@@ -144,13 +158,13 @@ export default function SettingsPage() {
         const customers = localStorage.getItem(LOCAL_STORAGE_CUSTOMERS_KEY);
         const invoices = localStorage.getItem(LOCAL_STORAGE_INVOICES_KEY);
 
-        const backupData = {
+        const backupData: BackupData = {
             companyDetails: companyDetails ? JSON.parse(companyDetails) : null,
             customers: customers ? JSON.parse(customers) : [],
             invoices: invoices ? JSON.parse(invoices) : [],
             exportDate: new Date().toISOString(),
             appName: "FacturaFacil",
-            version: "1.1.0", // You might want to make this dynamic if app version changes
+            version: "1.2.0", // Update version as features grow
         };
 
         const jsonString = JSON.stringify(backupData, null, 2);
@@ -177,6 +191,144 @@ export default function SettingsPage() {
             description: "No se pudieron exportar los datos. Revise la consola para más detalles.",
             variant: "destructive",
         });
+    }
+  };
+
+  const handleImportFiles = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) {
+      toast({ title: "No se seleccionaron archivos", variant: "destructive" });
+      return;
+    }
+
+    setIsImporting(true);
+    setImportMessages(["Procesando archivos..."]);
+
+    let currentCompanyDetails: CompanyDetails | null = JSON.parse(localStorage.getItem(LOCAL_STORAGE_COMPANY_KEY) || 'null');
+    let currentCustomers: CustomerDetails[] = JSON.parse(localStorage.getItem(LOCAL_STORAGE_CUSTOMERS_KEY) || '[]');
+    let currentInvoices: Invoice[] = JSON.parse(localStorage.getItem(LOCAL_STORAGE_INVOICES_KEY) || '[]');
+    
+    let customersAddedCount = 0;
+    let customersUpdatedCount = 0;
+    let invoicesAddedCount = 0;
+    let companyUpdated = false;
+    const localMessages: string[] = [];
+
+    for (const file of Array.from(files)) {
+      localMessages.push(`--- Procesando archivo: ${file.name} ---`);
+      try {
+        const fileContent = await file.text();
+        const data = JSON.parse(fileContent) as BackupData;
+
+        if (!data || (data.appName && data.appName !== "FacturaFacil")) {
+          localMessages.push(`Error: El archivo ${file.name} no parece ser un respaldo válido de FacturaFacil.`);
+          continue;
+        }
+
+        // Import Company Details
+        if (data.companyDetails) {
+          if (data.companyDetails.name && data.companyDetails.rif && data.companyDetails.address) {
+            currentCompanyDetails = { ...data.companyDetails, id: DEFAULT_COMPANY_ID };
+            companyUpdated = true;
+            localMessages.push(`- Detalles de la empresa actualizados desde ${file.name}.`);
+          } else {
+            localMessages.push(`- Detalles de la empresa en ${file.name} incompletos, omitidos.`);
+          }
+        }
+
+        // Import Customers
+        if (data.customers && Array.isArray(data.customers)) {
+          for (const importedCustomer of data.customers) {
+            if (!importedCustomer.id || !importedCustomer.rif || !importedCustomer.name) {
+              localMessages.push(`- Cliente sin ID, RIF o nombre en ${file.name} omitido.`);
+              continue;
+            }
+            const existingByIdIndex = currentCustomers.findIndex(c => c.id === importedCustomer.id);
+            const existingByRifIndex = currentCustomers.findIndex(c => c.rif.toUpperCase() === importedCustomer.rif.toUpperCase() && c.id !== importedCustomer.id);
+
+            if (existingByIdIndex !== -1) { // Customer exists by ID
+              currentCustomers[existingByIdIndex] = {
+                ...currentCustomers[existingByIdIndex], // Keep existing balances
+                name: importedCustomer.name,
+                rif: importedCustomer.rif,
+                address: importedCustomer.address || currentCustomers[existingByIdIndex].address,
+                phone: importedCustomer.phone || currentCustomers[existingByIdIndex].phone,
+                email: importedCustomer.email || currentCustomers[existingByIdIndex].email,
+              };
+              customersUpdatedCount++;
+              localMessages.push(`  - Cliente ID ${importedCustomer.id} (${importedCustomer.name}) actualizado.`);
+            } else if (existingByRifIndex !== -1) { // Customer exists by RIF (different ID or new ID)
+               currentCustomers[existingByRifIndex] = {
+                ...currentCustomers[existingByRifIndex], // Keep existing balances
+                id: importedCustomer.id, // Update ID to imported one if it's different but RIF matched
+                name: importedCustomer.name,
+                rif: importedCustomer.rif,
+                address: importedCustomer.address || currentCustomers[existingByRifIndex].address,
+                phone: importedCustomer.phone || currentCustomers[existingByRifIndex].phone,
+                email: importedCustomer.email || currentCustomers[existingByRifIndex].email,
+              };
+              customersUpdatedCount++;
+              localMessages.push(`  - Cliente RIF ${importedCustomer.rif} (${importedCustomer.name}) actualizado (ID fusionado/actualizado).`);
+            } else { // New customer
+              currentCustomers.push({
+                ...importedCustomer,
+                outstandingBalance: importedCustomer.outstandingBalance || 0,
+                creditBalance: importedCustomer.creditBalance || 0,
+              });
+              customersAddedCount++;
+              localMessages.push(`  - Nuevo cliente ${importedCustomer.name} añadido.`);
+            }
+          }
+        }
+        
+        // Import Invoices
+        if (data.invoices && Array.isArray(data.invoices)) {
+          for (const importedInvoice of data.invoices) {
+            if (!importedInvoice.id || !importedInvoice.invoiceNumber) {
+               localMessages.push(`- Factura sin ID o número en ${file.name} omitida.`);
+              continue;
+            }
+            const exists = currentInvoices.some(inv => inv.id === importedInvoice.id);
+            if (!exists) {
+              currentInvoices.push(importedInvoice);
+              invoicesAddedCount++;
+              localMessages.push(`  - Factura Nro. ${importedInvoice.invoiceNumber} añadida.`);
+            } else {
+              localMessages.push(`  - Factura Nro. ${importedInvoice.invoiceNumber} (ID: ${importedInvoice.id}) ya existe, omitida.`);
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`Error procesando el archivo ${file.name}:`, error);
+        localMessages.push(`Error: No se pudo procesar el archivo ${file.name}. ¿Es un JSON válido?`);
+      }
+    }
+
+    // Save consolidated data to localStorage
+    if (companyUpdated && currentCompanyDetails) {
+        localStorage.setItem(LOCAL_STORAGE_COMPANY_KEY, JSON.stringify(currentCompanyDetails));
+    }
+    localStorage.setItem(LOCAL_STORAGE_CUSTOMERS_KEY, JSON.stringify(currentCustomers));
+    localStorage.setItem(LOCAL_STORAGE_INVOICES_KEY, JSON.stringify(currentInvoices));
+    
+    localMessages.push("--- Resumen de Importación ---");
+    if (companyUpdated) localMessages.push("Información de la empresa actualizada.");
+    localMessages.push(`${customersAddedCount} cliente(s) nuevo(s) añadido(s).`);
+    localMessages.push(`${customersUpdatedCount} cliente(s) existente(s) actualizado(s).`);
+    localMessages.push(`${invoicesAddedCount} factura(s) nueva(s) añadida(s).`);
+    localMessages.push("----------------------------");
+    localMessages.push("Importación completada. Se recomienda recargar la página para ver todos los cambios.");
+
+    setImportMessages(localMessages);
+    setIsImporting(false);
+    toast({
+      title: "Importación Finalizada",
+      description: "Los datos han sido procesados. Revise los mensajes para detalles. Recargue la página.",
+      duration: 7000,
+    });
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""; // Reset file input
     }
   };
 
@@ -287,22 +439,57 @@ export default function SettingsPage() {
             <CardTitle className="text-xl text-primary">Gestión de Datos</CardTitle>
           </div>
           <CardDescription>
-            Exporte los datos de su aplicación para realizar copias de seguridad o transferirlos a otro navegador/ordenador.
+            Exporte o importe los datos de su aplicación.
+             Es recomendable exportar sus datos antes de realizar una importación.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-            <div className="p-4 rounded-md bg-accent/10 border border-accent/30 text-accent-foreground">
-                <p className="text-sm font-medium">
-                Haga clic en el botón de abajo para descargar un archivo JSON que contiene la información de su empresa, clientes y todas las facturas.
-                Guarde este archivo en un lugar seguro.
-                </p>
-                <p className="text-xs mt-1">
-                Actualmente, la funcionalidad de importación no está implementada.
-                </p>
+        <CardContent className="space-y-6">
+            <div className="p-4 rounded-md bg-accent/10 border border-accent/30 text-accent-foreground space-y-3">
+                <div>
+                    <h3 className="font-semibold text-lg mb-2">Exportar Datos</h3>
+                    <p className="text-sm">
+                    Haga clic en el botón de abajo para descargar un archivo JSON que contiene la información de su empresa, clientes y todas las facturas.
+                    Guarde este archivo en un lugar seguro.
+                    </p>
+                    <Button onClick={handleExportData} className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground mt-2">
+                        <Download className="mr-2 h-4 w-4" /> Exportar Datos de la Aplicación
+                    </Button>
+                </div>
             </div>
-            <Button onClick={handleExportData} className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground">
-                <Download className="mr-2 h-4 w-4" /> Exportar Datos de la Aplicación
-            </Button>
+
+            <div className="p-4 rounded-md bg-destructive/10 border border-destructive/30 text-destructive-foreground space-y-3">
+                <div>
+                    <div className="flex items-center mb-2">
+                        <AlertTriangle className="h-5 w-5 mr-2" />
+                        <h3 className="font-semibold text-lg">Importar Datos (¡Precaución!)</h3>
+                    </div>
+                    <p className="text-sm mb-1">
+                        Seleccione uno o más archivos JSON de respaldo (<code>facturafacil_backup_*.json</code>) para importar y fusionar datos en esta instancia del navegador.
+                    </p>
+                    <p className="text-xs mb-2">
+                        <strong>Advertencia:</strong> Esta acción modificará los datos actuales. Asegúrese de haber exportado sus datos actuales como respaldo antes de proceder.
+                        Los saldos de clientes existentes no se sobrescribirán; solo se actualizarán datos demográficos. Las facturas se añadirán si no existen por ID.
+                    </p>
+                    <Input
+                        type="file"
+                        accept=".json"
+                        multiple
+                        ref={fileInputRef}
+                        onChange={handleImportFiles}
+                        className="mb-2"
+                        disabled={isImporting}
+                    />
+                     {isImporting && <p className="text-sm font-semibold">Importando, por favor espere...</p>}
+                    {importMessages.length > 0 && (
+                        <div className="mt-3 p-3 border rounded-md bg-background/50 max-h-60 overflow-y-auto text-xs">
+                            <h4 className="font-semibold mb-1">Resultado de la Importación:</h4>
+                            {importMessages.map((msg, index) => (
+                                <p key={index} className="whitespace-pre-wrap">{msg}</p>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
         </CardContent>
       </Card>
 
@@ -328,7 +515,7 @@ export default function SettingsPage() {
                   <li><strong><Link href="/invoices" className="text-primary hover:underline">Historial de Documentos</Link> (<History className="inline h-4 w-4" />):</strong> Para consultar facturas, notas de crédito, abonos y depósitos emitidos.</li>
                   <li><strong><Link href="/returns" className="text-primary hover:underline">Procesar Devolución / Retiro de Saldo</Link> (<Undo2 className="inline h-4 w-4" />):</strong> Para generar notas de crédito basadas en facturas existentes o procesar retiros de saldo a favor del cliente.</li>
                   <li><strong><Link href="/company" className="text-primary hover:underline">Configuración de Empresa</Link> (<SettingsIcon className="inline h-4 w-4" />):</strong> Para actualizar los datos fiscales de su empresa que aparecen en los documentos.</li>
-                  <li><strong><Link href="/settings" className="text-primary hover:underline">Ajustes del Entorno</Link> (<SlidersHorizontal className="inline h-4 w-4" />):</strong> Donde se encuentra ahora, para cambiar temas, ver información de la app y este manual.</li>
+                  <li><strong><Link href="/settings" className="text-primary hover:underline">Ajustes del Entorno</Link> (<SlidersHorizontal className="inline h-4 w-4" />):</strong> Donde se encuentra ahora, para cambiar temas, gestionar datos (exportar/importar), ver información de la app y este manual.</li>
                 </ul>
               </AccordionContent>
             </AccordionItem>
@@ -379,11 +566,11 @@ export default function SettingsPage() {
                         <ul className="list-disc pl-5">
                           <li>Agregue métodos de pago.</li>
                           <li>Si el cliente tiene <strong>Saldo a Favor</strong>, aparecerá como opción. Puede usarlo para cubrir parte o todo el monto de la factura. El sistema autocompletará el monto a usar, pero puede editarlo (sin exceder el crédito disponible).</li>
-                           <li>Si el cliente paga <strong>de más</strong>, puede elegir si el excedente se abona al saldo a favor del cliente o si se procesa el vuelto inmediatamente.</li>
+                           <li>Si el cliente paga <strong>de más</strong>, puede elegir si el excedente se abona al saldo a favor del cliente (predeterminado) o si se procesa el vuelto inmediatamente (con sus propios métodos de pago).</li>
                         </ul>
                       </li>
                       <li>Configure descuento, IVA, mensaje de agradecimiento y notas.</li>
-                      <li>Al guardar, se actualizarán los saldos del cliente si el pago fue menor (aumenta Saldo Pendiente) o mayor (aumenta Saldo a Favor), o si se usó Saldo a Favor (reduce Saldo a Favor).</li>
+                      <li>Al guardar, se actualizarán los saldos del cliente si el pago fue menor (aumenta Saldo Pendiente) o mayor (aumenta Saldo a Favor, si esa fue la opción), o si se usó Saldo a Favor (reduce Saldo a Favor).</li>
                     </ul>
                   </li>
                   <li><strong>Registrar Abono a Deuda:</strong>
@@ -465,16 +652,27 @@ export default function SettingsPage() {
             </AccordionItem>
 
             <AccordionItem value="item-8">
-              <AccordionTrigger>Almacenamiento y Gestión de Datos</AccordionTrigger>
+              <AccordionTrigger>Almacenamiento y Gestión de Datos (Exportar/Importar)</AccordionTrigger>
               <AccordionContent className="space-y-2 text-sm text-muted-foreground">
                 <p>FacturaFacil utiliza el almacenamiento local de su navegador (<code>localStorage</code>) para guardar la configuración de la empresa, lista de clientes, todos los documentos generados y su preferencia de tema de color.</p>
-                 <p>En la sección <Link href="/settings" className="text-primary hover:underline">Ajustes del Entorno</Link> (<SlidersHorizontal className="inline h-4 w-4" />) &gt; "Gestión de Datos", encontrará una opción para <strong className="text-foreground">Exportar Datos</strong>. Esto le permite descargar un archivo JSON con toda la información de su aplicación (empresa, clientes, facturas) para tener una copia de seguridad o para transferir a otro navegador/ordenador.</p>
-                <p><strong>Consideraciones Importantes:</strong></p>
+                <p>En la sección <Link href="/settings" className="text-primary hover:underline">Ajustes del Entorno</Link> (<SlidersHorizontal className="inline h-4 w-4" />) &gt; "Gestión de Datos", encontrará opciones para:</p>
+                <ul className="list-disc pl-5">
+                    <li><strong className="text-foreground">Exportar Datos:</strong> Descarga un archivo JSON con toda la información de su aplicación (empresa, clientes, facturas). Es crucial para tener copias de seguridad o para transferir a otro navegador/ordenador.</li>
+                    <li><strong className="text-foreground">Importar Datos:</strong> Permite seleccionar uno o más archivos JSON de respaldo (generados por la función de exportar) para fusionarlos con los datos existentes en el navegador actual. 
+                        <ul className="list-disc pl-5">
+                            <li>La información de la empresa se tomará del último archivo procesado.</li>
+                            <li>Los clientes se fusionan: los existentes (por ID o RIF) actualizan sus datos demográficos (sin alterar saldos locales); los nuevos se añaden.</li>
+                            <li>Las facturas se añaden si no existen por ID.</li>
+                            <li><strong className="text-destructive">Importante:</strong> Siempre exporte sus datos actuales como respaldo ANTES de importar.</li>
+                        </ul>
+                    </li>
+                </ul>
+                <p className="font-semibold text-destructive mt-2">Consideraciones Clave del Almacenamiento Local:</p>
                 <ul className="list-disc pl-5">
                   <li>Los datos se guardan <strong>exclusivamente en el navegador y dispositivo</strong> que está utilizando.</li>
                   <li>Si limpia la caché o datos de navegación, <strong>perderá toda la información</strong> (a menos que tenga una copia exportada).</li>
                   <li>Se recomienda <strong>realizar exportaciones periódicas</strong> de sus datos y guardarlas en un lugar seguro.</li>
-                   <li>La funcionalidad de <strong>Importar Datos</strong> desde un archivo de respaldo aún no está implementada.</li>
+                  <li>Tras una importación, se recomienda recargar la aplicación para asegurar que todos los cambios se reflejen correctamente.</li>
                 </ul>
               </AccordionContent>
             </AccordionItem>
@@ -497,7 +695,7 @@ export default function SettingsPage() {
           </div>
           <div className="flex justify-between">
             <span className="font-semibold text-foreground">Versión:</span>
-            <span className="text-muted-foreground">1.1.0 (Con Gestión de Saldos y Exportación)</span>
+            <span className="text-muted-foreground">1.2.0 (Con Gestión de Saldos, Exportación e Importación)</span>
           </div>
           <div className="flex justify-between">
             <span className="font-semibold text-foreground">Desarrollado con:</span>
@@ -512,4 +710,3 @@ export default function SettingsPage() {
     </div>
   );
 }
-

@@ -4,6 +4,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import type { z } from "zod";
+import { v4 as uuidv4 } from "uuid";
 import type { CustomerDetails } from "@/lib/types";
 import { customerDetailsSchema } from "@/lib/schemas";
 import { Button } from "@/components/ui/button";
@@ -63,9 +64,11 @@ export function CustomerDialog({ customer, onSave, triggerButton }: CustomerDial
 
   function onSubmit(values: z.infer<typeof customerDetailsSchema>) {
     const customerToSave: CustomerDetails = {
-      id: customer?.id || Date.now().toString(), // Generate new ID or use existing
-      ...defaultCustomerValues, // ensure balance fields are present
+      id: customer?.id || uuidv4(), // Use uuidv4 for new customers
+      ...defaultCustomerValues, 
       ...values,
+      outstandingBalance: customer?.outstandingBalance || values.outstandingBalance || 0,
+      creditBalance: customer?.creditBalance || values.creditBalance || 0,
     };
     onSave(customerToSave);
     setOpen(false);
