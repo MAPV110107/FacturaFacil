@@ -101,12 +101,12 @@ body {
     color: black !important;
     margin: 0 !important;
     padding: 0 !important;
-    width: auto !important; /* Allow body to shrink to content if possible */
-    height: auto !important; /* Allow body to shrink to content if possible */
+    width: auto !important; 
+    height: auto !important; 
   }
 
   html {
-    background-color: white !important; /* Ensure html background is white for print */
+    background-color: white !important; 
   }
 
   .no-print {
@@ -117,62 +117,56 @@ body {
     display: block !important;
   }
   
-  /* Cuando se imprime una factura (ya sea desde la vista individual o desde el editor) */
-  /* This rule makes the direct parent of the invoice preview take over */
-  body > div:first-child > main.flex-1.container, /* Common app layout structure */
-  body > div:first-child > div.lg\:col-span-1 /* Specific to invoice editor preview column */ {
+  body > div:first-child > main.flex-1.container,
+  body > div:first-child > div.lg\:col-span-1 {
     padding: 0 !important;
     margin: 0 !important;
     width: auto !important;
     max-width: none !important;
     height: auto !important;
     overflow: visible !important;
+    background-color: white !important;
   }
   
   div[data-invoice-preview-container] {
     display: block !important;
-    width: auto !important; /* Let content define width up to max-width of .receipt-font */
-    min-width: 0 !important; /* Override any min-width from Tailwind that might force it larger */
+    width: auto !important; 
+    min-width: 0 !important; 
     height: auto !important;
     margin: 0 !important; 
-    padding: 0 !important; /* Padding will be handled by .receipt-font or its content directly */
+    padding: 0 !important; 
     box-shadow: none !important;
     border: none !important;
-    overflow: visible !important; /* Allow content to flow */
+    overflow: visible !important; 
     background-color: white !important;
-    page-break-inside: avoid !important; /* Try to keep invoice on one page if possible */
+    page-break-inside: avoid !important; 
   }
   
-  /* Make the card inside the preview container also not restrict width unnecessarily */
-  div[data-invoice-preview-container] > .card {
-    max-width: none !important; /* Remove max-width from Card component */
+  div[data-invoice-preview-container].card { /* If the container is a Card */
+    max-width: none !important;
     box-shadow: none !important;
     border: none !important;
-    padding: 0 !important; /* Remove Card's own padding */
+    padding: 0 !important;
     border-radius: 0 !important;
   }
   
-  div[data-invoice-preview-container] > .card > .receipt-font {
-    /* This is CardContent, ensure it has padding for the receipt content itself */
-    padding: 5mm !important; /* Or your desired actual receipt margin */
-    margin: 0 auto !important; /* Centers the content if paper is wider */
+  /* Apply padding to the receipt-font content within the preview container */
+  div[data-invoice-preview-container] .receipt-font {
+    padding: 5mm !important; 
+    margin: 0 auto !important; 
   }
 
-
-  /* Ocultar el botón de "Imprimir" dentro del preview cuando se está imprimiendo */
   div[data-invoice-preview-container] .no-print {
      display: none !important;
   }
 
-
-  /* Thermal receipt specific styles */
   .receipt-font {
-    font-family: 'Courier New', Courier, monospace !important; /* Common thermal printer font */
+    font-family: 'Courier New', Courier, monospace !important; 
     font-size: 9pt !important;
     line-height: 1.2 !important;
     color: black !important;
-    max-width: 78mm !important; /* Strict width for 80mm paper, leaving a bit of margin. Adjust to 56mm for 58mm paper. */
-    width: 100% !important; /* Ensure it tries to fill the max-width */
+    max-width: 78mm !important; 
+    width: 100% !important; 
     box-sizing: border-box !important;
   }
   .receipt-font p, 
@@ -181,7 +175,7 @@ body {
     font-size: 9pt !important;
     line-height: 1.2 !important;
     color: black !important;
-    margin-bottom: 0.5px !important; /* Reduce space between paragraphs */
+    margin-bottom: 0.5px !important; 
   }
   .receipt-font .text-lg { font-size: 11pt !important; }
   .receipt-font .text-sm { font-size: 9pt !important; }
@@ -190,26 +184,25 @@ body {
   .receipt-font .truncate { 
     overflow: visible !important; 
     white-space: normal !important; 
-    word-break: break-word !important; /* Help break long words if needed */
+    word-break: break-word !important; 
   }
 
-  .receipt-font .grid { display: block !important; } /* Simplify grid for print */
+  .receipt-font .grid { display: block !important; } 
   .receipt-font .grid > div { display: block !important; width: 100% !important; }
 
-  /* Item table styling for receipt */
   .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] {
-     display: block !important; /* override grid display */
+     display: block !important; 
   }
   .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div {
-    display: inline-block !important; /* make columns inline */
-    padding-right: 2mm !important; /* small spacing between "columns" */
+    display: inline-block !important; 
+    padding-right: 2mm !important; 
     vertical-align: top !important;
     box-sizing: border-box !important;
   }
-  .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div:nth-child(1) { width: 45% !important; } /* Desc */
-  .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div:nth-child(2) { width: 15% !important; text-align: right !important; } /* Qty */
-  .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div:nth-child(3) { width: 20% !important; text-align: right !important; } /* P.Unit */
-  .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div:nth-child(4) { width: 20% !important; text-align: right !important; padding-right: 0 !important; } /* Total */
+  .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div:nth-child(1) { width: 45% !important; } 
+  .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div:nth-child(2) { width: 15% !important; text-align: right !important; } 
+  .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div:nth-child(3) { width: 20% !important; text-align: right !important; } 
+  .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div:nth-child(4) { width: 20% !important; text-align: right !important; padding-right: 0 !important; } 
   
   .receipt-font .border-dashed { border-style: none !important; }
   .receipt-font .my-1, .receipt-font .my-2, .receipt-font .mb-1, .receipt-font .mb-2, .receipt-font .mt-1, .receipt-font .mt-2, .receipt-font .mt-3 {
@@ -222,26 +215,22 @@ body {
     margin-bottom: 2px !important;
   }
 
-  /* Watermark for Nota de Credito */
   .print-receipt .watermark-text {
-    font-size: 40pt !important; /* Smaller for receipt */
-    opacity: 0.1 !important; /* More transparent for actual print */
+    font-size: 40pt !important; 
+    opacity: 0.1 !important; 
     color: #888888 !important;
     transform: rotate(-30deg) !important;
   }
 
-  /* Hide elements that are typically too large or not needed for thermal receipt */
   .print-receipt img[data-ai-hint~="company logo"] {
-     max-height: 30px !important; /* Make logo very small or hide if preferred */
+     max-height: 30px !important; 
      margin-bottom: 2mm !important;
-     /* display: none !important; */ /* Uncomment to hide logo completely on thermal */
   }
 }
 
-/* Ensure the invoice editor's preview column also allows shrinking */
 @media print {
   .lg\:col-span-1.space-y-4.sticky.top-20 {
-    position: static !important; /* Override sticky positioning for print */
+    position: static !important; 
     height: auto !important;
     overflow: visible !important;
   }
