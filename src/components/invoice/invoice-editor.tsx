@@ -180,19 +180,20 @@ export function InvoiceEditor() {
       setShowNewCustomerFields(false);
     } else { 
       if (mode !== 'normal') { 
-        toast({ variant: "destructive", title: "Acción no completada", description: "Debe seleccionar un cliente primero."});
+        // This case might happen if e.g. debt payment params are present but customer not found by resetFormAndState
+        // The calling useEffect should handle toasts for "customer not found" etc.
       }
       setCustomerRifInput("");
       setShowNewCustomerFields(false);
       setCustomerSearchMessage(null);
       setSelectedCustomerIdForDropdown(undefined);
-      if (targetCustomer) { // if resetting to normal with a customer selected
+      if (targetCustomer) { // if resetting to normal with a customer selected (e.g. cancelling special mode)
         initialCustomerState = {...targetCustomer};
         setSelectedCustomerIdForDropdown(targetCustomer.id);
         setCustomerRifInput(targetCustomer.rif);
         setCustomerSearchMessage(`Cliente: ${targetCustomer.name}`);
       } else {
-        setSelectedCustomerAvailableCredit(0);
+        setSelectedCustomerAvailableCredit(0); // No customer, no credit
       }
     }
     
@@ -254,38 +255,64 @@ export function InvoiceEditor() {
       isCreditDeposit: !!formValuesToReset.isCreditDeposit,
     });
     
-    if (pathname === '/invoice/new' && searchParams.toString() !== "") {
-      router.replace('/invoice/new', { scroll: false });
+    // Clear URL params if they were used to set a special mode, after applying the mode.
+    // This check is important to only clear if we successfully entered a special mode.
+    const debtPaymentParamInUrl = searchParams.get('debtPayment') === 'true';
+    if ((mode === 'debtPayment' && debtPaymentParamInUrl) || (mode === 'creditDeposit' /* && relevant credit deposit param if we add one */)) {
+      if (pathname === '/invoice/new' && searchParams.toString() !== "") {
+        router.replace('/invoice/new', { scroll: false });
+      }
     }
   }, [form, customers, companyDetails, calculateTotals, calculatePaymentSummary, router, pathname, searchParams, toast]);
+
 
   useEffect(() => {
     setIsClient(true);
   }, []);
 
   useEffect(() => {
-    if (isClient && customers.length >= 0 && editorMode === 'normal') {
-        const customerIdParam = searchParams.get('customerId');
-        const debtPaymentParam = searchParams.get('debtPayment') === 'true';
-        const amountStrParam = searchParams.get('amount');
-        const amountParam = parseFloat(amountStrParam || '0');
+    if (!isClient) return;
 
-        if (debtPaymentParam && customerIdParam && amountParam > 0) {
+    const customerIdParam = searchParams.get('customerId');
+    const debtPaymentParam = searchParams.get('debtPayment') === 'true';
+    const amountStrParam = searchParams.get('amount');
+    const amountParam = parseFloat(amountStrParam || '0');
+
+    if (debtPaymentParam && customerIdParam && amountParam > 0) {
+        if (customers.length > 0) { // Customers are loaded
             const targetCustomer = customers.find(c => c.id === customerIdParam);
             if (targetCustomer) {
-                resetFormAndState({ mode: 'debtPayment', customerId: customerIdParam, amount: amountParam });
-            } else if (customers.length > 0) { // Customers list is loaded, but this specific one not found
+                // Check if already in the correct mode to avoid redundant resets
+                const currentFormValues = form.getValues();
+                const isAlreadyCorrectlySetup = editorMode === 'debtPayment' &&
+                                             currentFormValues.customerDetails.id === customerIdParam &&
+                                             currentFormValues.items[0]?.unitPrice === amountParam &&
+                                             currentFormValues.items[0]?.description === "Abono a Deuda Pendiente";
+
+                if (!isAlreadyCorrectlySetup) {
+                    resetFormAndState({ mode: 'debtPayment', customerId: customerIdParam, amount: amountParam });
+                }
+            } else {
+                // Customers loaded, but specific customer not found
                 toast({ variant: "destructive", title: "Cliente no encontrado", description: "No se pudo encontrar el cliente especificado para el pago de deuda." });
-                router.replace('/invoice/new', { scroll: false }); // Clear invalid params
-                resetFormAndState({ mode: 'normal' }); // Reset to normal mode without customer
+                if (pathname === '/invoice/new') router.replace('/invoice/new', { scroll: false }); // Clean URL
+                resetFormAndState({ mode: 'normal' }); // Reset to a clean normal state
             }
-            // If customers.length is 0, it means customers are not loaded yet.
-            // This effect will run again when `customers` state updates, and then targetCustomer might be found.
-        } else if (!form.getValues('invoiceNumber')) { // If no specific mode params and form is "empty" (no invoice number), do a normal reset.
-            resetFormAndState({ mode: 'normal' });
         }
+        // If customers.length is 0, this effect will re-run when `customers` state updates.
+        // We don't reset to 'normal' here, to give `customers` a chance to load.
+        return; // Explicitly return to avoid falling into the 'normal reset' case below if debt params are present.
     }
-  }, [isClient, searchParams, resetFormAndState, customers, editorMode, form, router, toast]); // Added router and toast
+    
+    // If no special parameters are trying to set a mode, and the form is "empty"
+    // and we are in 'normal' mode, ensure it's a clean initial state.
+    // This prevents resetting if we are already in a special mode set by user interaction within the page.
+    if (!debtPaymentParam && editorMode === 'normal' && !form.getValues('invoiceNumber') && !selectedCustomerIdForDropdown) {
+        resetFormAndState({ mode: 'normal' });
+    }
+
+  }, [isClient, searchParams, customers, editorMode, form, resetFormAndState, router, toast, pathname, selectedCustomerIdForDropdown]);
+
 
   const { fields: itemFields, append: appendItem, remove: removeItem } = useFieldArray({
     control: form.control,
@@ -610,7 +637,7 @@ export function InvoiceEditor() {
       ),
     });
     
-    resetFormAndState({ mode: 'normal' });
+    resetFormAndState({ mode: 'normal' }); // Always reset to normal mode after any submission
   }
 
   const previewCompanyDetails = companyDetails;
@@ -946,7 +973,7 @@ export function InvoiceEditor() {
                                     <FormLabel>Monto ({CURRENCY_SYMBOL})</FormLabel>
                                     <FormControl><Input {...f} type="number" step="0.01" placeholder="0.00" 
                                      onChange={e => f.onChange(parseFloat(e.target.value) || 0)} 
-                                     readOnly={form.getValues(`paymentMethods.${index}.method`) === 'Saldo a Favor' && editorMode !== 'normal'}
+                                     readOnly={form.getValues(`paymentMethods.${index}.method`) === 'Saldo a Favor' && editorMode === 'normal' && (liveInvoicePreview.totalAmount || 0) <= selectedCustomerAvailableCredit} // Slightly different logic might be needed if user can edit
                                      /></FormControl>
                                      <FormMessage />
                                 </FormItem>
@@ -1059,4 +1086,3 @@ export function InvoiceEditor() {
     </div>
   );
 }
-
