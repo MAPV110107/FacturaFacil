@@ -54,4 +54,27 @@ export const invoiceFormSchema = z.object({
   notes: z.string().optional(),
   taxRate: z.number().min(0).max(1).default(0.16), // Example: 0.16 for 16%
   discountAmount: z.number().min(0, "El descuento no puede ser negativo.").optional(),
+
+  // Fields for handling overpayment
+  overpaymentHandlingChoice: z.enum(['creditToAccount', 'refundNow']).default('creditToAccount').optional(),
+  changeRefundPaymentMethods: z.array(paymentDetailsSchema).optional(),
+}).refine(data => {
+  if (data.overpaymentHandlingChoice === 'refundNow') {
+    return data.changeRefundPaymentMethods && data.changeRefundPaymentMethods.length > 0;
+  }
+  return true;
+}, {
+  message: "Si se procesa el vuelto ahora, debe especificar al menos un método de pago para el vuelto.",
+  path: ["changeRefundPaymentMethods"],
+}).refine(data => {
+    if (data.overpaymentHandlingChoice === 'refundNow' && data.changeRefundPaymentMethods) {
+        // This validation would ideally compare against the calculated overpayment amount.
+        // For simplicity in Zod schema, we just ensure amount is positive.
+        // The actual amount comparison will be done in the component logic.
+        return data.changeRefundPaymentMethods.every(pm => pm.amount > 0);
+    }
+    return true;
+}, {
+    message: "El monto del vuelto para cada método debe ser positivo.",
+    path: ["changeRefundPaymentMethods"],
 });

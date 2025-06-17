@@ -47,8 +47,11 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
   const totalAmount = invoice.totalAmount ?? 0;
   const taxRate = invoice.taxRate ?? 0;
   const amountPaid = invoice.amountPaid ?? 0;
-  const amountDue = invoice.amountDue ?? 0;
-
+  
+  // invoice.amountDue in the live preview already reflects the final state after overpayment handling.
+  // if overpayment was refunded, invoice.amountDue is 0.
+  // if overpayment was credited, invoice.amountDue is negative.
+  const finalAmountDueForDisplay = invoice.amountDue ?? 0;
 
   const taxableBase = subTotal - discountAmount;
   const isReturn = invoice.type === 'return';
@@ -63,10 +66,8 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
     watermarkText = "NOTA DE CRÉDITO";
   } else if (isDebtPayment) {
     documentTitle = "RECIBO DE PAGO DE DEUDA";
-    // watermarkText = "PAGO DEUDA"; // Optional watermark
   } else if (isCreditDeposit) {
     documentTitle = "COMPROBANTE DE DEPÓSITO";
-    // watermarkText = "DEPÓSITO"; // Optional watermark
   }
 
 
@@ -83,11 +84,14 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
     }
   }
 
+  const overpaymentWasMade = (invoice.overpaymentAmount ?? 0) > 0;
+  const overpaymentCredited = overpaymentWasMade && invoice.overpaymentHandling === 'creditedToAccount';
+  const overpaymentRefunded = overpaymentWasMade && invoice.overpaymentHandling === 'refunded';
 
   return (
     <Card 
-      className={cn("w-full shadow-xl relative", className)} // Removed max-w-md, print styles will control width
-      data-invoice-preview-container // This attribute is key for print styles
+      className={cn("w-full shadow-xl relative", className)}
+      data-invoice-preview-container 
     >
       {watermarkText && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 watermark-container">
@@ -99,7 +103,7 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
           </span>
         </div>
       )}
-      <CardContent className={cn("p-4 text-xs relative z-10", "receipt-font")}> {/* Applied receipt-font here */}
+      <CardContent className={cn("p-4 text-xs relative z-10", "receipt-font")}>
         <div className="text-center mb-1">
           <p className="font-bold text-lg my-1">{SENIAT_TEXT}</p>
         </div>
@@ -163,10 +167,10 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
           {discountAmount > 0 && (
             <p>{formatLine("DESCUENTO:", `-${formatCurrency(discountAmount)}`)}</p>
           )}
-           {(taxAmount > 0 || isDebtPayment || isCreditDeposit) && ( // Show taxable base if there is tax or special modes
+           {(taxAmount > 0 || isDebtPayment || isCreditDeposit) && ( 
             <p>{formatLine(`BASE IMPONIBLE:`, formatCurrency(taxableBase))}</p>
           )}
-          {taxAmount > 0 && !isDebtPayment && !isCreditDeposit && ( // Show tax only if there is tax and not special modes
+          {taxAmount > 0 && !isDebtPayment && !isCreditDeposit && ( 
             <p>{formatLine(`IVA (${(taxRate * 100).toFixed(0)}%):`, formatCurrency(taxAmount))}</p>
           )}
           <p className="font-bold text-sm">{formatLine(isReturn ? "TOTAL CRÉDITO:" : isDebtPayment ? "TOTAL ABONO:" : isCreditDeposit ? "TOTAL DEPÓSITO:" : "TOTAL A PAGAR:", formatCurrency(totalAmount))}</p>
@@ -183,15 +187,24 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
           </div>
         )}
 
-        {!isReturn && !isCreditDeposit && amountPaid > 0 && ( // Don't show paid/due for credit deposit as it's a direct balance increase
+        
+        {!isReturn && !isCreditDeposit && (
             <div className="mt-1">
                 <DottedLine />
                 <p className="font-semibold">{formatLine("TOTAL PAGADO:", formatCurrency(amountPaid))}</p>
-                {amountDue < 0 && ( 
-                    <p className="font-semibold">{formatLine("VUELTO:", formatCurrency(Math.abs(amountDue)))}</p>
+                {overpaymentRefunded && invoice.changeRefundPaymentMethods && invoice.changeRefundPaymentMethods.length > 0 && (
+                  <>
+                    <p className="font-semibold mt-1">VUELTO PROCESADO:</p>
+                    {invoice.changeRefundPaymentMethods.map((crpm, idx) => (
+                       <p key={`change-${idx}`}>{formatLine(crpm.method.toUpperCase() + (crpm.reference ? ` (${crpm.reference.slice(0,10)})` : ''), formatCurrency(crpm.amount))}</p>
+                    ))}
+                  </>
                 )}
-                {amountDue > 0 && ( 
-                    <p className="font-semibold">{formatLine("MONTO PENDIENTE:", formatCurrency(amountDue))}</p>
+                {overpaymentCredited && (
+                    <p className="font-semibold">{formatLine("ABONADO A SALDO CLIENTE:", formatCurrency(invoice.overpaymentAmount))}</p>
+                )}
+                {finalAmountDueForDisplay > 0 && !overpaymentWasMade && ( 
+                    <p className="font-semibold">{formatLine("MONTO PENDIENTE:", formatCurrency(finalAmountDueForDisplay))}</p>
                 )}
             </div>
         )}

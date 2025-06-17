@@ -19,9 +19,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { InvoicePreview } from "./invoice-preview";
 import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, Trash2, Users, FileText, DollarSign, Settings, Receipt, CalendarDays, Info, Save, Percent, Search, Ban, ArrowRight, HandCoins, PiggyBank, XCircle } from "lucide-react";
+import { PlusCircle, Trash2, Users, FileText, DollarSign, Settings, Receipt, CalendarDays, Info, Save, Percent, Search, Ban, ArrowRight, HandCoins, PiggyBank, XCircle, WalletCards, RotateCcw } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Form, FormField, FormItem, FormControl, FormLabel, FormMessage } from "@/components/ui/form";
@@ -92,6 +93,9 @@ export function InvoiceEditor() {
     notes: "",
     isDebtPayment: false,
     isCreditDeposit: false,
+    overpaymentAmount: 0,
+    overpaymentHandling: 'creditToAccount',
+    changeRefundPaymentMethods: [],
   };
 
   const [liveInvoicePreview, setLiveInvoicePreview] = useState<Partial<Invoice>>(initialLivePreviewState);
@@ -114,6 +118,8 @@ export function InvoiceEditor() {
       notes: "",
       taxRate: TAX_RATE,
       discountAmount: 0,
+      overpaymentHandlingChoice: 'creditToAccount',
+      changeRefundPaymentMethods: [],
     },
   });
 
@@ -129,7 +135,7 @@ export function InvoiceEditor() {
   
   const calculatePaymentSummary = useCallback((payments: PaymentDetails[], totalAmount: number) => {
     const amountPaid = payments.reduce((sum, p) => sum + p.amount, 0);
-    const amountDue = totalAmount - amountPaid;
+    const amountDue = totalAmount - amountPaid; // This can be negative if overpaid
     return { amountPaid, amountDue };
   }, []);
 
@@ -217,6 +223,8 @@ export function InvoiceEditor() {
       notes: notesMsg,
       taxRate: formTaxRate, 
       discountAmount: 0,
+      overpaymentHandlingChoice: 'creditToAccount' as 'creditToAccount' | 'refundNow',
+      changeRefundPaymentMethods: [],
     };
     form.reset(formValuesToReset);
         
@@ -254,10 +262,11 @@ export function InvoiceEditor() {
       notes: formValuesToReset.notes,
       isDebtPayment: !!formValuesToReset.isDebtPayment,
       isCreditDeposit: !!formValuesToReset.isCreditDeposit,
+      overpaymentAmount: amountDue < 0 ? Math.abs(amountDue) : 0,
+      overpaymentHandling: formValuesToReset.overpaymentHandlingChoice,
+      changeRefundPaymentMethods: formValuesToReset.changeRefundPaymentMethods as PaymentDetails[],
     });
     
-    // Clear URL params if they were used to set a special mode, after applying the mode.
-    // This check is important to only clear if we successfully entered a special mode.
     const debtPaymentParamInUrl = searchParams.get('debtPayment') === 'true';
     if ((mode === 'debtPayment' && debtPaymentParamInUrl) || (mode === 'creditDeposit' /* && relevant credit deposit param if we add one */)) {
       if (pathname === '/invoice/new' && searchParams.toString() !== "") {
@@ -273,7 +282,6 @@ export function InvoiceEditor() {
 
   useEffect(() => {
     if (!isClient) { 
-        // Allow initial reset if no params and form pristine before customers load
         if (!searchParams.get('customerId') && !form.getValues('invoiceNumber')) {
             resetFormAndState({ mode: 'normal' });
         }
@@ -281,9 +289,6 @@ export function InvoiceEditor() {
     }
 
     if (isClient && customers.length === 0 && searchParams.get('customerId')) {
-        // If there's a customerId in URL but customers list is empty (still loading),
-        // we might display a loading state or just wait for next effect run.
-        // For now, let's not reset if a customerId is present, to give customers a chance to load.
         return;
     }
     
@@ -296,7 +301,6 @@ export function InvoiceEditor() {
         const targetCustomer = customers.find(c => c.id === customerIdParam);
         if (targetCustomer) {
             const currentFormValues = form.getValues();
-            // Check if we are already in the correct state or if this is the first time setting it up
             const isAlreadyCorrectlySetup = editorMode === 'debtPayment' &&
                                          currentFormValues.customerDetails.id === customerIdParam &&
                                          currentFormValues.items[0]?.unitPrice === amountParam &&
@@ -305,19 +309,15 @@ export function InvoiceEditor() {
                 resetFormAndState({ mode: 'debtPayment', customerId: customerIdParam, amount: amountParam });
             }
         } else {
-             // Customer not found, maybe customers list wasn't fully loaded yet or bad ID.
-             // If customers list *is* loaded and customer not found, show error and reset.
-            if (customers.length > 0) { // Check if customers list has content
+            if (customers.length > 0) { 
                 toast({ variant: "destructive", title: "Cliente no encontrado", description: "No se pudo encontrar el cliente para el pago de deuda." });
-                if (pathname === '/invoice/new') router.replace('/invoice/new', { scroll: false }); // Clear params
+                if (pathname === '/invoice/new') router.replace('/invoice/new', { scroll: false }); 
                 resetFormAndState({ mode: 'normal' }); 
             }
-            // If customers list is empty, it might still be loading, so don't reset yet.
         }
         return; 
     }
     
-    // Fallback to ensure reset if no params and form isn't initialized or in a special mode without cause
     if (!debtPaymentParam && editorMode === 'normal' && !form.getValues('invoiceNumber') && !selectedCustomerIdForDropdown) {
         resetFormAndState({ mode: 'normal' });
     }
@@ -334,6 +334,11 @@ export function InvoiceEditor() {
     control: form.control,
     name: "paymentMethods",
   });
+
+  const { fields: changePaymentFields, append: appendChangePayment, remove: removeChangePayment, update: updateChangePayment, replace: replaceChangePayments } = useFieldArray({
+    control: form.control,
+    name: "changeRefundPaymentMethods",
+  });
   
   useEffect(() => {
     const updatePreview = (values: InvoiceFormData) => {
@@ -348,6 +353,19 @@ export function InvoiceEditor() {
         const currentDiscountAmount = values.isDebtPayment || values.isCreditDeposit ? 0 : (values.discountAmount || 0);
         const { subTotal, discountAmount, taxAmount, totalAmount } = calculateTotals(currentItems, currentTaxRate, currentDiscountAmount);
         const { amountPaid, amountDue } = calculatePaymentSummary(values.paymentMethods || [], totalAmount);
+
+        let overpaymentAmt = 0;
+        let finalAmountDueForInvoice = amountDue;
+
+        if (amountDue < 0) { // Overpayment occurred
+            overpaymentAmt = Math.abs(amountDue);
+            if (values.overpaymentHandlingChoice === 'refundNow') {
+                // If refunding now, the invoice's own amountDue effectively becomes 0 after refund.
+                finalAmountDueForInvoice = 0;
+            }
+            // If crediting to account, amountDue remains negative to reflect credit.
+        }
+
 
         setLiveInvoicePreview(prev => ({
             ...prev,
@@ -364,12 +382,15 @@ export function InvoiceEditor() {
             taxAmount,
             totalAmount,
             amountPaid,
-            amountDue,
+            amountDue: finalAmountDueForInvoice, // Reflects final state after considering refund choice
             thankYouMessage: values.thankYouMessage || DEFAULT_THANK_YOU_MESSAGE,
             notes: values.notes,
             type: 'sale', 
             isDebtPayment: !!values.isDebtPayment,
             isCreditDeposit: !!values.isCreditDeposit,
+            overpaymentAmount: overpaymentAmt,
+            overpaymentHandling: values.overpaymentHandlingChoice,
+            changeRefundPaymentMethods: values.changeRefundPaymentMethods as PaymentDetails[] || [],
         }));
     };
     
@@ -382,6 +403,28 @@ export function InvoiceEditor() {
         subscription.unsubscribe();
     };
   }, [form, calculateTotals, calculatePaymentSummary]);
+
+
+  // Effect to manage changeRefundPaymentMethods when overpaymentHandlingChoice changes or overpayment amount changes
+  useEffect(() => {
+    const overpaymentHandlingChoice = form.getValues("overpaymentHandlingChoice");
+    const actualOverpaymentAmount = liveInvoicePreview.overpaymentAmount || 0;
+
+    if (overpaymentHandlingChoice === 'refundNow' && actualOverpaymentAmount > 0) {
+        if (changePaymentFields.length === 0) {
+            appendChangePayment({ method: "Efectivo", amount: actualOverpaymentAmount, reference: "" });
+        } else {
+            // If there are existing fields, update the first one's amount if it's the only one,
+            // or if the sum doesn't match. This logic might need refinement for multiple payment methods for change.
+            // For now, let's assume one method for simplicity or manual adjustment by user.
+             if (changePaymentFields.length === 1) {
+                 updateChangePayment(0, { ...changePaymentFields[0], amount: actualOverpaymentAmount });
+             }
+        }
+    } else if (overpaymentHandlingChoice === 'creditToAccount') {
+        replaceChangePayments([]); // Clear change payment methods if crediting to account
+    }
+  }, [form.watch("overpaymentHandlingChoice"), liveInvoicePreview.overpaymentAmount, appendChangePayment, replaceChangePayments, updateChangePayment, changePaymentFields, form]);
 
 
   const handleRifSearch = async () => {
@@ -528,7 +571,6 @@ export function InvoiceEditor() {
         return;
     }
 
-    // Validation for "Saldo a Favor" usage
     let totalCreditUsedInTransaction = 0;
     let creditUsageError = false;
     if (editorMode === 'normal') {
@@ -552,7 +594,6 @@ export function InvoiceEditor() {
         if (creditUsageError) return;
     }
 
-
     const finalItems = data.items.map(item => ({
       ...item,
       totalPrice: item.quantity * item.unitPrice,
@@ -562,7 +603,31 @@ export function InvoiceEditor() {
     const currentDiscountAmount = data.isDebtPayment || data.isCreditDeposit ? 0 : (data.discountAmount || 0);
     
     const { subTotal, discountAmount, taxAmount, totalAmount } = calculateTotals(finalItems, currentTaxRate, currentDiscountAmount);
-    const { amountPaid, amountDue } = calculatePaymentSummary(data.paymentMethods, totalAmount);
+    const { amountPaid, amountDue: rawAmountDue } = calculatePaymentSummary(data.paymentMethods, totalAmount); // rawAmountDue can be negative
+
+    let finalInvoiceAmountDue = rawAmountDue;
+    let overpaymentAmountToStore = 0;
+    let overpaymentHandlingToStore: 'creditedToAccount' | 'refunded' | undefined = undefined;
+    let changeRefundPaymentMethodsToStore: PaymentDetails[] | undefined = undefined;
+
+    if (rawAmountDue < 0) { // Overpayment occurred
+        overpaymentAmountToStore = Math.abs(rawAmountDue);
+        if (data.overpaymentHandlingChoice === 'refundNow') {
+            const totalChangeRefunded = (data.changeRefundPaymentMethods || []).reduce((sum, pm) => sum + pm.amount, 0);
+            if (Math.abs(totalChangeRefunded - overpaymentAmountToStore) > 0.001) { // Check if refund matches overpayment
+                toast({ variant: "destructive", title: "Error en Vuelto", description: `El monto del vuelto procesado (${formatCurrency(totalChangeRefunded)}) no coincide con el sobrepago (${formatCurrency(overpaymentAmountToStore)}).` });
+                form.setError("changeRefundPaymentMethods", {type: "manual", message: "El total del vuelto debe igualar el sobrepago."});
+                return;
+            }
+            overpaymentHandlingToStore = 'refunded';
+            changeRefundPaymentMethodsToStore = data.changeRefundPaymentMethods;
+            finalInvoiceAmountDue = 0; // Invoice is settled regarding its own amount.
+        } else { // creditToAccount
+            overpaymentHandlingToStore = 'creditedToAccount';
+            // finalInvoiceAmountDue remains negative to signify the credit applied to account from this invoice
+        }
+    }
+
 
     const fullInvoiceData: Invoice = {
       id: uuidv4(),
@@ -583,9 +648,12 @@ export function InvoiceEditor() {
       taxAmount,
       totalAmount,
       amountPaid,
-      amountDue,
+      amountDue: finalInvoiceAmountDue,
       thankYouMessage: data.thankYouMessage || DEFAULT_THANK_YOU_MESSAGE,
       notes: data.notes,
+      overpaymentAmount: overpaymentAmountToStore > 0 ? overpaymentAmountToStore : undefined,
+      overpaymentHandling: overpaymentHandlingToStore,
+      changeRefundPaymentMethods: changeRefundPaymentMethodsToStore,
     };
     
     setSavedInvoices(prevInvoices => [...prevInvoices, fullInvoiceData]);
@@ -609,24 +677,28 @@ export function InvoiceEditor() {
             StoredCustomer.outstandingBalance = Math.max(0, StoredCustomer.outstandingBalance - amountPaid);
         } else if (editorMode === 'creditDeposit') {
             StoredCustomer.creditBalance += amountPaid;
-        } else { // Normal invoice (after credit deduction if any)
-            if (amountDue > 0) {
-                StoredCustomer.outstandingBalance += amountDue;
-            } else if (amountDue < 0) { 
-                StoredCustomer.creditBalance += Math.abs(amountDue);
+        } else { // Normal invoice
+            if (rawAmountDue > 0) { // Actual underpayment
+                StoredCustomer.outstandingBalance += rawAmountDue;
+            } else if (rawAmountDue < 0) { // Overpayment
+                if (overpaymentHandlingToStore === 'creditedToAccount') {
+                    StoredCustomer.creditBalance += overpaymentAmountToStore;
+                }
+                // If 'refunded', customer balance is not affected by the overpayment itself.
             }
         }
         currentCustomersList[customerIndex] = StoredCustomer;
-    } else if (newCustomerJustAdded) { // Handle new customer balances
+    } else if (newCustomerJustAdded) { 
         let newCustWithBalance = {...newCustomerJustAdded};
         newCustWithBalance.outstandingBalance = 0;
         newCustWithBalance.creditBalance = 0;
-        // New customer cannot use credit on first transaction, so no deduction needed here
         if (editorMode === 'creditDeposit') {
             newCustWithBalance.creditBalance += amountPaid;
-        } else { // normal or debt payment (though debt payment for new customer is unlikely)
-             if (amountDue > 0) newCustWithBalance.outstandingBalance += amountDue;
-             else if (amountDue < 0) newCustWithBalance.creditBalance += Math.abs(amountDue);
+        } else { 
+             if (rawAmountDue > 0) newCustWithBalance.outstandingBalance += rawAmountDue;
+             else if (rawAmountDue < 0 && overpaymentHandlingToStore === 'creditedToAccount') {
+                newCustWithBalance.creditBalance += overpaymentAmountToStore;
+             }
         }
         const newCustIndexInList = currentCustomersList.findIndex(c => c.id === newCustWithBalance.id);
         if (newCustIndexInList !== -1) currentCustomersList[newCustIndexInList] = newCustWithBalance;
@@ -648,7 +720,7 @@ export function InvoiceEditor() {
       ),
     });
     
-    resetFormAndState({ mode: 'normal' }); // Always reset to normal mode after any submission
+    resetFormAndState({ mode: 'normal' }); 
   }
   
   const handleCancelInvoice = () => {
@@ -660,9 +732,7 @@ export function InvoiceEditor() {
     router.push('/dashboard'); 
   };
 
-
   const previewCompanyDetails = companyDetails;
-  
   const getEditorTitle = () => {
     if (editorMode === 'debtPayment') return "Registrar Abono a Deuda";
     if (editorMode === 'creditDeposit') return "Registrar Depósito a Cuenta Cliente";
@@ -679,6 +749,7 @@ export function InvoiceEditor() {
   }
 
   const currentCustomerForActions = form.getValues("customerDetails");
+  const showOverpaymentSection = liveInvoicePreview.overpaymentAmount && liveInvoicePreview.overpaymentAmount > 0.001 && editorMode === 'normal';
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
@@ -1062,6 +1133,120 @@ export function InvoiceEditor() {
               </CardContent>
             </Card>
 
+            {showOverpaymentSection && (
+                 <Card>
+                    <CardHeader>
+                        <CardTitle className="text-xl flex items-center text-primary">
+                            <WalletCards className="mr-2 h-5 w-5" />
+                            Manejo de Sobrepago ({formatCurrency(liveInvoicePreview.overpaymentAmount)})
+                        </CardTitle>
+                        <CardDescription>El cliente ha pagado de más. Seleccione cómo proceder con el excedente.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <FormField
+                            control={form.control}
+                            name="overpaymentHandlingChoice"
+                            render={({ field }) => (
+                                <FormItem className="space-y-3">
+                                <FormLabel>¿Qué hacer con el monto excedente de {formatCurrency(liveInvoicePreview.overpaymentAmount)}?</FormLabel>
+                                <FormControl>
+                                    <RadioGroup
+                                    onValueChange={field.onChange}
+                                    defaultValue={field.value}
+                                    className="flex flex-col space-y-1"
+                                    >
+                                    <FormItem className="flex items-center space-x-3 space-y-0">
+                                        <FormControl>
+                                        <RadioGroupItem value="creditToAccount" />
+                                        </FormControl>
+                                        <FormLabel className="font-normal">
+                                        Abonar a Saldo a Favor del Cliente
+                                        </FormLabel>
+                                    </FormItem>
+                                    <FormItem className="flex items-center space-x-3 space-y-0">
+                                        <FormControl>
+                                        <RadioGroupItem value="refundNow" />
+                                        </FormControl>
+                                        <FormLabel className="font-normal">
+                                        Procesar Vuelto/Reembolso Ahora
+                                        </FormLabel>
+                                    </FormItem>
+                                    </RadioGroup>
+                                </FormControl>
+                                <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+
+                        {form.watch("overpaymentHandlingChoice") === 'refundNow' && (
+                            <div className="space-y-4 pt-4 border-t">
+                                <h3 className="text-md font-semibold text-muted-foreground">Detalles del Vuelto/Reembolso:</h3>
+                                {changePaymentFields.map((field, index) => (
+                                    <div key={field.id} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_auto] gap-3 items-end p-3 border rounded-md bg-muted/30">
+                                        <FormField
+                                            control={form.control}
+                                            name={`changeRefundPaymentMethods.${index}.method`}
+                                            render={({ field: f }) => (
+                                                <FormItem>
+                                                    <FormLabel>Método de Vuelto</FormLabel>
+                                                    <Select onValueChange={f.onChange} defaultValue={f.value}>
+                                                        <FormControl><SelectTrigger><SelectValue placeholder="Seleccione método" /></SelectTrigger></FormControl>
+                                                        <SelectContent>
+                                                            <SelectItem value="Efectivo">Efectivo</SelectItem>
+                                                            <SelectItem value="Transferencia">Transferencia</SelectItem>
+                                                            <SelectItem value="Pago Móvil">Pago Móvil</SelectItem>
+                                                            <SelectItem value="Otro">Otro</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                        <FormField
+                                            control={form.control}
+                                            name={`changeRefundPaymentMethods.${index}.amount`}
+                                            render={({ field: f }) => (
+                                                <FormItem>
+                                                    <FormLabel>Monto Vuelto ({CURRENCY_SYMBOL})</FormLabel>
+                                                    <FormControl>
+                                                        <Input 
+                                                            {...f}
+                                                            value={f.value === 0 ? '' : f.value}
+                                                            onChange={e => f.onChange(parseFloat(e.target.value) || 0)}
+                                                            type="number" step="0.01" placeholder="0.00" 
+                                                        />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                        <FormField
+                                            control={form.control}
+                                            name={`changeRefundPaymentMethods.${index}.reference`}
+                                            render={({ field: f }) => (
+                                                <FormItem>
+                                                    <FormLabel>Referencia Vuelto (Opc.)</FormLabel>
+                                                    <FormControl><Input {...f} placeholder="Nro. de confirmación" /></FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                        <Button type="button" variant="ghost" size="icon" onClick={() => removeChangePayment(index)} className="text-destructive hover:text-destructive/80" disabled={changePaymentFields.length <=1}>
+                                            <Trash2 className="h-5 w-5" />
+                                        </Button>
+                                    </div>
+                                ))}
+                                <Button type="button" variant="outline" size="sm" onClick={() => appendChangePayment({ method: "Efectivo", amount: 0, reference: "" })}>
+                                    <PlusCircle className="mr-2 h-4 w-4" /> Añadir Método de Vuelto
+                                </Button>
+                                 <FormMessage>{form.formState.errors.changeRefundPaymentMethods && typeof form.formState.errors.changeRefundPaymentMethods === 'string' && (form.formState.errors.changeRefundPaymentMethods as any)?.message}</FormMessage>
+                                 <FormMessage>{form.formState.errors.changeRefundPaymentMethods && Array.isArray(form.formState.errors.changeRefundPaymentMethods) && (form.formState.errors.changeRefundPaymentMethods as any)?.message}</FormMessage>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
+
             <Card>
               <CardHeader>
                   <CardTitle className="text-xl flex items-center text-primary"><Settings className="mr-2 h-5 w-5" />Configuración Adicional</CardTitle>
@@ -1151,7 +1336,7 @@ export function InvoiceEditor() {
         </Form>
       </form>
       
-      <div className="lg:col-span-1 space-y-4 sticky top-20"> {/* This div is the container for the preview card */}
+      <div className="lg:col-span-1 space-y-4 sticky top-20"> 
         <Card className="shadow-md no-print" data-invoice-preview-header>
           <CardHeader>
             <CardTitle className="text-xl flex items-center text-primary">
@@ -1166,4 +1351,3 @@ export function InvoiceEditor() {
     </div>
   );
 }
-
