@@ -48,9 +48,9 @@ const suggestedPalettes: ColorPalette[] = [
   },
   {
     name: "Tema Amarillo",
-    primary: "45 70% 45%", // Darker Yellow L=45%
-    background: "0 0% 98%", // Very Light Background
-    accent: "60 90% 70%", // Light Yellow L=70%
+    primary: "45 70% 45%", 
+    background: "0 0% 98%", 
+    accent: "60 90% 70%", 
   },
   {
     name: "Tema Morado",
@@ -89,16 +89,15 @@ interface BackupData {
 }
 
 const getLightnessFromHslString = (hslString: string): number => {
-  if (!hslString || typeof hslString !== 'string') return 50; // Default if invalid
+  if (!hslString || typeof hslString !== 'string') return 50; 
   const parts = hslString.trim().split(" ");
   if (parts.length >= 3 && parts[2].endsWith('%')) {
     try {
       return parseFloat(parts[2].slice(0, -1));
     } catch (e) {
-      return 50; // Default on parsing error
+      return 50; 
     }
   }
-  // Attempt to parse if it's just a number like '50%'
   if (parts.length === 1 && parts[0].endsWith('%')) {
     try {
       return parseFloat(parts[0].slice(0, -1));
@@ -106,7 +105,7 @@ const getLightnessFromHslString = (hslString: string): number => {
       return 50;
     }
   }
-  return 50; // Default if format is unexpected
+  return 50; 
 };
 
 
@@ -149,22 +148,19 @@ export default function SettingsPage() {
     const accentLightness = getLightnessFromHslString(palette.accent);
     const backgroundLightness = getLightnessFromHslString(palette.background);
 
-    // Set primary foreground based on primary color's lightness
-    if (primaryLightness > 55) { // Primary is light
-      document.documentElement.style.setProperty('--primary-foreground', '0 0% 3.9%'); // Dark text
-    } else { // Primary is dark
-      document.documentElement.style.setProperty('--primary-foreground', '0 0% 98%'); // Light text
+    if (primaryLightness > 55) { 
+      document.documentElement.style.setProperty('--primary-foreground', '0 0% 3.9%'); 
+    } else { 
+      document.documentElement.style.setProperty('--primary-foreground', '0 0% 98%'); 
     }
 
-    // Set accent foreground based on accent color's lightness
-    if (accentLightness > 55) { // Accent is light
-      document.documentElement.style.setProperty('--accent-foreground', '0 0% 3.9%'); // Dark text
-    } else { // Accent is dark
-      document.documentElement.style.setProperty('--accent-foreground', '0 0% 98%'); // Light text
+    if (accentLightness > 55) { 
+      document.documentElement.style.setProperty('--accent-foreground', '0 0% 3.9%'); 
+    } else { 
+      document.documentElement.style.setProperty('--accent-foreground', '0 0% 98%'); 
     }
     
-    // Set general foregrounds based on main background lightness
-    if (backgroundLightness > 50) { // Light page background
+    if (backgroundLightness > 50) { 
         document.documentElement.style.setProperty('--foreground', '0 0% 3.9%'); 
         document.documentElement.style.setProperty('--card', '0 0% 100%');
         document.documentElement.style.setProperty('--card-foreground', '0 0% 3.9%');
@@ -173,7 +169,7 @@ export default function SettingsPage() {
         document.documentElement.style.setProperty('--secondary-foreground', '0 0% 9%');
         document.documentElement.style.setProperty('--muted-foreground', '0 0% 45.1%');
 
-    } else { // Dark page background
+    } else { 
         document.documentElement.style.setProperty('--foreground', '0 0% 98%'); 
         document.documentElement.style.setProperty('--card', '0 0% 10%'); 
         document.documentElement.style.setProperty('--card-foreground', '0 0% 98%');
@@ -503,9 +499,9 @@ export default function SettingsPage() {
             <div>
               <h3 className="font-semibold text-foreground mb-2">Colores Actuales del Tema ({activeThemeName || "Desconocido"}):</h3>
               <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground ml-4">
-                <li><strong>Primario:</strong> <code>{currentDisplayColors.primary}</code> (Texto en botón: <code style={{color: `hsl(${getLightnessFromHslString(currentDisplayColors.primary) > 55 ? 'var(--foreground)' : 'var(--primary-foreground)'})`}}>{getLightnessFromHslString(currentDisplayColors.primary) > 55 ? 'Oscuro' : 'Claro'}</code>)</li>
+                <li><strong>Primario:</strong> <code>{currentDisplayColors.primary}</code> (Texto en botón: <code>{getLightnessFromHslString(currentDisplayColors.primary) > 55 ? 'Oscuro' : 'Claro'}</code>)</li>
                 <li><strong>Fondo:</strong> <code>{currentDisplayColors.background}</code></li>
-                <li><strong>Acento:</strong> <code>{currentDisplayColors.accent}</code> (Texto en botón: <code style={{color: `hsl(${getLightnessFromHslString(currentDisplayColors.accent) > 55 ? 'var(--foreground)' : 'var(--primary-foreground)'})`}}>{getLightnessFromHslString(currentDisplayColors.accent) > 55 ? 'Oscuro' : 'Claro'}</code>)</li>
+                <li><strong>Acento:</strong> <code>{currentDisplayColors.accent}</code> (Texto en botón: <code>{getLightnessFromHslString(currentDisplayColors.accent) > 55 ? 'Oscuro' : 'Claro'}</code>)</li>
               </ul>
             </div>
           )}
@@ -522,49 +518,56 @@ export default function SettingsPage() {
           <div>
             <h3 className="font-semibold text-foreground mt-6 mb-4 text-lg">Paletas de Colores Disponibles:</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {suggestedPalettes.map((palette) => (
-                <Card key={palette.name} className={`shadow-md hover:shadow-lg transition-shadow relative overflow-hidden ${activeThemeName === palette.name ? 'border-2 border-primary ring-2 ring-primary' : 'border'}`}>
-                  {activeThemeName === palette.name && (
-                    <div className="absolute top-2 right-2 bg-primary text-primary-foreground p-1 rounded-full z-10">
-                      <CheckCircle className="h-5 w-5" />
-                    </div>
-                  )}
-                  <CardHeader>
-                    <CardTitle className="text-lg" style={{ color: `hsl(${palette.primary})`}}>{palette.name}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3 text-sm">
-                    <div className="flex items-center">
-                      <div className="inline-block w-5 h-5 rounded-sm mr-2 border" style={{ backgroundColor: `hsl(${palette.primary})` }} />
-                      <div>
-                        <span className="font-semibold">Primario:</span>
-                        <code className="ml-1 text-xs bg-muted p-1 rounded">{palette.primary}</code>
+              {suggestedPalettes.map((palette) => {
+                const palettePrimaryLightness = getLightnessFromHslString(palette.primary);
+                // Use default foreground if palette primary is too light for text on card background
+                const titleColor = palettePrimaryLightness > 65 && getLightnessFromHslString(currentDisplayColors?.card || '0 0% 100%') > 50 
+                                   ? 'hsl(var(--card-foreground))' 
+                                   : `hsl(${palette.primary})`;
+                return (
+                  <Card key={palette.name} className={`shadow-md hover:shadow-lg transition-shadow relative overflow-hidden ${activeThemeName === palette.name ? 'border-2 border-primary ring-2 ring-primary' : 'border'}`}>
+                    {activeThemeName === palette.name && (
+                      <div className="absolute top-2 right-2 bg-primary text-primary-foreground p-1 rounded-full z-10">
+                        <CheckCircle className="h-5 w-5" />
                       </div>
-                    </div>
-                    <div className="flex items-center">
-                      <div className="inline-block w-5 h-5 rounded-sm mr-2 border" style={{ backgroundColor: `hsl(${palette.background})` }} />
-                      <div>
-                        <span className="font-semibold">Fondo:</span>
-                        <code className="ml-1 text-xs bg-muted p-1 rounded">{palette.background}</code>
+                    )}
+                    <CardHeader>
+                      <CardTitle className="text-lg" style={{ color: titleColor }}>{palette.name}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3 text-sm">
+                      <div className="flex items-center">
+                        <div className="inline-block w-5 h-5 rounded-sm mr-2 border" style={{ backgroundColor: `hsl(${palette.primary})` }} />
+                        <div>
+                          <span className="font-semibold">Primario:</span>
+                          <code className="ml-1 text-xs bg-muted p-1 rounded">{palette.primary}</code>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center">
-                      <div className="inline-block w-5 h-5 rounded-sm mr-2 border" style={{ backgroundColor: `hsl(${palette.accent})` }} />
-                      <div>
-                        <span className="font-semibold">Acento:</span>
-                        <code className="ml-1 text-xs bg-muted p-1 rounded">{palette.accent}</code>
+                      <div className="flex items-center">
+                        <div className="inline-block w-5 h-5 rounded-sm mr-2 border" style={{ backgroundColor: `hsl(${palette.background})` }} />
+                        <div>
+                          <span className="font-semibold">Fondo:</span>
+                          <code className="ml-1 text-xs bg-muted p-1 rounded">{palette.background}</code>
+                        </div>
                       </div>
-                    </div>
-                    <Button 
-                      onClick={() => handleThemeSelect(palette)} 
-                      variant="outline" 
-                      className="w-full mt-4"
-                      disabled={activeThemeName === palette.name}
-                    >
-                      {activeThemeName === palette.name ? "Tema Activo" : "Aplicar Tema"}
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
+                      <div className="flex items-center">
+                        <div className="inline-block w-5 h-5 rounded-sm mr-2 border" style={{ backgroundColor: `hsl(${palette.accent})` }} />
+                        <div>
+                          <span className="font-semibold">Acento:</span>
+                          <code className="ml-1 text-xs bg-muted p-1 rounded">{palette.accent}</code>
+                        </div>
+                      </div>
+                      <Button 
+                        onClick={() => handleThemeSelect(palette)} 
+                        variant="outline" 
+                        className="w-full mt-4"
+                        disabled={activeThemeName === palette.name}
+                      >
+                        {activeThemeName === palette.name ? "Tema Activo" : "Aplicar Tema"}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           </div>
         </CardContent>
@@ -856,7 +859,7 @@ export default function SettingsPage() {
           </div>
           <div className="flex justify-between">
             <span className="font-semibold text-foreground">Versión:</span>
-            <span className="text-muted-foreground">1.5.0 (Gestión de Datos Mejorada, Temas Dinámicos)</span>
+            <span className="text-muted-foreground">1.5.0 (Gestión de Datos Mejorada, Temas Dinámicos y Contraste)</span>
           </div>
           <div className="flex justify-between">
             <span className="font-semibold text-foreground">Desarrollado con:</span>
