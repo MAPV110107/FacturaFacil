@@ -27,6 +27,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Form, FormField, FormItem, FormControl, FormLabel, FormMessage } from "@/components/ui/form";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { cn } from "@/lib/utils";
 
 type InvoiceFormData = z.infer<typeof invoiceFormSchema>;
 
@@ -681,9 +682,8 @@ export function InvoiceEditor() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-      <div className="lg:col-span-2 no-print">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="lg:col-span-2 space-y-8 no-print">
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
             <Card>
               <CardHeader>
                 <CardTitle className="text-xl flex items-center text-primary">
@@ -1148,9 +1148,8 @@ export function InvoiceEditor() {
                   </Button>
               </CardFooter>
             </Card>
-          </form>
         </Form>
-      </div>
+      </form>
       
       <div className="lg:col-span-1 space-y-4 sticky top-20">
         <Card className="shadow-md no-print" data-invoice-preview-header>
