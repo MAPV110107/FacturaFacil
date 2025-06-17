@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Trash2, UserRoundPlus, Users, Edit, DollarSign, Gift } from "lucide-react"; 
+import { Trash2, UserRoundPlus, Users, Edit, DollarSign, Gift, Eye } from "lucide-react"; 
 import {
   AlertDialog,
   AlertDialogAction,
@@ -135,7 +135,11 @@ export function CustomerListView() {
               <TableBody>
                 {filteredCustomers.map((customer) => (
                   <TableRow key={customer.id}>
-                    <TableCell className="font-medium">{customer.name}</TableCell>
+                    <TableCell className="font-medium">
+                      <Link href={`/customers/${customer.id}`} className="hover:underline text-primary">
+                        {customer.name}
+                      </Link>
+                    </TableCell>
                     <TableCell>{customer.rif}</TableCell>
                     <TableCell className="hidden md:table-cell truncate max-w-xs" title={customer.address}>{customer.address}</TableCell>
                     <TableCell className={cn("text-right", (customer.outstandingBalance ?? 0) > 0 ? "text-destructive font-semibold" : "text-muted-foreground")}>
@@ -163,11 +167,17 @@ export function CustomerListView() {
                       )}
                     </TableCell>
                     <TableCell className="text-right space-x-1">
+                      <Button asChild variant="ghost" size="icon" className="text-primary hover:text-primary/80 h-8 w-8 p-0" title="Ver Resumen Cliente">
+                        <Link href={`/customers/${customer.id}`}>
+                            <Eye className="h-4 w-4" />
+                            <span className="sr-only">Ver Resumen</span>
+                        </Link>
+                      </Button>
                       <CustomerDialog
                         customer={customer}
                         onSave={handleSaveCustomer}
                         triggerButton={
-                           <Button variant="ghost" size="icon" className="text-primary hover:text-primary/80 h-8 w-8 p-0">
+                           <Button variant="ghost" size="icon" className="text-primary hover:text-primary/80 h-8 w-8 p-0" title="Editar Cliente">
                             <Edit className="h-4 w-4" />
                             <span className="sr-only">Editar</span>
                           </Button>
@@ -175,7 +185,7 @@ export function CustomerListView() {
                       />
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive/80 h-8 w-8 p-0">
+                          <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive/80 h-8 w-8 p-0" title="Eliminar Cliente">
                             <Trash2 className="h-4 w-4" />
                             <span className="sr-only">Eliminar</span>
                           </Button>
@@ -225,3 +235,4 @@ const Input = React.forwardRef<
   );
 });
 Input.displayName = "Input";
+
