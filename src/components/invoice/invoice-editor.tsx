@@ -21,7 +21,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { InvoicePreview } from "./invoice-preview";
 import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, Trash2, Users, FileText, DollarSign, Settings, Receipt, CalendarDays, Info, Save, Percent, Search, Ban, ArrowRight, HandCoins, PiggyBank } from "lucide-react";
+import { PlusCircle, Trash2, Users, FileText, DollarSign, Settings, Receipt, CalendarDays, Info, Save, Percent, Search, Ban, ArrowRight, HandCoins, PiggyBank, XCircle } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Form, FormField, FormItem, FormControl, FormLabel, FormMessage } from "@/components/ui/form";
@@ -271,11 +271,18 @@ export function InvoiceEditor() {
   }, []);
 
   useEffect(() => {
-    if (!isClient ) return; 
-    
-    if (customers.length === 0 && (searchParams.get('debtPayment') || searchParams.get('customerId'))) {
-        // Customers not loaded yet, but URL params suggest we might need them.
-        // Wait for customers to load (next effect run).
+    if (!isClient || customers.length === 0) { 
+        // Wait for client-side hydration and customers to be loaded
+        // This check is crucial if URL params depend on the customers list
+        const customerIdParam = searchParams.get('customerId');
+        if (customerIdParam && editorMode === 'normal' && !form.getValues('invoiceNumber')) {
+            // If there's a customerId in URL and form is pristine, it's likely we are waiting for customers.
+            // Do nothing this run, let the next run (once customers are loaded) handle it.
+            return;
+        }
+        if (!customerIdParam && !form.getValues('invoiceNumber')) {
+             resetFormAndState({ mode: 'normal' }); // Ensure initial reset if no params and form pristine
+        }
         return;
     }
 
@@ -298,13 +305,12 @@ export function InvoiceEditor() {
         } else {
             toast({ variant: "destructive", title: "Cliente no encontrado", description: "No se pudo encontrar el cliente para el pago de deuda." });
             if (pathname === '/invoice/new') router.replace('/invoice/new', { scroll: false });
-            resetFormAndState({ mode: 'normal' });
+            resetFormAndState({ mode: 'normal' }); // Reset to normal if customer not found
         }
         return; 
     }
     
-    // If no params for special mode, and form isn't initialized, reset to normal.
-    // This check ensures we only do this once on initial load or if explicitly reset.
+    // Fallback to ensure reset if no params and form isn't initialized or in a special mode without cause
     if (!debtPaymentParam && editorMode === 'normal' && !form.getValues('invoiceNumber') && !selectedCustomerIdForDropdown) {
         resetFormAndState({ mode: 'normal' });
     }
@@ -637,6 +643,17 @@ export function InvoiceEditor() {
     
     resetFormAndState({ mode: 'normal' }); // Always reset to normal mode after any submission
   }
+  
+  const handleCancelInvoice = () => {
+    // Potentially add a confirmation dialog here if form is dirty
+    resetFormAndState({ mode: 'normal' });
+    toast({
+        title: "Creación Cancelada",
+        description: "El documento ha sido descartado.",
+    });
+    router.push('/dashboard'); // Or back to previous page
+  };
+
 
   const previewCompanyDetails = companyDetails;
   
@@ -911,12 +928,12 @@ export function InvoiceEditor() {
                         <FormControl>
                           <Input 
                             {...f} 
-                            value={(editorMode === 'creditDeposit' || (editorMode === 'debtPayment' && f.value === 0)) ? '' : (f.value === 0 ? '' : f.value)}
+                            value={(editorMode === 'creditDeposit' && f.value === 0) ? '' : (f.value === 0 ? '' : f.value)}
                             onChange={e => f.onChange(parseFloat(e.target.value) || 0)}
                             type="number" 
                             step="0.01" 
                             placeholder="0.00" 
-                            readOnly={editorMode === 'debtPayment' || editorMode === 'creditDeposit'}
+                            readOnly={editorMode === 'debtPayment' || (editorMode === 'creditDeposit' && f.name === `items.${index}.unitPrice`)}
                           />
                         </FormControl> 
                         <FormMessage />
@@ -1113,12 +1130,15 @@ export function InvoiceEditor() {
                     )}
                 />
             </CardContent>
-             <CardFooter className="flex-col items-stretch gap-3">
-                <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+             <CardFooter className="flex-col sm:flex-row items-stretch gap-3">
+                <Button type="submit" className="w-full sm:flex-1 bg-primary hover:bg-primary/90 text-primary-foreground">
                     <Save className="mr-2 h-4 w-4" /> 
                     {editorMode === 'debtPayment' && "Guardar Abono a Deuda"}
                     {editorMode === 'creditDeposit' && "Guardar Depósito a Cuenta"}
                     {editorMode === 'normal' && "Guardar y Generar Factura"}
+                </Button>
+                <Button type="button" variant="outline" onClick={handleCancelInvoice} className="w-full sm:w-auto">
+                    <XCircle className="mr-2 h-4 w-4" /> Cancelar Documento
                 </Button>
             </CardFooter>
           </Card>
@@ -1140,4 +1160,3 @@ export function InvoiceEditor() {
     </div>
   );
 }
-

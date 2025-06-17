@@ -1,3 +1,4 @@
+
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -20,7 +21,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Save } from "lucide-react";
+import { Save, XCircle } from "lucide-react";
+import React from "react";
 
 const defaultCompanyDetails: CompanyDetails = {
   id: DEFAULT_COMPANY_ID,
@@ -42,14 +44,28 @@ export function CompanySettingsForm() {
   const form = useForm<z.infer<typeof companyDetailsSchema>>({
     resolver: zodResolver(companyDetailsSchema),
     defaultValues: companyDetails || defaultCompanyDetails,
-    values: companyDetails || defaultCompanyDetails, // ensure form updates if localStorage changes
   });
+
+  React.useEffect(() => {
+    // Ensure form is reset if companyDetails from localStorage changes (e.g., initial load)
+    form.reset(companyDetails || defaultCompanyDetails);
+  }, [companyDetails, form]);
+
 
   function onSubmit(values: z.infer<typeof companyDetailsSchema>) {
     setCompanyDetails({ ...companyDetails, ...values, id: DEFAULT_COMPANY_ID });
     toast({
       title: "Guardado",
       description: "La información de la empresa ha sido actualizada.",
+    });
+  }
+
+  function handleCancel() {
+    form.reset(companyDetails || defaultCompanyDetails); // Reset to last saved/loaded values
+    toast({
+      title: "Cancelado",
+      description: "Los cambios no guardados han sido descartados.",
+      variant: "default",
     });
   }
 
@@ -152,9 +168,14 @@ export function CompanySettingsForm() {
                   </FormItem>
                 )}
               />
-            <Button type="submit" className="w-full md:w-auto bg-primary hover:bg-primary/90 text-primary-foreground">
-              <Save className="mr-2 h-4 w-4" /> Guardar Cambios
-            </Button>
+            <div className="flex flex-col sm:flex-row gap-2 mt-4">
+              <Button type="submit" className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground">
+                <Save className="mr-2 h-4 w-4" /> Guardar Cambios
+              </Button>
+              <Button type="button" variant="outline" onClick={handleCancel} className="w-full sm:w-auto">
+                <XCircle className="mr-2 h-4 w-4" /> Cancelar
+              </Button>
+            </div>
           </form>
         </Form>
       </CardContent>
