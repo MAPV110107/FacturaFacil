@@ -6,7 +6,7 @@ import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
 import { v4 as uuidv4 } from "uuid";
-import { useRouter, useSearchParams, usePathname } from 'next/navigation'; // Added usePathname
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 
 import useLocalStorage from "@/hooks/use-local-storage";
 import type { Invoice, CompanyDetails, CustomerDetails, InvoiceItem, PaymentDetails } from "@/lib/types";
@@ -44,6 +44,11 @@ const debounce = <F extends (...args: any[]) => any>(func: F, waitFor: number) =
 
 type EditorMode = 'normal' | 'debtPayment' | 'creditDeposit';
 
+const formatCurrency = (amount: number | undefined | null) => {
+  if (amount === undefined || amount === null) return `${CURRENCY_SYMBOL}0.00`;
+  return `${CURRENCY_SYMBOL}${amount.toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,')}`;
+};
+
 export function InvoiceEditor() {
   const [companyDetails] = useLocalStorage<CompanyDetails>("companyDetails", defaultCompany);
   const [customers, setCustomers] = useLocalStorage<CustomerDetails[]>("customers", []);
@@ -62,6 +67,7 @@ export function InvoiceEditor() {
   const [customerSearchMessage, setCustomerSearchMessage] = useState<string | null>(null);
   const [showNewCustomerFields, setShowNewCustomerFields] = useState(false);
   const [selectedCustomerIdForDropdown, setSelectedCustomerIdForDropdown] = useState<string | undefined>(undefined);
+  const [selectedCustomerAvailableCredit, setSelectedCustomerAvailableCredit] = useState(0);
 
   const initialLivePreviewState: Partial<Invoice> = {
     id: '', 
@@ -138,15 +144,22 @@ export function InvoiceEditor() {
     let formTaxRate = TAX_RATE;
     let formIsDebtPayment = false;
     let formIsCreditDeposit = false;
+    let currentCustomerCredit = 0;
 
     const targetCustomer = customers.find(c => c.id === customerId);
+
+    if (targetCustomer) {
+        currentCustomerCredit = targetCustomer.creditBalance || 0;
+    }
+    setSelectedCustomerAvailableCredit(currentCustomerCredit);
+
 
     if (mode === 'debtPayment' && targetCustomer && amount > 0) {
       initialCustomerState = { ...targetCustomer };
       initialInvoiceNumber = `PAGO-${Date.now().toString().slice(-6)}`;
       initialItemsArr = [{ id: uuidv4(), description: "Abono a Deuda Pendiente", quantity: 1, unitPrice: amount }];
       thankYouMsg = "Gracias por su abono.";
-      notesMsg = `Abono a deuda pendiente por ${CURRENCY_SYMBOL}${amount.toFixed(2)}`;
+      notesMsg = `Abono a deuda pendiente por ${formatCurrency(amount)}`;
       formTaxRate = 0;
       formIsDebtPayment = true;
       setSelectedCustomerIdForDropdown(targetCustomer.id);
@@ -165,14 +178,22 @@ export function InvoiceEditor() {
       setCustomerRifInput(targetCustomer.rif);
       setCustomerSearchMessage(`Registrando depósito para: ${targetCustomer.name}`);
       setShowNewCustomerFields(false);
-    } else { // Normal mode or invalid params for special modes
-      if (mode !== 'normal') { // If tried to enter special mode but failed (e.g. no customer)
+    } else { 
+      if (mode !== 'normal') { 
         toast({ variant: "destructive", title: "Acción no completada", description: "Debe seleccionar un cliente primero."});
       }
       setCustomerRifInput("");
       setShowNewCustomerFields(false);
       setCustomerSearchMessage(null);
       setSelectedCustomerIdForDropdown(undefined);
+      if (targetCustomer) { // if resetting to normal with a customer selected
+        initialCustomerState = {...targetCustomer};
+        setSelectedCustomerIdForDropdown(targetCustomer.id);
+        setCustomerRifInput(targetCustomer.rif);
+        setCustomerSearchMessage(`Cliente: ${targetCustomer.name}`);
+      } else {
+        setSelectedCustomerAvailableCredit(0);
+      }
     }
     
     setEditorMode(mode);
@@ -232,7 +253,7 @@ export function InvoiceEditor() {
       isDebtPayment: !!formValuesToReset.isDebtPayment,
       isCreditDeposit: !!formValuesToReset.isCreditDeposit,
     });
-    // Clear URL params if we entered a mode via button or are resetting to normal
+    
     if (pathname === '/invoice/new' && searchParams.toString() !== "") {
       router.replace('/invoice/new', { scroll: false });
     }
@@ -255,14 +276,14 @@ export function InvoiceEditor() {
         resetFormAndState({ mode: 'normal' });
       }
     }
-  }, [isClient, searchParams, resetFormAndState, customers, editorMode, form]); // Added editorMode and form
+  }, [isClient, searchParams, resetFormAndState, customers, editorMode, form]); 
 
-  const { fields: itemFields, append: appendItem, remove: removeItem, update: updateItem } = useFieldArray({
+  const { fields: itemFields, append: appendItem, remove: removeItem } = useFieldArray({
     control: form.control,
     name: "items",
   });
 
-  const { fields: paymentFields, append: appendPayment, remove: removePayment } = useFieldArray({
+  const { fields: paymentFields, append: appendPayment, remove: removePayment, update: updatePayment } = useFieldArray({
     control: form.control,
     name: "paymentMethods",
   });
@@ -323,6 +344,7 @@ export function InvoiceEditor() {
       setShowNewCustomerFields(false);
       form.reset({ ...form.getValues(), customerDetails: { ...defaultCustomer, rif: "" } });
       setSelectedCustomerIdForDropdown(undefined);
+      setSelectedCustomerAvailableCredit(0);
       return;
     }
     setIsSearchingCustomer(true);
@@ -347,6 +369,7 @@ export function InvoiceEditor() {
       setCustomerSearchMessage(`Cliente encontrado: ${foundCustomer.name}`);
       setShowNewCustomerFields(false);
       setSelectedCustomerIdForDropdown(foundCustomer.id);
+      setSelectedCustomerAvailableCredit(foundCustomer.creditBalance || 0);
     } else {
       form.setValue("customerDetails.id", ""); 
       form.setValue("customerDetails.name", "");
@@ -357,6 +380,7 @@ export function InvoiceEditor() {
       setCustomerSearchMessage("Cliente no encontrado. Complete los datos para registrarlo.");
       setShowNewCustomerFields(true);
       setSelectedCustomerIdForDropdown(undefined);
+      setSelectedCustomerAvailableCredit(0);
     }
     setIsSearchingCustomer(false);
   };
@@ -373,6 +397,7 @@ export function InvoiceEditor() {
       setCustomerRifInput(customer.rif); 
       setShowNewCustomerFields(false); 
       setCustomerSearchMessage(`Cliente seleccionado: ${customer.name}`);
+      setSelectedCustomerAvailableCredit(customer.creditBalance || 0);
     } else {
       const currentFormValues = form.getValues();
       form.reset({ 
@@ -382,6 +407,27 @@ export function InvoiceEditor() {
       setCustomerRifInput("");
       setShowNewCustomerFields(true);
       setCustomerSearchMessage("Ingrese los datos para un nuevo cliente o busque por RIF.");
+      setSelectedCustomerAvailableCredit(0);
+    }
+  };
+
+  const handlePaymentMethodChange = (index: number, newMethod: string) => {
+    const paymentMethods = form.getValues("paymentMethods");
+    const currentPayment = paymentMethods[index];
+    
+    updatePayment(index, { ...currentPayment, method: newMethod });
+
+    if (newMethod === "Saldo a Favor" && editorMode === 'normal' && selectedCustomerAvailableCredit > 0) {
+        const invoiceTotal = liveInvoicePreview.totalAmount || 0;
+        let otherPaymentsTotal = 0;
+        paymentMethods.forEach((pm, i) => {
+            if (i !== index) { // Exclude the current line being changed
+                otherPaymentsTotal += pm.amount || 0;
+            }
+        });
+        const amountDueOnInvoice = Math.max(0, invoiceTotal - otherPaymentsTotal);
+        const amountToApplyFromCredit = Math.min(selectedCustomerAvailableCredit, amountDueOnInvoice);
+        updatePayment(index, { ...currentPayment, method: newMethod, amount: amountToApplyFromCredit });
     }
   };
 
@@ -435,6 +481,31 @@ export function InvoiceEditor() {
         return;
     }
 
+    // Validation for "Saldo a Favor" usage
+    let totalCreditUsedInTransaction = 0;
+    let creditUsageError = false;
+    if (editorMode === 'normal') {
+        data.paymentMethods.forEach((pm, index) => {
+            if (pm.method === "Saldo a Favor") {
+                if (pm.amount < 0) {
+                     form.setError(`paymentMethods.${index}.amount`, { type: "manual", message: `Monto de saldo a favor no puede ser negativo.`});
+                     creditUsageError = true;
+                }
+                if (pm.amount > selectedCustomerAvailableCredit) {
+                    form.setError(`paymentMethods.${index}.amount`, { type: "manual", message: `No puede usar más de ${formatCurrency(selectedCustomerAvailableCredit)} de saldo.`});
+                    creditUsageError = true;
+                }
+                totalCreditUsedInTransaction += pm.amount;
+            }
+        });
+        if (totalCreditUsedInTransaction > selectedCustomerAvailableCredit) {
+             toast({ variant: "destructive", title: "Error de Saldo a Favor", description: `El total de saldo a favor utilizado (${formatCurrency(totalCreditUsedInTransaction)}) excede el disponible (${formatCurrency(selectedCustomerAvailableCredit)}).` });
+             creditUsageError = true;
+        }
+        if (creditUsageError) return;
+    }
+
+
     const finalItems = data.items.map(item => ({
       ...item,
       totalPrice: item.quantity * item.unitPrice,
@@ -483,38 +554,38 @@ export function InvoiceEditor() {
         StoredCustomer.outstandingBalance = StoredCustomer.outstandingBalance || 0;
         StoredCustomer.creditBalance = StoredCustomer.creditBalance || 0;
 
+        if (totalCreditUsedInTransaction > 0 && editorMode === 'normal') {
+            StoredCustomer.creditBalance -= totalCreditUsedInTransaction;
+        }
+
         if (editorMode === 'debtPayment') {
             StoredCustomer.outstandingBalance = Math.max(0, StoredCustomer.outstandingBalance - amountPaid);
         } else if (editorMode === 'creditDeposit') {
             StoredCustomer.creditBalance += amountPaid;
-        } else { // Normal invoice
+        } else { // Normal invoice (after credit deduction if any)
             if (amountDue > 0) {
                 StoredCustomer.outstandingBalance += amountDue;
-            } else if (amountDue < 0) { // Overpayment in normal invoice
+            } else if (amountDue < 0) { 
                 StoredCustomer.creditBalance += Math.abs(amountDue);
             }
         }
         currentCustomersList[customerIndex] = StoredCustomer;
-        setCustomers(currentCustomersList);
-    } else if (!customerWasModified && customerToSaveOnInvoice.id) {
-        const existingCustomerIndexGlobal = customers.findIndex(c => c.id === customerToSaveOnInvoice.id);
-        if(existingCustomerIndexGlobal !== -1) {
-            const StoredCustomer = {...customers[existingCustomerIndexGlobal]};
-            StoredCustomer.outstandingBalance = StoredCustomer.outstandingBalance || 0;
-            StoredCustomer.creditBalance = StoredCustomer.creditBalance || 0;
-            if (editorMode === 'debtPayment') {
-                StoredCustomer.outstandingBalance = Math.max(0, StoredCustomer.outstandingBalance - amountPaid);
-            } else if (editorMode === 'creditDeposit') {
-                 StoredCustomer.creditBalance += amountPaid;
-            } else {
-                if (amountDue > 0) StoredCustomer.outstandingBalance += amountDue;
-                else if (amountDue < 0) StoredCustomer.creditBalance += Math.abs(amountDue);
-            }
-            const updatedCustomersList = [...customers];
-            updatedCustomersList[existingCustomerIndexGlobal] = StoredCustomer;
-            setCustomers(updatedCustomersList);
+    } else if (newCustomerJustAdded) { // Handle new customer balances
+        let newCustWithBalance = {...newCustomerJustAdded};
+        newCustWithBalance.outstandingBalance = 0;
+        newCustWithBalance.creditBalance = 0;
+        // New customer cannot use credit on first transaction, so no deduction needed here
+        if (editorMode === 'creditDeposit') {
+            newCustWithBalance.creditBalance += amountPaid;
+        } else { // normal or debt payment (though debt payment for new customer is unlikely)
+             if (amountDue > 0) newCustWithBalance.outstandingBalance += amountDue;
+             else if (amountDue < 0) newCustWithBalance.creditBalance += Math.abs(amountDue);
         }
+        const newCustIndexInList = currentCustomersList.findIndex(c => c.id === newCustWithBalance.id);
+        if (newCustIndexInList !== -1) currentCustomersList[newCustIndexInList] = newCustWithBalance;
     }
+    
+    setCustomers(currentCustomersList);
     
     let toastTitle = "Factura Guardada";
     if (editorMode === 'debtPayment') toastTitle = "Abono a Deuda Registrado";
@@ -734,17 +805,17 @@ export function InvoiceEditor() {
                 <div className="pt-4 mt-4 border-t space-y-2 sm:space-y-0 sm:flex sm:gap-2">
                   {(currentCustomerForActions.outstandingBalance ?? 0) > 0 && (
                      <Button type="button" variant="outline" onClick={handleEnterDebtPaymentMode} className="w-full sm:w-auto">
-                        <HandCoins className="mr-2 h-4 w-4" /> Cobrar Deuda Pendiente ({CURRENCY_SYMBOL}{(currentCustomerForActions.outstandingBalance ?? 0).toFixed(2)})
+                        <HandCoins className="mr-2 h-4 w-4" /> Cobrar Deuda Pendiente ({formatCurrency(currentCustomerForActions.outstandingBalance ?? 0)})
                     </Button>
                   )}
                    <Button type="button" variant="outline" onClick={handleEnterCreditDepositMode} className="w-full sm:w-auto">
-                        <PiggyBank className="mr-2 h-4 w-4" /> Registrar Abono a Cuenta
+                        <PiggyBank className="mr-2 h-4 w-4" /> Registrar Depósito a Cuenta
                     </Button>
                 </div>
               )}
                {editorMode !== 'normal' && (
                  <div className="pt-4 mt-4 border-t">
-                    <Button type="button" variant="outline" onClick={() => resetFormAndState({mode: 'normal'})} className="w-full">
+                    <Button type="button" variant="outline" onClick={() => resetFormAndState({mode: 'normal', customerId: form.getValues("customerDetails.id") || undefined })} className="w-full">
                         <Ban className="mr-2 h-4 w-4" /> Cancelar Modo Especial / Nueva Factura
                     </Button>
                  </div>
@@ -790,7 +861,7 @@ export function InvoiceEditor() {
                       <FormItem>
                         <FormLabel>Precio Unit. ({CURRENCY_SYMBOL})</FormLabel>
                         <FormControl><Input {...f} type="number" step="0.01" placeholder="0.00" 
-                         onChange={e => f.onChange(parseFloat(e.target.value) || 0)} readOnly={editorMode === 'debtPayment'} /></FormControl> {/* Editable for credit deposit */}
+                         onChange={e => f.onChange(parseFloat(e.target.value) || 0)} readOnly={editorMode === 'debtPayment'} /></FormControl> 
                         <FormMessage />
                       </FormItem>
                     )}
@@ -831,7 +902,11 @@ export function InvoiceEditor() {
                             render={({ field: f }) => (
                                 <FormItem>
                                     <FormLabel>Método</FormLabel>
-                                    <Select onValueChange={f.onChange} defaultValue={f.value}>
+                                    <Select 
+                                      onValueChange={(value) => handlePaymentMethodChange(index, value)} 
+                                      value={f.value}
+                                      disabled={editorMode !== 'normal' && f.value === 'Saldo a Favor'}
+                                    >
                                       <FormControl>
                                         <SelectTrigger><SelectValue placeholder="Seleccione método" /></SelectTrigger>
                                       </FormControl>
@@ -842,6 +917,11 @@ export function InvoiceEditor() {
                                             <SelectItem value="Transferencia">Transferencia</SelectItem>
                                             <SelectItem value="Pago Móvil">Pago Móvil</SelectItem>
                                             <SelectItem value="Zelle">Zelle</SelectItem>
+                                            {selectedCustomerAvailableCredit > 0 && editorMode === 'normal' && (
+                                              <SelectItem value="Saldo a Favor">
+                                                Saldo a Favor (Disp: {formatCurrency(selectedCustomerAvailableCredit)})
+                                              </SelectItem>
+                                            )}
                                             <SelectItem value="Otro">Otro</SelectItem>
                                         </SelectContent>
                                     </Select>
@@ -856,7 +936,9 @@ export function InvoiceEditor() {
                                 <FormItem>
                                     <FormLabel>Monto ({CURRENCY_SYMBOL})</FormLabel>
                                     <FormControl><Input {...f} type="number" step="0.01" placeholder="0.00" 
-                                     onChange={e => f.onChange(parseFloat(e.target.value) || 0)} /></FormControl>
+                                     onChange={e => f.onChange(parseFloat(e.target.value) || 0)} 
+                                     readOnly={form.getValues(`paymentMethods.${index}.method`) === 'Saldo a Favor' && editorMode !== 'normal'}
+                                     /></FormControl>
                                      <FormMessage />
                                 </FormItem>
                             )}
@@ -968,3 +1050,4 @@ export function InvoiceEditor() {
     </div>
   );
 }
+
