@@ -1151,7 +1151,7 @@ export function InvoiceEditor() {
         </Form>
       </form>
       
-      <div className="lg:col-span-1 space-y-4 sticky top-20">
+      <div className="lg:col-span-1 space-y-4 sticky top-20"> {/* This div is the container for the preview card */}
         <Card className="shadow-md no-print" data-invoice-preview-header>
           <CardHeader>
             <CardTitle className="text-xl flex items-center text-primary">

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Printer } from "lucide-react";
 import { SENIAT_TEXT, CURRENCY_SYMBOL, FISCAL_PRINTER_LINE_WIDTH } from "@/lib/constants";
 import React from "react";
+import { cn } from "@/lib/utils";
 
 interface InvoicePreviewProps {
   invoice: Partial<Invoice>; 
@@ -84,7 +85,10 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
 
 
   return (
-    <Card className={`w-full max-w-md mx-auto shadow-xl print-receipt relative ${className}`} data-invoice-preview-container>
+    <Card 
+      className={cn("w-full shadow-xl relative", className)} // Removed max-w-md, print styles will control width
+      data-invoice-preview-container // This attribute is key for print styles
+    >
       {watermarkText && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 watermark-container">
           <span 
@@ -95,7 +99,7 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
           </span>
         </div>
       )}
-      <CardContent className={`p-4 receipt-font text-xs relative z-10`}>
+      <CardContent className={cn("p-4 text-xs relative z-10", "receipt-font")}> {/* Applied receipt-font here */}
         <div className="text-center mb-1">
           <p className="font-bold text-lg my-1">{SENIAT_TEXT}</p>
         </div>
