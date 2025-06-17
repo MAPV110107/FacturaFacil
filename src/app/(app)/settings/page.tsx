@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/accordion";
 import type { CompanyDetails, CustomerDetails, Invoice } from "@/lib/types";
 import { DEFAULT_COMPANY_ID } from "@/lib/types";
+import { v4 as uuidv4 } from "uuid"; // Import uuid
 
 interface ColorPalette {
   name: string;
@@ -164,7 +165,7 @@ export default function SettingsPage() {
             invoices: invoices ? JSON.parse(invoices) : [],
             exportDate: new Date().toISOString(),
             appName: "FacturaFacil",
-            version: "1.2.0", // Update version as features grow
+            version: "1.3.0", 
         };
 
         const jsonString = JSON.stringify(backupData, null, 2);
@@ -202,17 +203,18 @@ export default function SettingsPage() {
     }
 
     setIsImporting(true);
-    setImportMessages(["Procesando archivos..."]);
+    setImportMessages(["Iniciando proceso de importación y fusión..."]);
 
-    let currentCompanyDetails: CompanyDetails | null = JSON.parse(localStorage.getItem(LOCAL_STORAGE_COMPANY_KEY) || 'null');
-    let currentCustomers: CustomerDetails[] = JSON.parse(localStorage.getItem(LOCAL_STORAGE_CUSTOMERS_KEY) || '[]');
-    let currentInvoices: Invoice[] = JSON.parse(localStorage.getItem(LOCAL_STORAGE_INVOICES_KEY) || '[]');
+    // Load initial local data
+    let consolidatedCompanyDetails: CompanyDetails | null = JSON.parse(localStorage.getItem(LOCAL_STORAGE_COMPANY_KEY) || 'null');
+    let consolidatedCustomers: CustomerDetails[] = JSON.parse(localStorage.getItem(LOCAL_STORAGE_CUSTOMERS_KEY) || '[]');
+    let consolidatedInvoices: Invoice[] = JSON.parse(localStorage.getItem(LOCAL_STORAGE_INVOICES_KEY) || '[]');
     
+    let companyUpdatedThisImport = false;
     let customersAddedCount = 0;
-    let customersUpdatedCount = 0;
+    let customersMergedCount = 0;
     let invoicesAddedCount = 0;
-    let companyUpdated = false;
-    const localMessages: string[] = [];
+    const localMessages: string[] = ["Procesando archivos..."];
 
     for (const file of Array.from(files)) {
       localMessages.push(`--- Procesando archivo: ${file.name} ---`);
@@ -225,76 +227,79 @@ export default function SettingsPage() {
           continue;
         }
 
-        // Import Company Details
+        // Import Company Details (last valid one wins)
         if (data.companyDetails) {
-          if (data.companyDetails.name && data.companyDetails.rif && data.companyDetails.address) {
-            currentCompanyDetails = { ...data.companyDetails, id: DEFAULT_COMPANY_ID };
-            companyUpdated = true;
+          if (data.companyDetails.name && data.companyDetails.rif) { // Basic check for validity
+            consolidatedCompanyDetails = { ...data.companyDetails, id: DEFAULT_COMPANY_ID };
+            companyUpdatedThisImport = true;
             localMessages.push(`- Detalles de la empresa actualizados desde ${file.name}.`);
           } else {
             localMessages.push(`- Detalles de la empresa en ${file.name} incompletos, omitidos.`);
           }
         }
 
-        // Import Customers
+        // Import and Merge Customers
         if (data.customers && Array.isArray(data.customers)) {
           for (const importedCustomer of data.customers) {
-            if (!importedCustomer.id || !importedCustomer.rif || !importedCustomer.name) {
-              localMessages.push(`- Cliente sin ID, RIF o nombre en ${file.name} omitido.`);
+            if (!importedCustomer.rif || !importedCustomer.name) {
+              localMessages.push(`- Cliente sin RIF o nombre en ${file.name} omitido.`);
               continue;
             }
-            const existingByIdIndex = currentCustomers.findIndex(c => c.id === importedCustomer.id);
-            const existingByRifIndex = currentCustomers.findIndex(c => c.rif.toUpperCase() === importedCustomer.rif.toUpperCase() && c.id !== importedCustomer.id);
+            // Normalize RIF for reliable matching
+            const importedRifClean = importedCustomer.rif.toUpperCase().replace(/[^A-Z0-9]/gi, '');
+            
+            const existingCustomerIndex = consolidatedCustomers.findIndex(
+              c => c.rif.toUpperCase().replace(/[^A-Z0-9]/gi, '') === importedRifClean
+            );
 
-            if (existingByIdIndex !== -1) { // Customer exists by ID
-              currentCustomers[existingByIdIndex] = {
-                ...currentCustomers[existingByIdIndex], // Keep existing balances
-                name: importedCustomer.name,
-                rif: importedCustomer.rif,
-                address: importedCustomer.address || currentCustomers[existingByIdIndex].address,
-                phone: importedCustomer.phone || currentCustomers[existingByIdIndex].phone,
-                email: importedCustomer.email || currentCustomers[existingByIdIndex].email,
-              };
-              customersUpdatedCount++;
-              localMessages.push(`  - Cliente ID ${importedCustomer.id} (${importedCustomer.name}) actualizado.`);
-            } else if (existingByRifIndex !== -1) { // Customer exists by RIF (different ID or new ID)
-               currentCustomers[existingByRifIndex] = {
-                ...currentCustomers[existingByRifIndex], // Keep existing balances
-                id: importedCustomer.id, // Update ID to imported one if it's different but RIF matched
-                name: importedCustomer.name,
-                rif: importedCustomer.rif,
-                address: importedCustomer.address || currentCustomers[existingByRifIndex].address,
-                phone: importedCustomer.phone || currentCustomers[existingByRifIndex].phone,
-                email: importedCustomer.email || currentCustomers[existingByRifIndex].email,
-              };
-              customersUpdatedCount++;
-              localMessages.push(`  - Cliente RIF ${importedCustomer.rif} (${importedCustomer.name}) actualizado (ID fusionado/actualizado).`);
-            } else { // New customer
-              currentCustomers.push({
+            if (existingCustomerIndex !== -1) { // Customer found by RIF in consolidated list
+              const existingCustomer = consolidatedCustomers[existingCustomerIndex];
+              
+              // Update demographics
+              existingCustomer.name = importedCustomer.name || existingCustomer.name;
+              existingCustomer.address = importedCustomer.address || existingCustomer.address;
+              existingCustomer.phone = importedCustomer.phone || existingCustomer.phone;
+              existingCustomer.email = importedCustomer.email || existingCustomer.email;
+              if (importedCustomer.id && existingCustomer.id !== importedCustomer.id) {
+                 // Prefer imported ID if different, to help consolidate on one ID for this RIF
+                existingCustomer.id = importedCustomer.id;
+              }
+
+              // SUM balances
+              existingCustomer.outstandingBalance = (existingCustomer.outstandingBalance || 0) + (importedCustomer.outstandingBalance || 0);
+              existingCustomer.creditBalance = (existingCustomer.creditBalance || 0) + (importedCustomer.creditBalance || 0);
+              
+              consolidatedCustomers[existingCustomerIndex] = existingCustomer;
+              customersMergedCount++;
+              localMessages.push(`  - Cliente RIF ${importedCustomer.rif} (${importedCustomer.name}) fusionado. Balances sumados.`);
+            } else { // New customer (not found by RIF)
+              const newCustId = importedCustomer.id || uuidv4(); // Ensure an ID
+              consolidatedCustomers.push({
                 ...importedCustomer,
+                id: newCustId,
                 outstandingBalance: importedCustomer.outstandingBalance || 0,
                 creditBalance: importedCustomer.creditBalance || 0,
               });
               customersAddedCount++;
-              localMessages.push(`  - Nuevo cliente ${importedCustomer.name} añadido.`);
+              localMessages.push(`  - Nuevo cliente ${importedCustomer.name} (RIF: ${importedCustomer.rif}) añadido con sus balances.`);
             }
           }
         }
         
-        // Import Invoices
+        // Import and Merge Invoices (by ID)
         if (data.invoices && Array.isArray(data.invoices)) {
           for (const importedInvoice of data.invoices) {
             if (!importedInvoice.id || !importedInvoice.invoiceNumber) {
                localMessages.push(`- Factura sin ID o número en ${file.name} omitida.`);
               continue;
             }
-            const exists = currentInvoices.some(inv => inv.id === importedInvoice.id);
+            const exists = consolidatedInvoices.some(inv => inv.id === importedInvoice.id);
             if (!exists) {
-              currentInvoices.push(importedInvoice);
+              consolidatedInvoices.push(importedInvoice);
               invoicesAddedCount++;
-              localMessages.push(`  - Factura Nro. ${importedInvoice.invoiceNumber} añadida.`);
+              localMessages.push(`  - Factura Nro. ${importedInvoice.invoiceNumber} (ID: ${importedInvoice.id}) añadida.`);
             } else {
-              localMessages.push(`  - Factura Nro. ${importedInvoice.invoiceNumber} (ID: ${importedInvoice.id}) ya existe, omitida.`);
+              localMessages.push(`  - Factura Nro. ${importedInvoice.invoiceNumber} (ID: ${importedInvoice.id}) ya existe, omitida para evitar duplicados.`);
             }
           }
         }
@@ -305,26 +310,26 @@ export default function SettingsPage() {
     }
 
     // Save consolidated data to localStorage
-    if (companyUpdated && currentCompanyDetails) {
-        localStorage.setItem(LOCAL_STORAGE_COMPANY_KEY, JSON.stringify(currentCompanyDetails));
+    if (companyUpdatedThisImport && consolidatedCompanyDetails) {
+        localStorage.setItem(LOCAL_STORAGE_COMPANY_KEY, JSON.stringify(consolidatedCompanyDetails));
     }
-    localStorage.setItem(LOCAL_STORAGE_CUSTOMERS_KEY, JSON.stringify(currentCustomers));
-    localStorage.setItem(LOCAL_STORAGE_INVOICES_KEY, JSON.stringify(currentInvoices));
+    localStorage.setItem(LOCAL_STORAGE_CUSTOMERS_KEY, JSON.stringify(consolidatedCustomers));
+    localStorage.setItem(LOCAL_STORAGE_INVOICES_KEY, JSON.stringify(consolidatedInvoices));
     
-    localMessages.push("--- Resumen de Importación ---");
-    if (companyUpdated) localMessages.push("Información de la empresa actualizada.");
+    localMessages.push("--- Resumen de Importación y Fusión ---");
+    if (companyUpdatedThisImport) localMessages.push("Información de la empresa actualizada con el último archivo válido.");
     localMessages.push(`${customersAddedCount} cliente(s) nuevo(s) añadido(s).`);
-    localMessages.push(`${customersUpdatedCount} cliente(s) existente(s) actualizado(s).`);
-    localMessages.push(`${invoicesAddedCount} factura(s) nueva(s) añadida(s).`);
-    localMessages.push("----------------------------");
-    localMessages.push("Importación completada. Se recomienda recargar la página para ver todos los cambios.");
+    localMessages.push(`${customersMergedCount} cliente(s) existente(s) fusionado(s)/actualizado(s) (balances sumados).`);
+    localMessages.push(`${invoicesAddedCount} factura(s)/nota(s) de crédito nueva(s) añadida(s).`);
+    localMessages.push("------------------------------------");
+    localMessages.push("Importación y fusión completada. Se recomienda recargar la página para ver todos los cambios.");
 
     setImportMessages(localMessages);
     setIsImporting(false);
     toast({
-      title: "Importación Finalizada",
+      title: "Importación y Fusión Finalizada",
       description: "Los datos han sido procesados. Revise los mensajes para detalles. Recargue la página.",
-      duration: 7000,
+      duration: 10000, // Longer duration for this important message
     });
 
     if (fileInputRef.current) {
@@ -440,7 +445,7 @@ export default function SettingsPage() {
           </div>
           <CardDescription>
             Exporte o importe los datos de su aplicación.
-             Es recomendable exportar sus datos antes de realizar una importación.
+             Es recomendable exportar sus datos actuales antes de realizar una importación para evitar pérdida de información.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -448,8 +453,8 @@ export default function SettingsPage() {
                 <div>
                     <h3 className="font-semibold text-lg mb-2">Exportar Datos</h3>
                     <p className="text-sm">
-                    Haga clic en el botón de abajo para descargar un archivo JSON que contiene la información de su empresa, clientes y todas las facturas.
-                    Guarde este archivo en un lugar seguro.
+                    Haga clic en el botón de abajo para descargar un archivo JSON que contiene la información de su empresa, clientes y todas las facturas y notas de crédito.
+                    Guarde este archivo en un lugar seguro. Este archivo puede ser usado para restaurar o fusionar datos.
                     </p>
                     <Button onClick={handleExportData} className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground mt-2">
                         <Download className="mr-2 h-4 w-4" /> Exportar Datos de la Aplicación
@@ -461,14 +466,20 @@ export default function SettingsPage() {
                 <div>
                     <div className="flex items-center mb-2">
                         <AlertTriangle className="h-5 w-5 mr-2" />
-                        <h3 className="font-semibold text-lg">Importar Datos (¡Precaución!)</h3>
+                        <h3 className="font-semibold text-lg">Importar y Fusionar Datos (¡Precaución!)</h3>
                     </div>
                     <p className="text-sm mb-1">
                         Seleccione uno o más archivos JSON de respaldo (<code>facturafacil_backup_*.json</code>) para importar y fusionar datos en esta instancia del navegador.
+                        Esta función está diseñada para consolidar información de múltiples cajas o respaldos.
                     </p>
                     <p className="text-xs mb-2">
-                        <strong>Advertencia:</strong> Esta acción modificará los datos actuales. Asegúrese de haber exportado sus datos actuales como respaldo antes de proceder.
-                        Los saldos de clientes existentes no se sobrescribirán; solo se actualizarán datos demográficos. Las facturas se añadirán si no existen por ID.
+                        <strong>Advertencia Importante:</strong> Esta acción modificará los datos actuales.
+                        <ul className="list-disc pl-5 mt-1">
+                          <li><strong>RESPALDE PRIMERO:</strong> Siempre exporte sus datos actuales como respaldo antes de proceder con una importación.</li>
+                          <li><strong>Clientes:</strong> Si un cliente importado (por RIF) ya existe, sus datos demográficos se actualizarán, y sus saldos (pendiente y a favor) se <strong>sumarán</strong> a los saldos existentes. Los clientes nuevos se añadirán.</li>
+                          <li><strong>Facturas/Notas de Crédito:</strong> Las transacciones se añadirán si no existen por ID interno, evitando duplicados exactos.</li>
+                          <li><strong>Empresa:</strong> La información de la empresa se tomará del último archivo procesado.</li>
+                        </ul>
                     </p>
                     <Input
                         type="file"
@@ -479,10 +490,10 @@ export default function SettingsPage() {
                         className="mb-2"
                         disabled={isImporting}
                     />
-                     {isImporting && <p className="text-sm font-semibold">Importando, por favor espere...</p>}
+                     {isImporting && <p className="text-sm font-semibold">Importando y fusionando datos, por favor espere...</p>}
                     {importMessages.length > 0 && (
                         <div className="mt-3 p-3 border rounded-md bg-background/50 max-h-60 overflow-y-auto text-xs">
-                            <h4 className="font-semibold mb-1">Resultado de la Importación:</h4>
+                            <h4 className="font-semibold mb-1">Resultado de la Importación y Fusión:</h4>
                             {importMessages.map((msg, index) => (
                                 <p key={index} className="whitespace-pre-wrap">{msg}</p>
                             ))}
@@ -657,13 +668,18 @@ export default function SettingsPage() {
                 <p>FacturaFacil utiliza el almacenamiento local de su navegador (<code>localStorage</code>) para guardar la configuración de la empresa, lista de clientes, todos los documentos generados y su preferencia de tema de color.</p>
                 <p>En la sección <Link href="/settings" className="text-primary hover:underline">Ajustes del Entorno</Link> (<SlidersHorizontal className="inline h-4 w-4" />) &gt; "Gestión de Datos", encontrará opciones para:</p>
                 <ul className="list-disc pl-5">
-                    <li><strong className="text-foreground">Exportar Datos:</strong> Descarga un archivo JSON con toda la información de su aplicación (empresa, clientes, facturas). Es crucial para tener copias de seguridad o para transferir a otro navegador/ordenador.</li>
-                    <li><strong className="text-foreground">Importar Datos:</strong> Permite seleccionar uno o más archivos JSON de respaldo (generados por la función de exportar) para fusionarlos con los datos existentes en el navegador actual. 
+                    <li><strong className="text-foreground">Exportar Datos:</strong> Descarga un archivo JSON con toda la información de su aplicación (empresa, clientes, facturas/notas de crédito). Es crucial para tener copias de seguridad o para transferir/fusionar datos.</li>
+                    <li><strong className="text-foreground">Importar y Fusionar Datos:</strong> Permite seleccionar uno o más archivos JSON de respaldo (generados por la función de exportar) para fusionarlos con los datos existentes en el navegador actual. 
                         <ul className="list-disc pl-5">
-                            <li>La información de la empresa se tomará del último archivo procesado.</li>
-                            <li>Los clientes se fusionan: los existentes (por ID o RIF) actualizan sus datos demográficos (sin alterar saldos locales); los nuevos se añaden.</li>
-                            <li>Las facturas se añaden si no existen por ID.</li>
-                            <li><strong className="text-destructive">Importante:</strong> Siempre exporte sus datos actuales como respaldo ANTES de importar.</li>
+                            <li>La información de la empresa se tomará del último archivo procesado que contenga datos válidos.</li>
+                            <li>Los clientes se fusionan por RIF/Cédula:
+                                <ul className="list-disc pl-5">
+                                    <li>Si un cliente importado ya existe, sus datos demográficos se actualizan y sus saldos (pendiente y a favor) se <strong>suman</strong> a los saldos existentes.</li>
+                                    <li>Los clientes nuevos (por RIF) se añaden con sus datos y saldos del archivo.</li>
+                                </ul>
+                            </li>
+                            <li>Las facturas/notas de crédito se añaden si no existen por ID interno, evitando duplicados exactos.</li>
+                            <li><strong className="text-destructive">Importante:</strong> Siempre exporte sus datos actuales como respaldo ANTES de importar para evitar pérdida de información. Se recomienda recargar la página después de la importación.</li>
                         </ul>
                     </li>
                 </ul>
@@ -671,7 +687,7 @@ export default function SettingsPage() {
                 <ul className="list-disc pl-5">
                   <li>Los datos se guardan <strong>exclusivamente en el navegador y dispositivo</strong> que está utilizando.</li>
                   <li>Si limpia la caché o datos de navegación, <strong>perderá toda la información</strong> (a menos que tenga una copia exportada).</li>
-                  <li>Se recomienda <strong>realizar exportaciones periódicas</strong> de sus datos y guardarlas en un lugar seguro.</li>
+                  <li>Se recomienda <strong>realizar exportaciones periódicas</strong> de sus datos y guardarlas en un lugar seguro, especialmente si opera en múltiples cajas.</li>
                   <li>Tras una importación, se recomienda recargar la aplicación para asegurar que todos los cambios se reflejen correctamente.</li>
                 </ul>
               </AccordionContent>
@@ -695,7 +711,7 @@ export default function SettingsPage() {
           </div>
           <div className="flex justify-between">
             <span className="font-semibold text-foreground">Versión:</span>
-            <span className="text-muted-foreground">1.2.0 (Con Gestión de Saldos, Exportación e Importación)</span>
+            <span className="text-muted-foreground">1.3.0 (Con Fusión Completa de Datos en Importación)</span>
           </div>
           <div className="flex justify-between">
             <span className="font-semibold text-foreground">Desarrollado con:</span>
@@ -710,3 +726,4 @@ export default function SettingsPage() {
     </div>
   );
 }
+

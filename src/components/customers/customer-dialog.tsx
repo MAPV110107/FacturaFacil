@@ -36,7 +36,7 @@ interface CustomerDialogProps {
   triggerButton?: React.ReactNode;
 }
 
-const defaultCustomerValues: Partial<CustomerDetails> = {
+const defaultCustomerValues: Omit<CustomerDetails, 'id'> = {
   name: "",
   rif: "",
   address: "",
@@ -52,27 +52,34 @@ export function CustomerDialog({ customer, onSave, triggerButton }: CustomerDial
 
   const form = useForm<z.infer<typeof customerDetailsSchema>>({
     resolver: zodResolver(customerDetailsSchema),
-    defaultValues: customer ? { ...defaultCustomerValues, ...customer } : defaultCustomerValues,
+    defaultValues: customer ? { ...defaultCustomerValues, ...customer } : { ...defaultCustomerValues },
   });
   
   React.useEffect(() => {
     if (open) {
-      form.reset(customer ? { ...defaultCustomerValues, ...customer } : defaultCustomerValues);
+      form.reset(customer ? { ...defaultCustomerValues, ...customer } : { ...defaultCustomerValues });
     }
   }, [open, customer, form]);
 
 
   function onSubmit(values: z.infer<typeof customerDetailsSchema>) {
+    // Ensure balances are numbers and default to 0 if not provided or invalid
+    const outstandingBalance = typeof values.outstandingBalance === 'number' ? values.outstandingBalance : 0;
+    const creditBalance = typeof values.creditBalance === 'number' ? values.creditBalance : 0;
+
     const customerToSave: CustomerDetails = {
-      id: customer?.id || uuidv4(), // Use uuidv4 for new customers
-      ...defaultCustomerValues, 
-      ...values,
-      outstandingBalance: customer?.outstandingBalance || values.outstandingBalance || 0,
-      creditBalance: customer?.creditBalance || values.creditBalance || 0,
+      id: customer?.id || uuidv4(), // Use existing ID if editing, or generate new one
+      name: values.name,
+      rif: values.rif,
+      address: values.address,
+      phone: values.phone || "", // Ensure optional fields are at least empty strings
+      email: values.email || "",
+      outstandingBalance: customer?.id ? (customer.outstandingBalance || 0) : outstandingBalance, // Preserve existing balance if editing
+      creditBalance: customer?.id ? (customer.creditBalance || 0) : creditBalance, // Preserve existing balance if editing
     };
     onSave(customerToSave);
     setOpen(false);
-    form.reset(defaultCustomerValues);
+    form.reset({ ...defaultCustomerValues, id: undefined }); // Reset form including id for next new customer
   }
 
   return (
@@ -163,7 +170,9 @@ export function CustomerDialog({ customer, onSave, triggerButton }: CustomerDial
                 )}
               />
             </div>
-            {/* Balance fields are not typically edited directly in this dialog */}
+            {/* Balances (outstandingBalance, creditBalance) are not directly edited here for existing customers; 
+                they are modified through transactions. For new customers, they default to 0.
+            */}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                 Cancelar
