@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Menu, Settings, Users, FilePlus2, LayoutDashboard, History, Undo2, SlidersHorizontal } from "lucide-react";
 import { Logo } from "@/components/icons";
@@ -61,6 +61,9 @@ export function SiteHeader() {
               </Button>
             </SheetTrigger>
             <SheetContent side="left">
+              <SheetHeader className="pb-4 border-b mb-4">
+                <SheetTitle className="text-left">Menú Principal</SheetTitle>
+              </SheetHeader>
               <Link href="/dashboard" className="mb-6 flex items-center space-x-2">
                 <Logo />
                 <span className="font-bold text-xl">FacturaFacil</span>
