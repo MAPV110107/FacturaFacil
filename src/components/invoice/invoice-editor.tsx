@@ -23,11 +23,11 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { InvoicePreview } from "./invoice-preview";
 import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, Trash2, Users, FileText, DollarSign, Settings, Receipt, CalendarDays, Info, Save, Percent, Search, Ban, ArrowRight, HandCoins, PiggyBank, XCircle, WalletCards, RotateCcw, ShieldCheck } from "lucide-react";
+import { PlusCircle, Trash2, Users, FileText, DollarSign, Settings, Receipt, CalendarDays, Info, Save, Percent, Search, Ban, ArrowRight, HandCoins, PiggyBank, XCircle, WalletCards, RotateCcw, ShieldCheck, Clock } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Form, FormField, FormItem, FormControl, FormLabel, FormMessage } from "@/components/ui/form";
-import { format } from "date-fns";
+import { format, addDays, addMonths, addYears } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 
@@ -53,6 +53,17 @@ const formatCurrency = (amount: number | undefined | null) => {
   if (amount === undefined || amount === null) return `${CURRENCY_SYMBOL}0.00`;
   return `${CURRENCY_SYMBOL}${amount.toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,')}`;
 };
+
+const warrantyDurationOptions = [
+  { value: "no_aplica", label: "No Aplica" },
+  { value: "7_dias", label: "7 Días" },
+  { value: "15_dias", label: "15 Días" },
+  { value: "1_mes", label: "1 Mes" },
+  { value: "3_meses", label: "3 Meses" },
+  { value: "6_meses", label: "6 Meses" },
+  { value: "1_anio", label: "1 Año" },
+  { value: "personalizado", label: "Personalizado (detallar en texto)" },
+];
 
 export function InvoiceEditor() {
   const [companyDetails] = useLocalStorage<CompanyDetails>("companyDetails", defaultCompany);
@@ -126,11 +137,12 @@ export function InvoiceEditor() {
       thankYouMessage: DEFAULT_THANK_YOU_MESSAGE,
       notes: "",
       applyTax: true,
-      taxRate: TAX_RATE * 100, // Percentage for form input
+      taxRate: TAX_RATE * 100,
       applyDiscount: false,
       discountPercentage: 0,
       discountValue: 0,
       applyWarranty: false,
+      warrantyDuration: "no_aplica",
       warrantyText: "",
       overpaymentHandlingChoice: 'creditToAccount',
       changeRefundPaymentMethods: [],
@@ -139,7 +151,7 @@ export function InvoiceEditor() {
 
   const calculateTotals = useCallback((items: InvoiceItem[], taxRatePercentValue: number, discountValueFromForm: number, applyTaxFlag: boolean) => {
     const subTotal = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
-    const actualDiscountValue = discountValueFromForm; // discountValueFromForm is already 0 if applyDiscount is false
+    const actualDiscountValue = discountValueFromForm;
     const taxableAmount = Math.max(0, subTotal - actualDiscountValue);
     const actualTaxRateDecimal = applyTaxFlag ? (taxRatePercentValue || 0) / 100 : 0;
     const taxAmount = taxableAmount * actualTaxRateDecimal;
@@ -163,7 +175,7 @@ export function InvoiceEditor() {
     let thankYouMsg = DEFAULT_THANK_YOU_MESSAGE;
     let notesMsg = "";
     
-    let formTaxRatePercent = TAX_RATE * 100; // Percentage
+    let formTaxRatePercent = TAX_RATE * 100;
     let formApplyTax = true;
     let formApplyDiscount = false;
     let formDiscountPercentage = 0;
@@ -171,6 +183,7 @@ export function InvoiceEditor() {
     let formIsDebtPayment = false;
     let formIsCreditDeposit = false;
     let formApplyWarranty = false;
+    let formWarrantyDuration = "no_aplica";
     let formWarrantyText = "";
     
     const targetCustomer = customers.find(c => c.id === customerId);
@@ -227,6 +240,7 @@ export function InvoiceEditor() {
       discountPercentage: formDiscountPercentage,
       discountValue: formDiscountValue,
       applyWarranty: formApplyWarranty,
+      warrantyDuration: formWarrantyDuration,
       warrantyText: formWarrantyText,
       overpaymentHandlingChoice: 'creditToAccount',
       changeRefundPaymentMethods: [],
@@ -262,7 +276,7 @@ export function InvoiceEditor() {
       paymentMethods: formValuesToReset.paymentMethods as PaymentDetails[],
       subTotal,
       discountPercentage: currentDiscountPercentage,
-      discountValue: discountAmount, // This is actualDiscountValue from calculateTotals
+      discountValue: discountAmount,
       taxRate: currentApplyTax ? (currentTaxRatePercent / 100) : 0, 
       taxAmount,
       totalAmount,
@@ -398,7 +412,7 @@ export function InvoiceEditor() {
             paymentMethods: values.paymentMethods as PaymentDetails[],
             subTotal,
             discountPercentage: currentDiscountPercentage,
-            discountValue: discountAmount, // This is actualDiscountValue from calculateTotals
+            discountValue: discountAmount,
             taxRate: currentApplyTax ? (currentTaxRatePercent / 100) : 0, 
             taxAmount,
             totalAmount,
@@ -459,7 +473,6 @@ export function InvoiceEditor() {
     form 
 ]);
 
-  // Effect to synchronize applyTax and taxRate
   useEffect(() => {
     const applyTaxValue = form.watch('applyTax');
     const currentTaxRateValue = form.watch('taxRate'); 
@@ -485,7 +498,6 @@ export function InvoiceEditor() {
     return currentItems.reduce((sum, item) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0);
   }, []);
 
-  // Effect for discountPercentage change
   useEffect(() => {
     if (!watchedApplyDiscount || editorMode !== 'normal') return;
 
@@ -504,7 +516,6 @@ export function InvoiceEditor() {
     }
   }, [form.watch('discountPercentage'), watchedItems, watchedApplyDiscount, editorMode, form, calculateSubTotal]);
 
-  // Effect for discountValue change
   useEffect(() => {
     if (!watchedApplyDiscount || editorMode !== 'normal') return;
 
@@ -518,7 +529,7 @@ export function InvoiceEditor() {
         }
     } else if (subTotal === 0 && typeof value === 'number' && value !== 0) {
         if (form.getValues('discountPercentage') !== 0) {
-            form.setValue('discountPercentage', 0, { shouldValidate: true }); // Or 100 if value > 0, but 0 is safer
+            form.setValue('discountPercentage', 0, { shouldValidate: true });
         }
     } else if (typeof value === 'number' && value === 0) {
         if (form.getValues('discountPercentage') !== 0) {
@@ -527,39 +538,81 @@ export function InvoiceEditor() {
     }
   }, [form.watch('discountValue'), watchedItems, watchedApplyDiscount, editorMode, form, calculateSubTotal]);
 
-  // Effect to clear discounts if applyDiscount is unchecked or mode changes
   useEffect(() => {
     if (!watchedApplyDiscount || editorMode !== 'normal') {
         const currentPercentage = form.getValues('discountPercentage');
         const currentValue = form.getValues('discountValue');
         let changed = false;
         if (currentPercentage !== 0) {
-            form.setValue('discountPercentage', 0, { shouldValidate: true, shouldDirty: false }); // Avoid dirtying if only mode changed
+            form.setValue('discountPercentage', 0, { shouldValidate: true, shouldDirty: false });
             changed = true;
         }
         if (currentValue !== 0) {
             form.setValue('discountValue', 0, { shouldValidate: true, shouldDirty: false });
             changed = true;
         }
-        // If applyDiscount was explicitly unchecked by user, then mark form as dirty
         if (changed && form.formState.dirtyFields.applyDiscount) {
             form.setValue('applyDiscount', form.getValues('applyDiscount'), {shouldDirty: true});
         }
     }
   }, [watchedApplyDiscount, editorMode, form]);
 
-  // Effect for applyWarranty
   const watchedApplyWarranty = form.watch('applyWarranty');
+  const watchedWarrantyDuration = form.watch('warrantyDuration');
+  const watchedInvoiceDate = form.watch('date');
+
   useEffect(() => {
     if (editorMode !== 'normal') {
       if (form.getValues('applyWarranty')) form.setValue('applyWarranty', false, { shouldValidate: true });
+      if (form.getValues('warrantyDuration') !== "no_aplica") form.setValue('warrantyDuration', 'no_aplica', { shouldValidate: true });
       if (form.getValues('warrantyText')) form.setValue('warrantyText', '', { shouldValidate: true });
       return;
     }
+
     if (!watchedApplyWarranty) {
+      if (form.getValues('warrantyDuration') !== "no_aplica") form.setValue('warrantyDuration', 'no_aplica', { shouldValidate: true });
       if (form.getValues('warrantyText')) form.setValue('warrantyText', '', { shouldValidate: true });
+    } else { // applyWarranty is true
+      if (watchedWarrantyDuration === "no_aplica") {
+         if (form.getValues('warrantyText')) form.setValue('warrantyText', '', { shouldValidate: true });
+      } else if (watchedWarrantyDuration === "personalizado") {
+        // User will type custom text, ensure no automatic date is prepended or kept.
+        const currentText = form.getValues('warrantyText') || "";
+        if (currentText.startsWith("Garantía válida hasta")) {
+          const userText = currentText.substring(currentText.indexOf(".") + 1).trim();
+          form.setValue('warrantyText', userText, { shouldValidate: true });
+        }
+      } else { // A specific duration is selected
+        let endDate = new Date(watchedInvoiceDate || Date.now());
+        const [value, unit] = watchedWarrantyDuration.split("_");
+        const numValue = parseInt(value);
+
+        if (unit === "dias") endDate = addDays(endDate, numValue);
+        else if (unit === "mes") endDate = addMonths(endDate, numValue);
+        else if (unit === "anio") endDate = addYears(endDate, numValue);
+        
+        const formattedEndDate = format(endDate, "PPP", { locale: es });
+        const autoText = `Garantía válida hasta ${formattedEndDate}.`;
+        
+        const currentText = form.getValues('warrantyText') || "";
+        let userSpecificText = "";
+        // Preserve user text if it was added after automatic text
+        if (currentText.startsWith("Garantía válida hasta")) {
+            const dotIndex = currentText.indexOf(".");
+            if (dotIndex !== -1 && currentText.length > dotIndex + 1) {
+                userSpecificText = currentText.substring(dotIndex + 1).trim();
+            }
+        } else if (currentText.trim() !== "") { // If it was custom text before
+            userSpecificText = currentText;
+        }
+
+        const newWarrantyText = userSpecificText ? `${autoText} ${userSpecificText}` : `${autoText}`;
+        if (form.getValues('warrantyText') !== newWarrantyText) {
+          form.setValue('warrantyText', newWarrantyText, { shouldValidate: true });
+        }
+      }
     }
-  }, [watchedApplyWarranty, editorMode, form]);
+  }, [watchedApplyWarranty, watchedWarrantyDuration, watchedInvoiceDate, editorMode, form]);
 
 
   const handleRifSearch = async () => {
@@ -893,7 +946,7 @@ export function InvoiceEditor() {
       amountDue: finalAmountDueForInvoiceRecord, 
       thankYouMessage: data.thankYouMessage || DEFAULT_THANK_YOU_MESSAGE,
       notes: finalInvoiceNotes,
-      warrantyText: data.applyWarranty ? data.warrantyText : undefined,
+      warrantyText: (data.applyWarranty && data.warrantyDuration !== "no_aplica") ? data.warrantyText : undefined,
       overpaymentAmount: (editorMode === 'normal' && (totalAmount - finalAmountPaidOnInvoice) < -0.001) ? Math.abs(totalAmount - finalAmountPaidOnInvoice) : undefined,
       overpaymentHandling: (editorMode === 'normal' && (totalAmount - finalAmountPaidOnInvoice) < -0.001) ? (data.overpaymentHandlingChoice === 'refundNow' ? 'refunded' : 'creditedToAccount') : undefined,
       changeRefundPaymentMethods: (editorMode === 'normal' && (totalAmount - finalAmountPaidOnInvoice) < -0.001 && data.overpaymentHandlingChoice === 'refundNow') ? data.changeRefundPaymentMethods : undefined,
@@ -1587,12 +1640,12 @@ export function InvoiceEditor() {
                     <FormField
                       control={form.control}
                       name="applyWarranty"
-                      render={({ field }) => (
+                      render={({ field: checkboxField }) => (
                         <FormItem className="flex flex-row items-center space-x-2 space-y-0">
                           <FormControl>
                             <Checkbox
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
+                              checked={checkboxField.value}
+                              onCheckedChange={checkboxField.onChange}
                               disabled={editorMode !== 'normal'}
                               id="applyWarrantyCheckbox"
                             />
@@ -1604,23 +1657,54 @@ export function InvoiceEditor() {
                       )}
                     />
                     {form.watch('applyWarranty') && editorMode === 'normal' && (
-                      <FormField
-                        control={form.control}
-                        name="warrantyText"
-                        render={({ field }) => (
-                          <FormItem className="mt-2 pl-6">
-                            <FormLabel htmlFor="warrantyText">Texto de la Garantía</FormLabel>
-                            <FormControl>
-                              <Textarea 
-                                id="warrantyText"
-                                placeholder="Ej: Garantía válida por 30 días contra defectos de fábrica."
-                                {...field}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
+                      <div className="space-y-3 mt-2 pl-6">
+                        <FormField
+                          control={form.control}
+                          name="warrantyDuration"
+                          render={({ field: selectField }) => (
+                            <FormItem>
+                              <FormLabel className="flex items-center"><Clock className="mr-2 h-4 w-4 text-muted-foreground" />Duración de la Garantía</FormLabel>
+                              <Select 
+                                onValueChange={selectField.onChange} 
+                                value={selectField.value}
+                                disabled={!form.watch('applyWarranty') || editorMode !== 'normal'}
+                              >
+                                <FormControl>
+                                  <SelectTrigger><SelectValue placeholder="Seleccione duración" /></SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {warrantyDurationOptions.map(option => (
+                                    <SelectItem key={option.value} value={option.value}>
+                                      {option.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        {form.watch('warrantyDuration') !== "no_aplica" && (
+                          <FormField
+                            control={form.control}
+                            name="warrantyText"
+                            render={({ field: textareaField }) => (
+                              <FormItem>
+                                <FormLabel htmlFor="warrantyText">Texto Adicional de la Garantía</FormLabel>
+                                <FormControl>
+                                  <Textarea 
+                                    id="warrantyText"
+                                    placeholder="Ej: contra defectos de fábrica."
+                                    {...textareaField}
+                                    disabled={!form.watch('applyWarranty') || editorMode !== 'normal'}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
                         )}
-                      />
+                      </div>
                     )}
                     {(!form.watch('applyWarranty') || editorMode !== 'normal') && <p className="text-xs text-muted-foreground mt-1">La garantía está desactivada o no aplica para este modo.</p>}
                   </div>
@@ -1642,7 +1726,7 @@ export function InvoiceEditor() {
                       render={({ field }) => (
                           <FormItem>
                               <FormLabel>Notas Adicionales (Opcional)</FormLabel>
-                              <FormControl><Textarea {...field} placeholder="Ej: Pago parcial recibido." /></FormControl>
+                              <FormControl><Textarea {...field} placeholder="Ej: Sin derecho a nota de crédito fiscal." /></FormControl>
                               <FormMessage />
                           </FormItem>
                       )}
@@ -1678,3 +1762,4 @@ export function InvoiceEditor() {
     </div>
   );
 }
+

@@ -54,16 +54,16 @@ export const invoiceFormSchema = z.object({
   notes: z.string().optional(),
   
   applyTax: z.boolean().default(true).optional(),
-  taxRate: z.number().min(0).max(100, "La tasa de IVA debe estar entre 0 y 100.").default(16), // Representa el porcentaje, ej. 16 para 16%
+  taxRate: z.number().min(0).max(100, "La tasa de IVA debe estar entre 0 y 100.").default(16),
   
   applyDiscount: z.boolean().default(false).optional(),
-  discountPercentage: z.number().min(0, "El porcentaje de descuento no puede ser negativo.").max(100, "El porcentaje de descuento no puede ser mayor a 100.").optional(),
-  discountValue: z.number().min(0, "El descuento no puede ser negativo.").optional(),
+  discountPercentage: z.number().min(0, "El porcentaje de descuento no puede ser negativo.").max(100, "El porcentaje de descuento no puede ser mayor a 100.").optional().default(0),
+  discountValue: z.number().min(0, "El descuento no puede ser negativo.").optional().default(0),
 
   applyWarranty: z.boolean().optional().default(false),
+  warrantyDuration: z.string().optional().default("no_aplica"),
   warrantyText: z.string().optional(),
 
-  // Fields for handling overpayment
   overpaymentHandlingChoice: z.enum(['creditToAccount', 'refundNow']).default('creditToAccount').optional(),
   changeRefundPaymentMethods: z.array(paymentDetailsSchema).optional(),
 }).refine(data => {
@@ -83,11 +83,12 @@ export const invoiceFormSchema = z.object({
     message: "El monto del vuelto para cada método debe ser positivo.",
     path: ["changeRefundPaymentMethods"],
 }).refine(data => {
-  if (data.applyWarranty && (!data.warrantyText || data.warrantyText.trim() === "")) {
+  if (data.applyWarranty && data.warrantyDuration !== "no_aplica" && (!data.warrantyText || data.warrantyText.trim() === "")) {
     return false;
   }
   return true;
 }, {
-  message: "El texto de la garantía es requerido si se aplica la garantía.",
+  message: "El texto de la garantía es requerido si se aplica una garantía y la duración no es 'No aplica'.",
   path: ["warrantyText"],
 });
+
