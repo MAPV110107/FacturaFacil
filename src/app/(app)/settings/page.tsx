@@ -27,6 +27,13 @@ interface ColorPalette {
   accent: string;
 }
 
+interface DisplayColorPalette extends ColorPalette {
+  primaryForeground: string;
+  accentForeground: string;
+  generalForeground: string; // To show what globals.css *should* be applying
+}
+
+
 const suggestedPalettes: ColorPalette[] = [
   {
     name: "Tema Azul Original",
@@ -91,7 +98,7 @@ interface BackupData {
 export default function SettingsPage() {
   const { toast } = useToast();
   const [activeThemeName, setActiveThemeName] = useState<string | null>(null);
-  const [currentDisplayColors, setCurrentDisplayColors] = useState<ColorPalette | null>(null);
+  const [currentDisplayColors, setCurrentDisplayColors] = useState<DisplayColorPalette | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importMessages, setImportMessages] = useState<string[]>([]);
   const [isImporting, setIsImporting] = useState(false);
@@ -117,17 +124,42 @@ export default function SettingsPage() {
     updateStatusIndicators();
   }, [updateStatusIndicators]);
 
-
   const applyThemeToDOM = useCallback((palette: ColorPalette) => {
     if (typeof document !== 'undefined') {
       document.documentElement.style.setProperty('--primary', palette.primary);
       document.documentElement.style.setProperty('--background', palette.background);
       document.documentElement.style.setProperty('--accent', palette.accent);
-      // Foreground colors are now primarily controlled by globals.css
+
+      // For buttons with primary/accent/destructive backgrounds, text should be light for the text-shadow effect
+      const lightButtonTextColor = "0 0% 98%"; // casi blanco
+      document.documentElement.style.setProperty('--primary-foreground', lightButtonTextColor);
+      document.documentElement.style.setProperty('--accent-foreground', lightButtonTextColor);
+      document.documentElement.style.setProperty('--destructive-foreground', lightButtonTextColor);
+      // Ensure secondary button text in dark mode is also light for text-shadow
+      if (document.documentElement.classList.contains('dark')) {
+        document.documentElement.style.setProperty('--secondary-foreground', lightButtonTextColor);
+      } else {
+        // In light mode, secondary button text is dark by default from globals.css
+        // We can re-fetch it here to ensure currentDisplayColors is accurate or just rely on globals.css
+         document.documentElement.style.setProperty('--secondary-foreground', "0 0% 3.9%");
+      }
     }
-    setCurrentDisplayColors(palette);
+    
+    // For display purposes, show what globals.css should be providing for general text
+    const generalFgColorForDisplay = typeof window !== 'undefined' && document.documentElement.classList.contains('dark') ? "0 0% 98%" : "0 0% 3.9%";
+
+    setCurrentDisplayColors({
+        name: palette.name,
+        primary: palette.primary,
+        background: palette.background,
+        accent: palette.accent,
+        primaryForeground: "0 0% 98%", // Fixed light for button text
+        accentForeground: "0 0% 98%", // Fixed light for button text
+        generalForeground: generalFgColorForDisplay 
+    });
     setActiveThemeName(palette.name);
   }, []);
+
 
   useEffect(() => {
     const getInitialColorValue = (cssVar: string, fallback: string) => {
@@ -146,11 +178,16 @@ export default function SettingsPage() {
     if (themeToApply) {
       applyThemeToDOM(themeToApply);
     } else if (typeof document !== 'undefined') {
+       // Fallback if no theme is saved or found, derive from CSS or use defaults
+       const generalFgColorForDisplay = document.documentElement.classList.contains('dark') ? getInitialColorValue('--foreground', "0 0% 98%") : getInitialColorValue('--foreground', "0 0% 3.9%");
        setCurrentDisplayColors({
         name: "Predeterminado (CSS)",
         primary: getInitialColorValue('--primary', "232 63% 30%"),
         background: getInitialColorValue('--background', "0 0% 96%"),
         accent: getInitialColorValue('--accent', "230 46% 48%"),
+        primaryForeground: getInitialColorValue('--primary-foreground', "0 0% 98%"),
+        accentForeground: getInitialColorValue('--accent-foreground', "0 0% 98%"),
+        generalForeground: generalFgColorForDisplay
       });
       setActiveThemeName("Predeterminado (CSS)");
     }
@@ -163,7 +200,7 @@ export default function SettingsPage() {
     }
     toast({
       title: "Tema Aplicado",
-      description: `El ${palette.name} ha sido aplicado. Los colores de texto ahora son predominantemente oscuros para mayor contraste.`,
+      description: `El ${palette.name} ha sido aplicado. El texto general es oscuro/claro según el tema base, el texto de los botones coloreados es blanco con borde negro.`,
     });
   };
 
@@ -440,17 +477,17 @@ export default function SettingsPage() {
           <CardDescription>
             Seleccione una paleta de colores para aplicarla instantáneamente. Su elección se guardará localmente.
             Los colores base del tema se definen en <code>src/app/globals.css</code> y pueden ser sobrescritos por su selección.
-            Los colores de texto ahora son predominantemente oscuros para mejorar el contraste.
+            El texto general es oscuro/claro según el tema base, el texto de los botones coloreados es blanco con borde negro.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {currentDisplayColors && (
             <div>
-              <h3 className="font-semibold text-foreground mb-2">Colores Actuales del Tema ({activeThemeName || "Desconocido"}):</h3>
+              <h3 className="font-semibold text-foreground mb-2">Colores Actuales Aplicados ({activeThemeName || "Desconocido"}):</h3>
               <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground ml-4">
-                <li><strong>Primario:</strong> <code>{currentDisplayColors.primary}</code></li>
-                <li><strong>Fondo:</strong> <code>{currentDisplayColors.background}</code></li>
-                <li><strong>Acento:</strong> <code>{currentDisplayColors.accent}</code></li>
+                <li><strong>Fondo de Página:</strong> <code>{currentDisplayColors.background}</code> (Texto general: {currentDisplayColors.generalForeground === "0 0% 3.9%" ? "Oscuro" : "Claro"})</li>
+                <li><strong>Color Primario (Botones, etc.):</strong> <code>{currentDisplayColors.primary}</code> (Texto en botón: Claro)</li>
+                <li><strong>Color de Acento:</strong> <code>{currentDisplayColors.accent}</code> (Texto en botón: Claro)</li>
               </ul>
             </div>
           )}
@@ -566,7 +603,7 @@ export default function SettingsPage() {
                         Seleccione uno o más archivos JSON de respaldo (<code>facturafacil_backup_*.json</code>) para importar y fusionar datos en esta instancia del navegador.
                         Esta función está diseñada para consolidar información de múltiples cajas o respaldos.
                     </p>
-                     <div className="text-xs mb-2">
+                     <div className="text-xs mb-2"> {/* Cambiado de <p> a <div> */}
                         <p><strong>Advertencia Importante:</strong> Esta acción modificará los datos actuales.</p>
                         <ul className="list-disc pl-5 mt-1">
                           <li><strong>RESPALDE PRIMERO:</strong> Siempre exporte sus datos actuales como respaldo antes de proceder con una importación. La importación actual reemplazará el respaldo pre-importación anterior.</li>
