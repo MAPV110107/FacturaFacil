@@ -52,7 +52,8 @@ export const invoiceFormSchema = z.object({
   paymentMethods: z.array(paymentDetailsSchema).min(1, "Debe añadir al menos un método de pago."),
   thankYouMessage: z.string().optional(),
   notes: z.string().optional(),
-  taxRate: z.number().min(0).max(1).default(0.16), // Example: 0.16 for 16%
+  applyTax: z.boolean().default(true).optional(),
+  taxRate: z.number().min(0).max(100, "La tasa de IVA debe estar entre 0 y 100.").default(16), // Representa el porcentaje, ej. 16 para 16%
   discountAmount: z.number().min(0, "El descuento no puede ser negativo.").optional(),
 
   // Fields for handling overpayment

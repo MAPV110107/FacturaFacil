@@ -20,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox";
 import { InvoicePreview } from "./invoice-preview";
 import { useToast } from "@/hooks/use-toast";
 import { PlusCircle, Trash2, Users, FileText, DollarSign, Settings, Receipt, CalendarDays, Info, Save, Percent, Search, Ban, ArrowRight, HandCoins, PiggyBank, XCircle, WalletCards, RotateCcw } from "lucide-react";
@@ -73,7 +74,6 @@ export function InvoiceEditor() {
   
   const isInitializingDebtPaymentRef = useRef(false);
   const initialCustomersLoadAttemptedRef = useRef(false);
-  const initialNormalResetDoneRef = useRef(false);
 
 
   const initialLivePreviewState: Partial<Invoice> = {
@@ -89,7 +89,7 @@ export function InvoiceEditor() {
     paymentMethods: [{ method: "Efectivo", amount: 0, reference: "" }],
     subTotal: 0,
     discountAmount: 0,
-    taxRate: TAX_RATE,
+    taxRate: TAX_RATE, // Decimal for preview
     taxAmount: 0,
     totalAmount: 0,
     amountPaid: 0,
@@ -121,19 +121,20 @@ export function InvoiceEditor() {
       paymentMethods: [{ method: "Efectivo", amount: 0, reference: "" }],
       thankYouMessage: DEFAULT_THANK_YOU_MESSAGE,
       notes: "",
-      taxRate: TAX_RATE,
+      applyTax: true,
+      taxRate: TAX_RATE * 100, // Percentage for form input
       discountAmount: 0,
       overpaymentHandlingChoice: 'creditToAccount',
       changeRefundPaymentMethods: [],
     },
   });
 
-  const calculateTotals = useCallback((items: InvoiceItem[], taxRateValue: number, discountAmountValue: number) => {
+  const calculateTotals = useCallback((items: InvoiceItem[], taxRatePercentValue: number, discountAmountValue: number, applyTaxFlag: boolean) => {
     const subTotal = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
     const actualDiscountAmount = discountAmountValue || 0;
     const taxableAmount = Math.max(0, subTotal - actualDiscountAmount);
-    const actualTaxRate = taxRateValue || 0;
-    const taxAmount = taxableAmount * actualTaxRate;
+    const actualTaxRateDecimal = applyTaxFlag ? (taxRatePercentValue || 0) / 100 : 0;
+    const taxAmount = taxableAmount * actualTaxRateDecimal;
     const totalAmount = taxableAmount + taxAmount;
     return { subTotal, discountAmount: actualDiscountAmount, taxAmount, totalAmount };
   }, []);
@@ -153,7 +154,9 @@ export function InvoiceEditor() {
     let initialCustomerState = { ...defaultCustomer };
     let thankYouMsg = DEFAULT_THANK_YOU_MESSAGE;
     let notesMsg = "";
-    let formTaxRate = TAX_RATE;
+    
+    let formTaxRatePercent = TAX_RATE * 100; // Percentage
+    let formApplyTax = true;
     let formIsDebtPayment = false;
     let formIsCreditDeposit = false;
     
@@ -165,22 +168,21 @@ export function InvoiceEditor() {
       initialItemsArr = [{ id: uuidv4(), description: "Abono a Deuda Pendiente", quantity: 1, unitPrice: amount }];
       thankYouMsg = "Gracias por su abono.";
       notesMsg = `Abono a deuda pendiente por ${formatCurrency(amount)}`;
-      formTaxRate = 0;
+      formTaxRatePercent = 0;
+      formApplyTax = false;
       formIsDebtPayment = true;
     } else if (mode === 'creditDeposit' && targetCustomer) {
       initialCustomerState = { ...targetCustomer };
       initialInvoiceNumber = `DEP-${Date.now().toString().slice(-6)}`;
-      initialItemsArr = [{ id: uuidv4(), description: "Depósito a Cuenta Cliente", quantity: 1, unitPrice: 0 }]; // Unit price 0 for deposit, actual amount from payments
+      initialItemsArr = [{ id: uuidv4(), description: "Depósito a Cuenta Cliente", quantity: 1, unitPrice: 0 }];
       thankYouMsg = "Gracias por su depósito.";
       notesMsg = `Depósito a cuenta cliente. El monto se define en los métodos de pago.`;
-      formTaxRate = 0;
+      formTaxRatePercent = 0;
+      formApplyTax = false;
       formIsCreditDeposit = true;
-    } else { // mode === 'normal' or fallback
+    } else { 
       if (targetCustomer) {
         initialCustomerState = {...targetCustomer};
-      }
-      if (mode === 'normal' && !customerId) {
-        initialNormalResetDoneRef.current = true;
       }
     }
     
@@ -198,7 +200,8 @@ export function InvoiceEditor() {
       paymentMethods: [{ method: "Efectivo", amount: (mode === 'debtPayment' ? amount : 0) , reference: "" }],
       thankYouMessage: thankYouMsg,
       notes: notesMsg,
-      taxRate: formTaxRate,
+      applyTax: formApplyTax,
+      taxRate: formTaxRatePercent,
       discountAmount: 0,
       overpaymentHandlingChoice: 'creditToAccount',
       changeRefundPaymentMethods: [],
@@ -211,9 +214,11 @@ export function InvoiceEditor() {
         unitPrice: item.unitPrice || 0,
         totalPrice: (item.quantity || 0) * (item.unitPrice || 0),
       })) as InvoiceItem[];
-    const currentTaxRate = formValuesToReset.taxRate ?? TAX_RATE;
+    const currentTaxRatePercent = formValuesToReset.taxRate ?? TAX_RATE * 100;
     const currentDiscountAmount = formValuesToReset.discountAmount || 0;
-    const { subTotal, discountAmount, taxAmount, totalAmount } = calculateTotals(currentItems, currentTaxRate, currentDiscountAmount);
+    const currentApplyTax = formValuesToReset.applyTax ?? true;
+
+    const { subTotal, discountAmount, taxAmount, totalAmount } = calculateTotals(currentItems, currentTaxRatePercent, currentDiscountAmount, currentApplyTax);
     const { amountPaid, amountDue } = calculatePaymentSummary(formValuesToReset.paymentMethods || [], totalAmount);
 
     setLiveInvoicePreview({
@@ -230,7 +235,7 @@ export function InvoiceEditor() {
       paymentMethods: formValuesToReset.paymentMethods as PaymentDetails[],
       subTotal,
       discountAmount,
-      taxRate: currentTaxRate,
+      taxRate: currentApplyTax ? (currentTaxRatePercent / 100) : 0, // Store decimal in preview
       taxAmount,
       totalAmount,
       amountPaid,
@@ -299,7 +304,7 @@ export function InvoiceEditor() {
     const currentInvoiceNumber = form.getValues('invoiceNumber');
     const isDefaultOrSpecialModeNumber = !currentInvoiceNumber || currentInvoiceNumber.startsWith("PAGO-") || currentInvoiceNumber.startsWith("DEP-");
 
-    if (editorMode === 'normal' && isDefaultOrSpecialModeNumber && !selectedCustomerIdForDropdown && !initialNormalResetDoneRef.current) {
+    if (editorMode === 'normal' && isDefaultOrSpecialModeNumber && !selectedCustomerIdForDropdown ) {
        resetFormAndState({ mode: 'normal' });
     }
 
@@ -333,9 +338,11 @@ export function InvoiceEditor() {
             totalPrice: (item.quantity || 0) * (item.unitPrice || 0),
         })) as InvoiceItem[];
         
-        const currentTaxRate = values.isDebtPayment || values.isCreditDeposit ? 0 : (values.taxRate ?? TAX_RATE);
+        const currentTaxRatePercent = values.isDebtPayment || values.isCreditDeposit ? 0 : (values.taxRate ?? TAX_RATE * 100);
         const currentDiscountAmount = values.isDebtPayment || values.isCreditDeposit ? 0 : (values.discountAmount || 0);
-        const { subTotal, discountAmount, taxAmount, totalAmount } = calculateTotals(currentItems, currentTaxRate, currentDiscountAmount);
+        const currentApplyTax = values.isDebtPayment || values.isCreditDeposit ? false : (values.applyTax ?? true);
+
+        const { subTotal, discountAmount, taxAmount, totalAmount } = calculateTotals(currentItems, currentTaxRatePercent, currentDiscountAmount, currentApplyTax);
         const { amountPaid, amountDue } = calculatePaymentSummary(values.paymentMethods || [], totalAmount);
 
         let overpaymentAmt = 0;
@@ -359,7 +366,7 @@ export function InvoiceEditor() {
             paymentMethods: values.paymentMethods as PaymentDetails[],
             subTotal,
             discountAmount,
-            taxRate: currentTaxRate,
+            taxRate: currentApplyTax ? (currentTaxRatePercent / 100) : 0, // Store decimal in preview
             taxAmount,
             totalAmount,
             amountPaid,
@@ -417,6 +424,27 @@ export function InvoiceEditor() {
     updateChangePayment,
     form 
 ]);
+
+  // Effect to synchronize applyTax and taxRate
+  useEffect(() => {
+    const applyTaxValue = form.watch('applyTax');
+    const currentTaxRateValue = form.watch('taxRate'); // This is percentage
+
+    if (editorMode !== 'normal') {
+      if (form.getValues('applyTax') !== false) form.setValue('applyTax', false, { shouldValidate: true });
+      if (form.getValues('taxRate') !== 0) form.setValue('taxRate', 0, { shouldValidate: true });
+      return;
+    }
+
+    if (applyTaxValue === false && currentTaxRateValue !== 0) {
+      form.setValue('taxRate', 0, { shouldValidate: true });
+    } else if (applyTaxValue === true && currentTaxRateValue === 0) {
+      // If tax is re-enabled and rate is 0, reset to default.
+      // If it had a non-zero value before being disabled, this will overwrite it. 
+      // This is simpler; for remembering a custom rate, more state would be needed.
+      form.setValue('taxRate', TAX_RATE * 100, { shouldValidate: true });
+    }
+  }, [form.watch('applyTax'), editorMode, form]);
 
 
   const handleRifSearch = async () => {
@@ -613,10 +641,11 @@ export function InvoiceEditor() {
       totalPrice: item.quantity * item.unitPrice,
     }));
 
-    const currentTaxRate = data.isDebtPayment || data.isCreditDeposit ? 0 : (data.taxRate ?? TAX_RATE);
+    const currentTaxRatePercent = data.isDebtPayment || data.isCreditDeposit ? 0 : (data.taxRate ?? TAX_RATE * 100);
     const currentDiscountAmount = data.isDebtPayment || data.isCreditDeposit ? 0 : (data.discountAmount || 0);
+    const currentApplyTax = data.isDebtPayment || data.isCreditDeposit ? false : (data.applyTax ?? true);
     
-    const { subTotal, discountAmount, taxAmount, totalAmount } = calculateTotals(finalItems, currentTaxRate, currentDiscountAmount);
+    const { subTotal, discountAmount, taxAmount, totalAmount } = calculateTotals(finalItems, currentTaxRatePercent, currentDiscountAmount, currentApplyTax);
     
     let currentCustomersList = [...customers];
     if (customerWasModified && newCustomerJustAdded) { 
@@ -745,7 +774,7 @@ export function InvoiceEditor() {
       paymentMethods: finalPaymentMethodsForInvoice,
       subTotal,
       discountAmount,
-      taxRate: currentTaxRate,
+      taxRate: data.applyTax ? ((data.taxRate || 0) / 100) : 0, // Store decimal
       taxAmount,
       totalAmount,
       amountPaid: finalAmountPaidOnInvoice,
@@ -1112,7 +1141,7 @@ export function InvoiceEditor() {
                     <PlusCircle className="mr-2 h-4 w-4" /> Añadir Artículo
                   </Button>
                 )}
-                {editorMode !== 'normal' && (
+                {(editorMode === 'debtPayment' || editorMode === 'creditDeposit') && (
                   <div className="flex items-center p-3 rounded-md bg-accent/10 text-foreground border border-accent/30">
                     <Info className="h-5 w-5 mr-2 text-accent" />
                     <p className="text-sm">
@@ -1353,27 +1382,53 @@ export function InvoiceEditor() {
                           </FormItem>
                       )}
                   />
-                  <FormField
+                  
+                  <div className="flex flex-col space-y-2 md:flex-row md:space-y-0 md:space-x-4 md:items-end"> {/* Changed items-center to items-end for better baseline align */}
+                    <FormField
                       control={form.control}
-                      name="taxRate"
+                      name="applyTax"
                       render={({ field }) => (
-                          <FormItem>
-                              <FormLabel>Tasa de IVA (ej. 0.16 para 16%)</FormLabel>
-                              <FormControl>
-                                <Input 
-                                  {...field} 
-                                  type="number" 
-                                  step="0.01" 
-                                  placeholder="0.16" 
-                                  onChange={e => field.onChange(parseFloat(e.target.value) || 0)} 
-                                  readOnly={editorMode !== 'normal'} 
-                                />
-                              </FormControl>
-                              {editorMode !== 'normal' && <p className="text-xs text-muted-foreground mt-1">El IVA no aplica en este modo.</p>}
-                              <FormMessage />
-                          </FormItem>
+                        <FormItem className="flex flex-row items-center space-x-2 space-y-0 pt-2 md:pt-0 md:self-center"> {/* Use self-center for checkbox vertical align */}
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              disabled={editorMode !== 'normal'}
+                              id="applyTaxCheckbox"
+                            />
+                          </FormControl>
+                          <FormLabel htmlFor="applyTaxCheckbox" className="font-normal cursor-pointer !mt-0"> {/* Remove !mt-0 if not needed or adjust */}
+                            Aplicar IVA
+                          </FormLabel>
+                        </FormItem>
                       )}
-                  />
+                    />
+                    <FormField
+                      control={form.control}
+                      name="taxRate" // This field holds the percentage value e.g. 16
+                      render={({ field }) => (
+                        <FormItem className="flex-grow">
+                          <FormLabel>Tasa de IVA (%)</FormLabel>
+                          <div className="flex items-center">
+                            <FormControl>
+                              <Input
+                                {...field}
+                                type="number"
+                                step="0.01"
+                                placeholder={(TAX_RATE * 100).toFixed(2)}
+                                onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
+                                disabled={!form.watch('applyTax') || editorMode !== 'normal'}
+                                className="w-full"
+                              />
+                            </FormControl>
+                          </div>
+                          {editorMode !== 'normal' && <p className="text-xs text-muted-foreground mt-1">El IVA no aplica en este modo.</p>}
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  
                   <FormField
                       control={form.control}
                       name="thankYouMessage"
@@ -1427,4 +1482,3 @@ export function InvoiceEditor() {
     </div>
   );
 }
-
