@@ -9,24 +9,33 @@ body {
 @layer base {
   :root {
     --background: 0 0% 96%; /* #F5F5F5 */
-    --foreground: 0 0% 3.9%; /* Black text */
+    --foreground: 0 0% 3.9%; /* Black text - Main page text */
+
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%; /* Black text */
+    --card-foreground: 0 0% 3.9%; /* Black text on cards */
+
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%; /* Black text */
+    --popover-foreground: 0 0% 3.9%; /* Black text on popovers */
+
     --primary: 232 63% 30%; /* #1A237E - Themeable */
-    --primary-foreground: 0 0% 3.9%; /* Black text */
+    --primary-foreground: 0 0% 98%; /* Light text for primary buttons */
+
     --secondary: 0 0% 92%; 
-    --secondary-foreground: 0 0% 3.9%; /* Black text */
+    --secondary-foreground: 0 0% 3.9%; /* Dark text for secondary buttons */
+
     --muted: 0 0% 90%;
     --muted-foreground: 0 0% 25%; /* Darker gray text for muted elements */
+
     --accent: 230 46% 48%; /* #3F51B5 - Themeable */
-    --accent-foreground: 0 0% 3.9%; /* Black text */
+    --accent-foreground: 0 0% 98%; /* Light text for accent elements/buttons */
+
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 3.9%; /* Black text */
+    --destructive-foreground: 0 0% 98%; /* Light text for destructive buttons */
+
     --border: 0 0% 89.8%;
     --input: 0 0% 89.8%;
-    --ring: 230 46% 48%; /* Use accent color for ring - Themeable via accent */
+    --ring: hsl(var(--accent)); /* Use accent color for ring - Themeable via accent */
+    
     --chart-1: 12 76% 61%;
     --chart-2: 173 58% 39%;
     --chart-3: 197 37% 24%;
@@ -36,35 +45,44 @@ body {
 
     /* Sidebar specific colors */
     --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 0 0% 3.9%; /* Black text */
-    --sidebar-primary: 232 63% 30%; /* Themeable via primary */
-    --sidebar-primary-foreground: 0 0% 3.9%; /* Black text */
-    --sidebar-accent: 230 46% 48%; /* Themeable via accent */
-    --sidebar-accent-foreground: 0 0% 3.9%; /* Black text */
+    --sidebar-foreground: 0 0% 3.9%; /* Dark text */
+    --sidebar-primary: hsl(var(--primary)); 
+    --sidebar-primary-foreground: 0 0% 98%; /* Light text for primary sidebar elements if needed */
+    --sidebar-accent: hsl(var(--accent));
+    --sidebar-accent-foreground: 0 0% 98%;   /* Light text for accent sidebar elements if needed */
     --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 230 46% 48%; /* Themeable via accent */
+    --sidebar-ring: hsl(var(--accent));
   }
 
   .dark {
-    --background: 0 0% 3.9%; /* Dark background */
-    --foreground: 0 0% 3.9%; /* Black text - as requested, on dark background */
-    --card: 0 0% 10%; /* Dark card background */
-    --card-foreground: 0 0% 3.9%; /* Black text - as requested, on dark card */
-    --popover: 0 0% 10%; /* Dark popover background */
-    --popover-foreground: 0 0% 3.9%; /* Black text - as requested, on dark popover */
-    --primary: 232 63% 30%; /* #1A237E - Themeable */
-    --primary-foreground: 0 0% 3.9%; /* Black text */
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 3.9%; /* Black text */
+    --background: 0 0% 3.9%; 
+    --foreground: 0 0% 98%; /* Light text for main page content in dark mode */
+
+    --card: 0 0% 10%; 
+    --card-foreground: 0 0% 98%; /* Light text on cards in dark mode */
+
+    --popover: 0 0% 10%; 
+    --popover-foreground: 0 0% 98%; /* Light text on popovers in dark mode */
+
+    --primary: 232 63% 30%; 
+    --primary-foreground: 0 0% 98%; /* Light text for primary buttons */
+
+    --secondary: 0 0% 14.9%; /* Darker secondary background for dark mode */
+    --secondary-foreground: 0 0% 98%; /* Light text for secondary buttons in dark mode */
+
     --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 25%; /* Darker gray text for muted elements */
-    --accent: 230 46% 48%; /* #3F51B5 - Themeable */
-    --accent-foreground: 0 0% 3.9%; /* Black text */
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 3.9%; /* Black text */
+    --muted-foreground: 0 0% 60%; /* Lighter gray for muted text in dark mode */
+
+    --accent: 230 46% 48%; 
+    --accent-foreground: 0 0% 98%; /* Light text for accent elements/buttons */
+
+    --destructive: 0 62.8% 30.6%; /* Darker destructive for dark mode */
+    --destructive-foreground: 0 0% 98%; /* Light text for destructive buttons */
+
     --border: 0 0% 14.9%;
     --input: 0 0% 14.9%;
-    --ring: 230 46% 48%; /* Themeable via accent */
+    --ring: hsl(var(--accent)); 
+    
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
@@ -72,13 +90,13 @@ body {
     --chart-5: 340 75% 55%;
 
     --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 0 0% 3.9%; /* Black text */
-    --sidebar-primary: 232 63% 30%; /* Themeable via primary */
-    --sidebar-primary-foreground: 0 0% 3.9%; /* Black text */
-    --sidebar-accent: 230 46% 48%; /* Themeable via accent */
-    --sidebar-accent-foreground: 0 0% 3.9%; /* Black text */
+    --sidebar-foreground: 0 0% 98%; /* Light text */
+    --sidebar-primary: hsl(var(--primary));
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: hsl(var(--accent));
+    --sidebar-accent-foreground: 0 0% 98%;
     --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 230 46% 48%; /* Themeable via accent */
+    --sidebar-ring: hsl(var(--accent));
   }
 }
 
@@ -90,6 +108,46 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/* Apply text-shadow for outline effect on specific button variants */
+.bg-primary.text-primary-foreground,
+button.bg-primary {
+  text-shadow:
+    -1px -1px 0 #000, /* Black shadow for outline */
+     1px -1px 0 #000,
+    -1px  1px 0 #000,
+     1px  1px 0 #000;
+}
+
+.bg-destructive.text-destructive-foreground,
+button.bg-destructive {
+  text-shadow:
+    -1px -1px 0 #000,
+     1px -1px 0 #000,
+    -1px  1px 0 #000,
+     1px  1px 0 #000;
+}
+
+/* This covers buttons using accent background with accent-foreground (which is light) */
+.bg-accent.text-accent-foreground,
+button.bg-accent {
+   text-shadow:
+    -1px -1px 0 #000,
+     1px -1px 0 #000,
+    -1px  1px 0 #000,
+     1px  1px 0 #000;
+}
+
+/* Dark mode specific: Secondary buttons in dark mode have a dark background and light text, so they also get the outline */
+.dark .bg-secondary.text-secondary-foreground,
+.dark button.bg-secondary {
+   text-shadow:
+    -1px -1px 0 #000,
+     1px -1px 0 #000,
+    -1px  1px 0 #000,
+     1px  1px 0 #000;
+}
+
 
 @media print {
   body {
