@@ -123,15 +123,16 @@ export function InvoiceEditor() {
       notes: "",
       applyTax: true,
       taxRate: TAX_RATE * 100, // Percentage for form input
+      applyDiscount: false,
       discountAmount: 0,
       overpaymentHandlingChoice: 'creditToAccount',
       changeRefundPaymentMethods: [],
     },
   });
 
-  const calculateTotals = useCallback((items: InvoiceItem[], taxRatePercentValue: number, discountAmountValue: number, applyTaxFlag: boolean) => {
+  const calculateTotals = useCallback((items: InvoiceItem[], taxRatePercentValue: number, discountAmountValue: number, applyTaxFlag: boolean, applyDiscountFlag: boolean) => {
     const subTotal = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
-    const actualDiscountAmount = discountAmountValue || 0;
+    const actualDiscountAmount = applyDiscountFlag ? (discountAmountValue || 0) : 0;
     const taxableAmount = Math.max(0, subTotal - actualDiscountAmount);
     const actualTaxRateDecimal = applyTaxFlag ? (taxRatePercentValue || 0) / 100 : 0;
     const taxAmount = taxableAmount * actualTaxRateDecimal;
@@ -157,6 +158,8 @@ export function InvoiceEditor() {
     
     let formTaxRatePercent = TAX_RATE * 100; // Percentage
     let formApplyTax = true;
+    let formApplyDiscount = false;
+    let formDiscountAmount = 0;
     let formIsDebtPayment = false;
     let formIsCreditDeposit = false;
     
@@ -170,6 +173,8 @@ export function InvoiceEditor() {
       notesMsg = `Abono a deuda pendiente por ${formatCurrency(amount)}`;
       formTaxRatePercent = 0;
       formApplyTax = false;
+      formApplyDiscount = false;
+      formDiscountAmount = 0;
       formIsDebtPayment = true;
     } else if (mode === 'creditDeposit' && targetCustomer) {
       initialCustomerState = { ...targetCustomer };
@@ -179,6 +184,8 @@ export function InvoiceEditor() {
       notesMsg = `Depósito a cuenta cliente. El monto se define en los métodos de pago.`;
       formTaxRatePercent = 0;
       formApplyTax = false;
+      formApplyDiscount = false;
+      formDiscountAmount = 0;
       formIsCreditDeposit = true;
     } else { 
       if (targetCustomer) {
@@ -202,7 +209,8 @@ export function InvoiceEditor() {
       notes: notesMsg,
       applyTax: formApplyTax,
       taxRate: formTaxRatePercent,
-      discountAmount: 0,
+      applyDiscount: formApplyDiscount,
+      discountAmount: formDiscountAmount,
       overpaymentHandlingChoice: 'creditToAccount',
       changeRefundPaymentMethods: [],
     };
@@ -217,8 +225,9 @@ export function InvoiceEditor() {
     const currentTaxRatePercent = formValuesToReset.taxRate ?? TAX_RATE * 100;
     const currentDiscountAmount = formValuesToReset.discountAmount || 0;
     const currentApplyTax = formValuesToReset.applyTax ?? true;
+    const currentApplyDiscount = formValuesToReset.applyDiscount ?? false;
 
-    const { subTotal, discountAmount, taxAmount, totalAmount } = calculateTotals(currentItems, currentTaxRatePercent, currentDiscountAmount, currentApplyTax);
+    const { subTotal, discountAmount, taxAmount, totalAmount } = calculateTotals(currentItems, currentTaxRatePercent, currentDiscountAmount, currentApplyTax, currentApplyDiscount);
     const { amountPaid, amountDue } = calculatePaymentSummary(formValuesToReset.paymentMethods || [], totalAmount);
 
     setLiveInvoicePreview({
@@ -341,8 +350,9 @@ export function InvoiceEditor() {
         const currentTaxRatePercent = values.isDebtPayment || values.isCreditDeposit ? 0 : (values.taxRate ?? TAX_RATE * 100);
         const currentDiscountAmount = values.isDebtPayment || values.isCreditDeposit ? 0 : (values.discountAmount || 0);
         const currentApplyTax = values.isDebtPayment || values.isCreditDeposit ? false : (values.applyTax ?? true);
+        const currentApplyDiscount = values.isDebtPayment || values.isCreditDeposit ? false : (values.applyDiscount ?? false);
 
-        const { subTotal, discountAmount, taxAmount, totalAmount } = calculateTotals(currentItems, currentTaxRatePercent, currentDiscountAmount, currentApplyTax);
+        const { subTotal, discountAmount, taxAmount, totalAmount } = calculateTotals(currentItems, currentTaxRatePercent, currentDiscountAmount, currentApplyTax, currentApplyDiscount);
         const { amountPaid, amountDue } = calculatePaymentSummary(values.paymentMethods || [], totalAmount);
 
         let overpaymentAmt = 0;
@@ -439,12 +449,27 @@ export function InvoiceEditor() {
     if (applyTaxValue === false && currentTaxRateValue !== 0) {
       form.setValue('taxRate', 0, { shouldValidate: true });
     } else if (applyTaxValue === true && currentTaxRateValue === 0) {
-      // If tax is re-enabled and rate is 0, reset to default.
-      // If it had a non-zero value before being disabled, this will overwrite it. 
-      // This is simpler; for remembering a custom rate, more state would be needed.
       form.setValue('taxRate', TAX_RATE * 100, { shouldValidate: true });
     }
   }, [form.watch('applyTax'), editorMode, form]);
+
+  // Effect to synchronize applyDiscount and discountAmount
+  useEffect(() => {
+    const applyDiscountValue = form.watch('applyDiscount');
+    const currentDiscountAmount = form.watch('discountAmount');
+
+    if (editorMode !== 'normal') {
+      if (form.getValues('applyDiscount') !== false) form.setValue('applyDiscount', false, { shouldValidate: true });
+      if (form.getValues('discountAmount') !== 0) form.setValue('discountAmount', 0, { shouldValidate: true });
+      return;
+    }
+
+    if (applyDiscountValue === false && currentDiscountAmount !== 0) {
+      form.setValue('discountAmount', 0, { shouldValidate: true });
+    }
+    // If applyDiscountValue is true, we let the user input the amount, so no automatic setting of discountAmount here
+    // unless it was previously 0 and now needs to be enabled for input. The field itself handles this.
+  }, [form.watch('applyDiscount'), editorMode, form]);
 
 
   const handleRifSearch = async () => {
@@ -642,10 +667,12 @@ export function InvoiceEditor() {
     }));
 
     const currentTaxRatePercent = data.isDebtPayment || data.isCreditDeposit ? 0 : (data.taxRate ?? TAX_RATE * 100);
-    const currentDiscountAmount = data.isDebtPayment || data.isCreditDeposit ? 0 : (data.discountAmount || 0);
+    const currentDiscountAmountRaw = data.isDebtPayment || data.isCreditDeposit ? 0 : (data.discountAmount || 0);
     const currentApplyTax = data.isDebtPayment || data.isCreditDeposit ? false : (data.applyTax ?? true);
-    
-    const { subTotal, discountAmount, taxAmount, totalAmount } = calculateTotals(finalItems, currentTaxRatePercent, currentDiscountAmount, currentApplyTax);
+    const currentApplyDiscount = data.isDebtPayment || data.isCreditDeposit ? false : (data.applyDiscount ?? false);
+    const currentDiscountAmount = currentApplyDiscount ? currentDiscountAmountRaw : 0;
+
+    const { subTotal, discountAmount, taxAmount, totalAmount } = calculateTotals(finalItems, currentTaxRatePercent, currentDiscountAmount, currentApplyTax, currentApplyDiscount);
     
     let currentCustomersList = [...customers];
     if (customerWasModified && newCustomerJustAdded) { 
@@ -773,7 +800,7 @@ export function InvoiceEditor() {
       items: finalItems,
       paymentMethods: finalPaymentMethodsForInvoice,
       subTotal,
-      discountAmount,
+      discountAmount: data.applyDiscount ? (data.discountAmount || 0) : 0,
       taxRate: data.applyTax ? ((data.taxRate || 0) / 100) : 0, // Store decimal
       taxAmount,
       totalAmount,
@@ -1142,9 +1169,9 @@ export function InvoiceEditor() {
                   </Button>
                 )}
                 {(editorMode === 'debtPayment' || editorMode === 'creditDeposit') && (
-                  <div className="flex items-center p-3 rounded-md bg-accent/10 text-foreground border border-accent/30">
+                  <div className="flex items-center p-3 rounded-md bg-accent/10 border border-accent/30">
                     <Info className="h-5 w-5 mr-2 text-accent" />
-                    <p className="text-sm">
+                    <p className="text-sm text-foreground">
                       {editorMode === 'debtPayment' 
                         ? "Está registrando un abono a una deuda. No se pueden modificar los artículos." 
                         : "Está registrando un depósito a cuenta. Los detalles del artículo son fijos. Ingrese el monto del depósito en 'Detalles del Pago'."}
@@ -1357,38 +1384,58 @@ export function InvoiceEditor() {
                   <CardTitle className="text-xl flex items-center text-primary"><Settings className="mr-2 h-5 w-5" />Configuración Adicional</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                  <FormField
-                      control={form.control}
-                      name="discountAmount"
-                      render={({ field }) => (
-                          <FormItem>
-                              <FormLabel className="flex items-center">
-                                <Percent className="mr-2 h-4 w-4 text-muted-foreground" />
-                                Monto de Descuento ({CURRENCY_SYMBOL}) (Opcional)
-                              </FormLabel>
-                              <FormControl>
-                                <Input 
-                                  {...field} 
-                                  value={field.value === 0 ? '' : field.value} 
-                                  onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
-                                  type="number" 
-                                  step="0.01" 
-                                  placeholder="0.00"
-                                  readOnly={editorMode !== 'normal'} 
-                                />
-                              </FormControl>
-                              {editorMode !== 'normal' && <p className="text-xs text-muted-foreground mt-1">Los descuentos no aplican en este modo.</p>}
-                              <FormMessage />
-                          </FormItem>
-                      )}
-                  />
+                  <div className="flex flex-col space-y-2 md:flex-row md:space-y-0 md:space-x-4 md:items-end">
+                      <FormField
+                          control={form.control}
+                          name="applyDiscount"
+                          render={({ field }) => (
+                              <FormItem className="flex flex-row items-center space-x-2 space-y-0 pt-2 md:pt-0 md:self-center">
+                                  <FormControl>
+                                      <Checkbox
+                                          checked={field.value}
+                                          onCheckedChange={field.onChange}
+                                          disabled={editorMode !== 'normal'}
+                                          id="applyDiscountCheckbox"
+                                      />
+                                  </FormControl>
+                                  <FormLabel htmlFor="applyDiscountCheckbox" className="font-normal cursor-pointer !mt-0">
+                                      Aplicar Descuento
+                                  </FormLabel>
+                              </FormItem>
+                          )}
+                      />
+                      <FormField
+                          control={form.control}
+                          name="discountAmount"
+                          render={({ field }) => (
+                              <FormItem className="flex-grow">
+                                  <FormLabel className="flex items-center">
+                                      Monto de Descuento ({CURRENCY_SYMBOL})
+                                  </FormLabel>
+                                  <FormControl>
+                                      <Input 
+                                      {...field} 
+                                      value={field.value === 0 ? '' : field.value} 
+                                      onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
+                                      type="number" 
+                                      step="0.01" 
+                                      placeholder="0.00"
+                                      disabled={!form.watch('applyDiscount') || editorMode !== 'normal'} 
+                                      />
+                                  </FormControl>
+                                  {(editorMode !== 'normal' || !form.watch('applyDiscount')) && <p className="text-xs text-muted-foreground mt-1">Los descuentos no aplican o están desactivados.</p>}
+                                  <FormMessage />
+                              </FormItem>
+                          )}
+                      />
+                  </div>
                   
-                  <div className="flex flex-col space-y-2 md:flex-row md:space-y-0 md:space-x-4 md:items-end"> {/* Changed items-center to items-end for better baseline align */}
+                  <div className="flex flex-col space-y-2 md:flex-row md:space-y-0 md:space-x-4 md:items-end"> 
                     <FormField
                       control={form.control}
                       name="applyTax"
                       render={({ field }) => (
-                        <FormItem className="flex flex-row items-center space-x-2 space-y-0 pt-2 md:pt-0 md:self-center"> {/* Use self-center for checkbox vertical align */}
+                        <FormItem className="flex flex-row items-center space-x-2 space-y-0 pt-2 md:pt-0 md:self-center"> 
                           <FormControl>
                             <Checkbox
                               checked={field.value}
@@ -1397,7 +1444,7 @@ export function InvoiceEditor() {
                               id="applyTaxCheckbox"
                             />
                           </FormControl>
-                          <FormLabel htmlFor="applyTaxCheckbox" className="font-normal cursor-pointer !mt-0"> {/* Remove !mt-0 if not needed or adjust */}
+                          <FormLabel htmlFor="applyTaxCheckbox" className="font-normal cursor-pointer !mt-0"> 
                             Aplicar IVA
                           </FormLabel>
                         </FormItem>
@@ -1405,7 +1452,7 @@ export function InvoiceEditor() {
                     />
                     <FormField
                       control={form.control}
-                      name="taxRate" // This field holds the percentage value e.g. 16
+                      name="taxRate" 
                       render={({ field }) => (
                         <FormItem className="flex-grow">
                           <FormLabel>Tasa de IVA (%)</FormLabel>
@@ -1422,7 +1469,7 @@ export function InvoiceEditor() {
                               />
                             </FormControl>
                           </div>
-                          {editorMode !== 'normal' && <p className="text-xs text-muted-foreground mt-1">El IVA no aplica en este modo.</p>}
+                          {(editorMode !== 'normal' || !form.watch('applyTax')) && <p className="text-xs text-muted-foreground mt-1">El IVA no aplica o está desactivado.</p>}
                           <FormMessage />
                         </FormItem>
                       )}
@@ -1482,3 +1529,4 @@ export function InvoiceEditor() {
     </div>
   );
 }
+

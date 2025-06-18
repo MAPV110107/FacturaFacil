@@ -54,6 +54,7 @@ export const invoiceFormSchema = z.object({
   notes: z.string().optional(),
   applyTax: z.boolean().default(true).optional(),
   taxRate: z.number().min(0).max(100, "La tasa de IVA debe estar entre 0 y 100.").default(16), // Representa el porcentaje, ej. 16 para 16%
+  applyDiscount: z.boolean().default(false).optional(),
   discountAmount: z.number().min(0, "El descuento no puede ser negativo.").optional(),
 
   // Fields for handling overpayment
@@ -79,3 +80,4 @@ export const invoiceFormSchema = z.object({
     message: "El monto del vuelto para cada método debe ser positivo.",
     path: ["changeRefundPaymentMethods"],
 });
+
