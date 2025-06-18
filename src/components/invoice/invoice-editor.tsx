@@ -302,12 +302,8 @@ export function InvoiceEditor() {
     isInitializingDebtPaymentRef.current = false;
 
     if ((editorMode === 'debtPayment' || editorMode === 'creditDeposit') && !debtPaymentParam) {
-        setEditorMode('normal');
-        setCurrentDebtOrCreditAmount(0);
-        resetFormAndState({ mode: 'normal', customerId: selectedCustomerIdForDropdown });
-        if (pathname === '/invoice/new' && searchParams.has('debtPayment')) { 
-             router.replace('/invoice/new', { scroll: false });
-        }
+        // Stays in special mode if entered via button, this block intentionally left leaner
+        // to avoid premature resets from special modes.
     }
     else if (editorMode === 'normal' && (!form.getValues('invoiceNumber') || form.getValues('invoiceNumber').startsWith("PAGO-") || form.getValues('invoiceNumber').startsWith("DEP-")) && !selectedCustomerIdForDropdown && !initialNormalResetDoneRef.current) {
        resetFormAndState({ mode: 'normal' });
@@ -527,7 +523,7 @@ export function InvoiceEditor() {
       setCustomerSearchMessage(`Pagando deuda de: ${customer.name}`);
       setShowNewCustomerFields(false);
       resetFormAndState({ mode: 'debtPayment', customerId: customer.id, amount: customer.outstandingBalance });
-      initialNormalResetDoneRef.current = true; 
+      // initialNormalResetDoneRef.current = true; // Removed
     } else {
       toast({ variant: "destructive", title: "Sin Deuda Pendiente", description: "El cliente seleccionado no tiene deuda pendiente o no hay cliente seleccionado." });
     }
@@ -543,7 +539,7 @@ export function InvoiceEditor() {
       setCustomerSearchMessage(`Registrando depósito para: ${customer.name}`);
       setShowNewCustomerFields(false);
       resetFormAndState({ mode: 'creditDeposit', customerId: customer.id });
-      initialNormalResetDoneRef.current = true; 
+      // initialNormalResetDoneRef.current = true; // Removed
     } else {
       toast({ variant: "destructive", title: "Cliente no seleccionado", description: "Por favor, seleccione o busque un cliente primero." });
     }
@@ -741,7 +737,7 @@ export function InvoiceEditor() {
     setCustomerRifInput(""); 
     setCustomerSearchMessage(null); 
     setShowNewCustomerFields(false); 
-    initialNormalResetDoneRef.current = false; 
+    // initialNormalResetDoneRef.current = false; // Let resetFormAndState manage this
     resetFormAndState({ mode: 'normal' }); 
     if (pathname === '/invoice/new' && searchParams.has('debtPayment')) { 
         router.replace('/invoice/new', { scroll: false });
@@ -755,7 +751,7 @@ export function InvoiceEditor() {
     setCustomerRifInput("");
     setCustomerSearchMessage(null);
     setShowNewCustomerFields(false);
-    initialNormalResetDoneRef.current = false; 
+    // initialNormalResetDoneRef.current = false; // Let resetFormAndState manage this
     resetFormAndState({ mode: 'normal' });
     toast({
         title: "Creación Cancelada",
@@ -982,7 +978,6 @@ export function InvoiceEditor() {
                         setEditorMode('normal');
                         setCurrentDebtOrCreditAmount(0);
                         resetFormAndState({mode: 'normal', customerId: selectedCustomerIdForDropdown });
-                        initialNormalResetDoneRef.current = true;
                       }} className="w-full">
                           <Ban className="mr-2 h-4 w-4" /> Cancelar Modo Especial / Nueva Factura
                       </Button>
