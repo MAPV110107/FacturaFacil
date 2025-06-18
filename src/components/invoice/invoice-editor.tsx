@@ -73,6 +73,7 @@ export function InvoiceEditor() {
   
   const isInitializingDebtPaymentRef = useRef(false);
   const initialCustomersLoadAttemptedRef = useRef(false);
+  const initialNormalResetDoneRef = useRef(false);
 
 
   const initialLivePreviewState: Partial<Invoice> = {
@@ -143,8 +144,8 @@ export function InvoiceEditor() {
     return { amountPaid, amountDue };
   }, []);
 
-  const resetFormAndState = useCallback((params: { mode?: EditorMode, customerId?: string, amount?: number, callingEffectRef?: React.MutableRefObject<boolean> } = {}) => {
-    const { mode = 'normal', customerId, amount = 0, callingEffectRef } = params;
+  const resetFormAndState = useCallback((params: { mode?: EditorMode, customerId?: string, amount?: number } = {}) => {
+    const { mode = 'normal', customerId, amount = 0 } = params;
     
     let initialInvoiceNumber = `FACT-${Date.now().toString().slice(-6)}`;
     const initialDate = new Date();
@@ -177,6 +178,9 @@ export function InvoiceEditor() {
     } else { // mode === 'normal' or fallback
       if (targetCustomer) {
         initialCustomerState = {...targetCustomer};
+      }
+      if (mode === 'normal' && !customerId) {
+        initialNormalResetDoneRef.current = true;
       }
     }
     
@@ -240,8 +244,8 @@ export function InvoiceEditor() {
       changeRefundPaymentMethods: formValuesToReset.changeRefundPaymentMethods as PaymentDetails[],
     });
     
-    if (callingEffectRef) {
-        callingEffectRef.current = false;
+    if (isInitializingDebtPaymentRef.current) {
+        isInitializingDebtPaymentRef.current = false;
     }
 
   }, [form, customers, companyDetails, calculateTotals, calculatePaymentSummary]);
@@ -276,24 +280,26 @@ export function InvoiceEditor() {
             setCustomerRifInput(targetCustomer.rif);
             setCustomerSearchMessage(`Pagando deuda de: ${targetCustomer.name}`);
             setShowNewCustomerFields(false);
-            resetFormAndState({ mode: 'debtPayment', customerId: customerIdParam, amount: amountParam, callingEffectRef: isInitializingDebtPaymentRef });
+            resetFormAndState({ mode: 'debtPayment', customerId: customerIdParam, amount: amountParam });
         } else {
             toast({ variant: "destructive", title: "Cliente no encontrado", description: "No se pudo encontrar el cliente para el pago de deuda." });
             setEditorMode('normal'); 
-            resetFormAndState({ mode: 'normal', callingEffectRef: isInitializingDebtPaymentRef });
+            resetFormAndState({ mode: 'normal' });
         }
         if (pathname === '/invoice/new' && searchParams.has('debtPayment')) {
              router.replace('/invoice/new', { scroll: false });
         }
         return; 
+    } else {
+       if (isInitializingDebtPaymentRef.current) {
+         isInitializingDebtPaymentRef.current = false;
+       }
     }
-    
-    isInitializingDebtPaymentRef.current = false;
     
     const currentInvoiceNumber = form.getValues('invoiceNumber');
     const isDefaultOrSpecialModeNumber = !currentInvoiceNumber || currentInvoiceNumber.startsWith("PAGO-") || currentInvoiceNumber.startsWith("DEP-");
 
-    if (editorMode === 'normal' && isDefaultOrSpecialModeNumber && !selectedCustomerIdForDropdown) {
+    if (editorMode === 'normal' && isDefaultOrSpecialModeNumber && !selectedCustomerIdForDropdown && !initialNormalResetDoneRef.current) {
        resetFormAndState({ mode: 'normal' });
     }
 
@@ -916,7 +922,7 @@ export function InvoiceEditor() {
                 <CardTitle className="text-xl flex items-center text-primary"><Users className="mr-2 h-5 w-5" />Información del Cliente</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex flex-col sm:flex-row gap-2 items-end">
+                <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
                   <FormItem className="flex-grow">
                     <FormLabel htmlFor="customerRifInput">RIF/Cédula del Cliente</FormLabel>
                     <FormControl>
@@ -1108,7 +1114,7 @@ export function InvoiceEditor() {
                 )}
                 {editorMode !== 'normal' && (
                   <div className="flex items-center p-3 rounded-md bg-accent/10 text-foreground border border-accent/30">
-                    <Info className="h-5 w-5 mr-2" />
+                    <Info className="h-5 w-5 mr-2 text-accent" />
                     <p className="text-sm">
                       {editorMode === 'debtPayment' 
                         ? "Está registrando un abono a una deuda. No se pueden modificar los artículos." 
