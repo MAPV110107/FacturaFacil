@@ -1,6 +1,18 @@
+
+import { Suspense } from 'react';
 import { InvoiceEditor } from "@/components/invoice/invoice-editor";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { FilePlus2 } from "lucide-react";
+import { FilePlus2, RefreshCw } from "lucide-react"; // Added RefreshCw for loading state
+
+function InvoiceLoadingSkeleton() {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] text-muted-foreground space-y-4">
+      <RefreshCw className="h-12 w-12 animate-spin text-primary" />
+      <p className="text-xl font-semibold">Cargando editor de facturas...</p>
+      <p>Esto puede tomar un momento.</p>
+    </div>
+  );
+}
 
 export default function NewInvoicePage() {
   return (
@@ -18,7 +30,9 @@ export default function NewInvoicePage() {
           </div>
         </CardHeader>
       </Card>
-      <InvoiceEditor />
+      <Suspense fallback={<InvoiceLoadingSkeleton />}>
+        <InvoiceEditor />
+      </Suspense>
     </div>
   );
 }
