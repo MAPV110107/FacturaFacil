@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { SlidersHorizontal, Palette, Info, CheckCircle, BookOpen, Eye, Undo, DollarSign, Gift, Users, FilePlus2, History, Settings as SettingsIcon, Download, Upload, Server, AlertTriangle, RotateCcw } from "lucide-react";
+import { SlidersHorizontal, Palette, Info, CheckCircle, BookOpen, Eye, Undo, DollarSign, Gift, Users, FilePlus2, History, Settings as SettingsIcon, Download, Upload, Server, AlertTriangle, RotateCcw, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -23,14 +23,15 @@ import { es } from "date-fns/locale";
 interface ColorPalette {
   name: string;
   primary: string;
-  background: string;
+  // background HSL is for the theme card preview, not for global page background override
+  backgroundPreview: string; 
   accent: string;
 }
 
 interface DisplayColorPalette {
   name: string;
   primary: string;
-  background: string;
+  actualPageBackground: string; // Reflects the true page background from CSS
   accent: string;
 }
 
@@ -38,43 +39,44 @@ interface DisplayColorPalette {
 const suggestedPalettes: ColorPalette[] = [
   {
     name: "Tema Azul Original",
-    primary: "232 63% 30%",
-    background: "0 0% 96%",
-    accent: "230 46% 48%",
+    primary: "232 63% 30%", // Dark Blue
+    backgroundPreview: "0 0% 96%", // Light Gray (for preview tile)
+    accent: "230 46% 48%",   // Medium Blue
   },
   {
     name: "Tema Rojo",
-    primary: "0 70% 50%",
-    background: "0 0% 96%",
-    accent: "30 80% 60%",
+    primary: "0 70% 50%",    // Red
+    backgroundPreview: "0 0% 96%", // Light Gray
+    accent: "30 80% 60%",   // Orange-Red
   },
   {
     name: "Tema Verde",
-    primary: "120 60% 35%",
-    background: "0 0% 96%",
-    accent: "140 50% 55%",
+    primary: "120 60% 35%",  // Dark Green
+    backgroundPreview: "0 0% 96%", // Light Gray
+    accent: "140 50% 55%",  // Medium Green
   },
   {
     name: "Tema Amarillo",
-    primary: "45 70% 45%", 
-    background: "0 0% 98%", 
-    accent: "60 90% 70%", 
+    primary: "45 70% 45%",   // Dark Yellow/Gold
+    backgroundPreview: "0 0% 98%", // Very Light Gray
+    accent: "60 90% 70%",   // Light Yellow
   },
   {
     name: "Tema Morado",
-    primary: "270 50% 45%",
-    background: "0 0% 96%",
-    accent: "290 60% 65%",
+    primary: "270 50% 45%",  // Purple
+    backgroundPreview: "0 0% 96%", // Light Gray
+    accent: "290 60% 65%",  // Pink-Purple
   },
   {
     name: "Tema Naranja",
-    primary: "30 90% 50%",
-    background: "0 0% 96%",
-    accent: "40 100% 65%",
+    primary: "30 90% 50%",   // Bright Orange
+    backgroundPreview: "0 0% 96%", // Light Gray
+    accent: "40 100% 65%",  // Lighter Orange
   },
 ];
 
 const LOCAL_STORAGE_THEME_KEY = "facturafacil-theme";
+const LOCAL_STORAGE_UI_MODE_KEY = "facturafacil-uimode";
 const LOCAL_STORAGE_COMPANY_KEY = "companyDetails";
 const LOCAL_STORAGE_CUSTOMERS_KEY = "customers";
 const LOCAL_STORAGE_INVOICES_KEY = "invoices";
@@ -98,7 +100,7 @@ interface BackupData {
 
 export default function SettingsPage() {
   const { toast } = useToast();
-  const [activeThemeName, setActiveThemeName] = useState<string | null>(null);
+  const [activePaletteName, setActivePaletteName] = useState<string | null>(null);
   const [currentDisplayColors, setCurrentDisplayColors] = useState<DisplayColorPalette | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importMessages, setImportMessages] = useState<string[]>([]);
@@ -108,6 +110,8 @@ export default function SettingsPage() {
   const [lastImportTimestamp, setLastImportTimestamp] = useState<string | null>(null);
   const [isLastImportReverted, setIsLastImportReverted] = useState<boolean>(false);
   const [canRevertImport, setCanRevertImport] = useState<boolean>(false);
+  
+  const [uiMode, setUiMode] = useState<'light' | 'dark'>('light');
 
 
   const updateStatusIndicators = useCallback(() => {
@@ -125,76 +129,104 @@ export default function SettingsPage() {
     updateStatusIndicators();
   }, [updateStatusIndicators]);
 
-  const applyThemeToDOM = useCallback((palette: ColorPalette) => {
+  const getActualPageBackground = () => {
+     if (typeof document !== 'undefined') {
+        return getComputedStyle(document.documentElement).getPropertyValue('--background').trim() || 
+               (document.documentElement.classList.contains('dark') ? "0 0% 3.9%" : "0 0% 96%");
+      }
+      return uiMode === 'dark' ? "0 0% 3.9%" : "0 0% 96%"; // Fallback
+  };
+
+  const applyPaletteToDOM = useCallback((palette: ColorPalette) => {
     if (typeof document !== 'undefined') {
       document.documentElement.style.setProperty('--primary', palette.primary);
-      document.documentElement.style.setProperty('--background', palette.background);
       document.documentElement.style.setProperty('--accent', palette.accent);
       
-      // Ensure text on colored buttons is white (for text-shadow from globals.css)
-      // These are fixed and don't depend on palette lightness anymore for text color.
+      // Text on colored buttons should be white with black border (text-shadow from globals.css)
       document.documentElement.style.setProperty('--primary-foreground', '0 0% 98%');
       document.documentElement.style.setProperty('--accent-foreground', '0 0% 98%');
       document.documentElement.style.setProperty('--destructive-foreground', '0 0% 98%');
-      
-      // For dark theme, secondary-foreground is also light
-      if (document.documentElement.classList.contains('dark')) {
-        document.documentElement.style.setProperty('--secondary-foreground', '0 0% 98%');
-      } else {
-        // In light theme, secondary-foreground is dark (defined in globals.css)
-        // No need to set it here dynamically unless a specific theme required it.
-      }
     }
     
-    setCurrentDisplayColors({
-        name: palette.name,
-        primary: palette.primary,
-        background: palette.background,
-        accent: palette.accent,
+    // Update currentDisplayColors state AFTER styles might have been flushed by the browser
+    requestAnimationFrame(() => {
+        setCurrentDisplayColors({
+            name: palette.name,
+            primary: palette.primary,
+            actualPageBackground: getActualPageBackground(),
+            accent: palette.accent,
+        });
     });
-    setActiveThemeName(palette.name);
-  }, []);
+    setActivePaletteName(palette.name);
+  }, [ setActivePaletteName]);
 
 
   useEffect(() => {
-    const getInitialColorValue = (cssVar: string, fallback: string) => {
-      if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-        const value = getComputedStyle(document.documentElement).getPropertyValue(cssVar).trim();
-        return value || fallback;
-      }
-      return fallback;
-    };
-    
-    const savedThemeName = typeof window !== 'undefined' ? localStorage.getItem(LOCAL_STORAGE_THEME_KEY) : null;
-    const themeToApply = suggestedPalettes.find(p => p.name === savedThemeName) || 
-                         suggestedPalettes.find(p => p.name === "Tema Azul Original") || 
-                         suggestedPalettes[0];
-    
-    if (themeToApply) {
-      applyThemeToDOM(themeToApply);
-    } else if (typeof document !== 'undefined') {
-       // This branch might not be hit if a default theme is always found
-       // But as a fallback, set current display colors based on CSS vars
-       setCurrentDisplayColors({
-        name: "Predeterminado (CSS)",
-        primary: getInitialColorValue('--primary', "232 63% 30%"), // Fallback from globals.css
-        background: getInitialColorValue('--background', "0 0% 96%"), // Fallback from globals.css
-        accent: getInitialColorValue('--accent', "230 46% 48%"), // Fallback from globals.css
-      });
-      setActiveThemeName("Predeterminado (CSS)");
-    }
-  }, [applyThemeToDOM]);
+    // Load saved UI mode (light/dark)
+    const savedMode = localStorage.getItem(LOCAL_STORAGE_UI_MODE_KEY) as 'light' | 'dark' | null;
+    const prefersDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const initialMode = savedMode || (prefersDark ? 'dark' : 'light');
+    setUiMode(initialMode);
+    // ThemeInitializer component handles adding/removing .dark class on initial app load.
+    // Here we just sync the local state for the button.
 
-  const handleThemeSelect = (palette: ColorPalette) => {
-    applyThemeToDOM(palette);
+    // Load saved color palette
+    const savedPaletteName = typeof window !== 'undefined' ? localStorage.getItem(LOCAL_STORAGE_THEME_KEY) : null;
+    const paletteToApply = suggestedPalettes.find(p => p.name === savedPaletteName) || 
+                           suggestedPalettes.find(p => p.name === "Tema Azul Original") || 
+                           suggestedPalettes[0];
+    
+    if (paletteToApply) {
+      applyPaletteToDOM(paletteToApply);
+    }
+  }, [applyPaletteToDOM]);
+
+  const handlePaletteSelect = (palette: ColorPalette) => {
+    applyPaletteToDOM(palette);
     if (typeof window !== 'undefined') {
       localStorage.setItem(LOCAL_STORAGE_THEME_KEY, palette.name);
     }
     toast({
-      title: "Tema Aplicado",
-      description: `El ${palette.name} ha sido aplicado. El texto general es oscuro/claro según el tema base, el texto de los botones coloreados es blanco con borde negro.`,
+      title: "Paleta Aplicada",
+      description: `La paleta de colores ${palette.name} ha sido aplicada.`,
     });
   };
+
+  const handleToggleUiMode = () => {
+    setUiMode(prevMode => {
+      const newMode = prevMode === 'light' ? 'dark' : 'light';
+      localStorage.setItem(LOCAL_STORAGE_UI_MODE_KEY, newMode);
+      if (newMode === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+      
+      // After toggling .dark class, the --background CSS var changes.
+      // We need to re-update currentDisplayColors to reflect this.
+      const currentPaletteName = localStorage.getItem(LOCAL_STORAGE_THEME_KEY);
+      const currentPalette = suggestedPalettes.find(p => p.name === currentPaletteName) || 
+                             suggestedPalettes.find(p => p.name === "Tema Azul Original") || 
+                             suggestedPalettes[0];
+      if (currentPalette) {
+        // Re-call applyPaletteToDOM not to change primary/accent, but to update display with new actualPageBackground
+         requestAnimationFrame(() => {
+            setCurrentDisplayColors({
+                name: currentPalette.name,
+                primary: currentPalette.primary,
+                actualPageBackground: getActualPageBackground(),
+                accent: currentPalette.accent,
+            });
+        });
+      }
+
+      toast({
+        title: `Modo cambiado a ${newMode === 'light' ? 'Claro' : 'Oscuro'}`,
+      });
+      return newMode;
+    });
+  };
+
 
   const handleExportData = () => {
     if (typeof window === 'undefined') {
@@ -212,7 +244,7 @@ export default function SettingsPage() {
             invoices: invoices ? JSON.parse(invoices) : [],
             exportDate: new Date().toISOString(),
             appName: "FacturaFacil",
-            version: "1.5.0", 
+            version: "1.6.0", 
         };
 
         const jsonString = JSON.stringify(backupData, null, 2);
@@ -453,54 +485,66 @@ export default function SettingsPage() {
             <div>
               <CardTitle className="text-2xl font-bold text-primary">Ajustes del Entorno</CardTitle>
               <CardDescription className="text-muted-foreground">
-                Configure la apariencia, gestione datos, vea información de la aplicación y consulte el manual de usuario.
+                Configure la apariencia, modo de visualización, gestione datos, y consulte el manual de usuario.
               </CardDescription>
             </div>
           </div>
         </CardHeader>
       </Card>
-
+      
       <Card>
         <CardHeader>
           <div className="flex items-center space-x-3">
             <Palette className="h-6 w-6 text-primary" />
             <CardTitle className="text-xl text-primary">Apariencia y Tema</CardTitle>
           </div>
-          <CardDescription>
-            Seleccione una paleta de colores para aplicarla instantáneamente. Su elección se guardará localmente.
-            Los colores base del tema se definen en <code>src/app/globals.css</code> y pueden ser sobrescritos por su selección.
-            El texto general es oscuro/claro según el tema base, el texto de los botones coloreados es blanco con borde negro.
+           <CardDescription>
+            Seleccione una paleta de colores para primario y acento. El fondo de página general y los colores de texto se controlan con el "Modo de Visualización".
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {currentDisplayColors && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
             <div>
-              <h3 className="font-semibold text-foreground mb-2">Tema Actual Aplicado: ({activeThemeName || "Desconocido"})</h3>
-              <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground ml-4">
-                <li><strong>Fondo de Página (CSS var --background):</strong> <code>{currentDisplayColors.background}</code></li>
-                <li><strong>Color Primario (Botones, Títulos, etc. - CSS var --primary):</strong> <code>{currentDisplayColors.primary}</code></li>
-                <li><strong>Color de Acento (CSS var --accent):</strong> <code>{currentDisplayColors.accent}</code></li>
-              </ul>
+              <h3 className="font-semibold text-foreground mb-1">Modo de Visualización Actual:</h3>
+              <Button onClick={handleToggleUiMode} variant="outline" className="w-full">
+                {uiMode === 'light' ? <Moon className="mr-2 h-4 w-4" /> : <Sun className="mr-2 h-4 w-4" />}
+                Cambiar a Modo {uiMode === 'light' ? 'Oscuro' : 'Claro'}
+              </Button>
             </div>
-          )}
+            {currentDisplayColors && (
+              <div className="p-3 border rounded-md bg-muted/50">
+                <h3 className="font-semibold text-foreground mb-2">Paleta Actual Aplicada: ({activePaletteName || "Desconocido"})</h3>
+                <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground ml-4">
+                  <li><strong>Fondo de Página (Actual):</strong> <code>{currentDisplayColors.actualPageBackground}</code></li>
+                  <li><strong>Color Primario (Botones, Títulos):</strong> <code>{currentDisplayColors.primary}</code></li>
+                  <li><strong>Color de Acento:</strong> <code>{currentDisplayColors.accent}</code></li>
+                </ul>
+              </div>
+            )}
+          </div>
           
           <div className="p-4 rounded-md bg-accent/10 border border-accent/30 text-foreground">
             <p className="text-sm font-medium">
-              Para cambiar la paleta de colores de la aplicación, seleccione una de las opciones a continuación.
+              Para cambiar la paleta de colores (primario y acento) de la aplicación, seleccione una de las opciones a continuación.
             </p>
              <p className="text-xs mt-1">
-              Si desea que un tema específico sea el predeterminado para todos los usuarios (modificando <code>globals.css</code>), puede solicitarlo al asistente de IA.
+              Si desea que una paleta específica sea la predeterminada para todos los usuarios (modificando <code>globals.css</code>), puede solicitarlo al asistente de IA.
             </p>
           </div>
 
           <div>
-            <h3 className="font-semibold text-foreground mt-6 mb-4 text-lg">Paletas de Colores Disponibles:</h3>
+            <h3 className="font-semibold text-foreground mt-6 mb-4 text-lg">Paletas de Colores (Primario y Acento):</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {suggestedPalettes.map((palette) => {
                 const titleColor = `hsl(${palette.primary})`;
+                const cardBgPreview = `hsl(${palette.backgroundPreview})`;
                 return (
-                  <Card key={palette.name} className={`shadow-md hover:shadow-lg transition-shadow relative overflow-hidden ${activeThemeName === palette.name ? 'border-2 border-primary ring-2 ring-primary' : 'border'}`}>
-                    {activeThemeName === palette.name && (
+                  <Card 
+                    key={palette.name} 
+                    className={`shadow-md hover:shadow-lg transition-shadow relative overflow-hidden ${activePaletteName === palette.name ? 'border-2 border-primary ring-2 ring-primary' : 'border'}`}
+                    style={{ backgroundColor: cardBgPreview }}
+                  >
+                    {activePaletteName === palette.name && (
                       <div className="absolute top-2 right-2 bg-primary text-primary-foreground p-1 rounded-full z-10">
                         <CheckCircle className="h-5 w-5" />
                       </div>
@@ -512,31 +556,25 @@ export default function SettingsPage() {
                       <div className="flex items-center">
                         <div className="inline-block w-5 h-5 rounded-sm mr-2 border" style={{ backgroundColor: `hsl(${palette.primary})` }} />
                         <div>
-                          <span className="font-semibold">Primario:</span>
-                          <code className="ml-1 text-xs bg-muted p-1 rounded">{palette.primary}</code>
+                          <span className="font-semibold" style={{color: 'hsl(var(--card-foreground))'}}>Primario:</span>
+                          <code className="ml-1 text-xs bg-muted p-1 rounded" style={{color: 'hsl(var(--card-foreground))'}}>{palette.primary}</code>
                         </div>
                       </div>
-                      <div className="flex items-center">
-                        <div className="inline-block w-5 h-5 rounded-sm mr-2 border" style={{ backgroundColor: `hsl(${palette.background})` }} />
-                        <div>
-                          <span className="font-semibold">Fondo:</span>
-                          <code className="ml-1 text-xs bg-muted p-1 rounded">{palette.background}</code>
-                        </div>
-                      </div>
+                       {/* BackgroundPreview is for the card itself, not a global override */}
                       <div className="flex items-center">
                         <div className="inline-block w-5 h-5 rounded-sm mr-2 border" style={{ backgroundColor: `hsl(${palette.accent})` }} />
                         <div>
-                          <span className="font-semibold">Acento:</span>
-                          <code className="ml-1 text-xs bg-muted p-1 rounded">{palette.accent}</code>
+                          <span className="font-semibold" style={{color: 'hsl(var(--card-foreground))'}}>Acento:</span>
+                          <code className="ml-1 text-xs bg-muted p-1 rounded" style={{color: 'hsl(var(--card-foreground))'}}>{palette.accent}</code>
                         </div>
                       </div>
                       <Button 
-                        onClick={() => handleThemeSelect(palette)} 
+                        onClick={() => handlePaletteSelect(palette)} 
                         variant="outline" 
                         className="w-full mt-4"
-                        disabled={activeThemeName === palette.name}
+                        disabled={activePaletteName === palette.name}
                       >
-                        {activeThemeName === palette.name ? "Tema Activo" : "Aplicar Tema"}
+                        {activePaletteName === palette.name ? "Paleta Activa" : "Aplicar Paleta"}
                       </Button>
                     </CardContent>
                   </Card>
@@ -546,6 +584,7 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
 
       <Card>
         <CardHeader>
@@ -572,61 +611,57 @@ export default function SettingsPage() {
                 </ul>
             </div>
 
-            <div className="p-4 rounded-md bg-accent/10 border border-accent/30 text-foreground space-y-3">
-                <div>
-                    <h3 className="font-semibold text-lg mb-2">Exportar Datos</h3>
-                    <p className="text-sm">
-                    Haga clic en el botón de abajo para descargar un archivo JSON que contiene la información de su empresa, clientes y todas las facturas y notas de crédito.
-                    Guarde este archivo en un lugar seguro. Este archivo puede ser usado para restaurar o fusionar datos.
-                    </p>
-                    <Button onClick={handleExportData} className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground mt-2">
-                        <Download className="mr-2 h-4 w-4" /> Exportar Datos de la Aplicación
-                    </Button>
-                </div>
+            <div className="p-4 rounded-md bg-accent/10 border border-accent/30">
+                <h3 className="font-semibold text-lg mb-2 text-foreground">Exportar Datos</h3>
+                <p className="text-sm text-foreground">
+                Haga clic en el botón de abajo para descargar un archivo JSON que contiene la información de su empresa, clientes y todas las facturas y notas de crédito.
+                Guarde este archivo en un lugar seguro. Este archivo puede ser usado para restaurar o fusionar datos.
+                </p>
+                <Button onClick={handleExportData} className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground mt-2">
+                    <Download className="mr-2 h-4 w-4" /> Exportar Datos de la Aplicación
+                </Button>
             </div>
 
-            <div className="p-4 rounded-md bg-destructive/10 border border-destructive/30 text-foreground space-y-3">
-                <div>
-                    <div className="flex items-center mb-2">
-                        <AlertTriangle className="h-5 w-5 mr-2 text-destructive" />
-                        <h3 className="font-semibold text-lg">Importar y Fusionar Datos (¡Precaución!)</h3>
-                    </div>
-                    <p className="text-sm mb-1">
-                        Seleccione uno o más archivos JSON de respaldo (<code>facturafacil_backup_*.json</code>) para importar y fusionar datos en esta instancia del navegador.
-                        Esta función está diseñada para consolidar información de múltiples cajas o respaldos.
-                    </p>
-                     <div className="text-xs mb-2">
-                        <p><strong>Advertencia Importante:</strong> Esta acción modificará los datos actuales.</p>
-                        <ul className="list-disc pl-5 mt-1">
-                          <li><strong>RESPALDE PRIMERO:</strong> Siempre exporte sus datos actuales como respaldo antes de proceder con una importación. La importación actual reemplazará el respaldo pre-importación anterior.</li>
-                          <li><strong>Clientes:</strong> Si un cliente importado (por RIF) ya existe, sus datos demográficos se actualizarán, y sus saldos (pendiente y a favor) se <strong>sumarán</strong> a los saldos existentes. Los clientes nuevos se añadirán.</li>
-                          <li><strong>Facturas/Notas de Crédito:</strong> Las transacciones se añadirán si no existen por ID interno, evitando duplicados exactos.</li>
-                          <li><strong>Empresa:</strong> La información de la empresa se tomará del último archivo procesado.</li>
-                          <li><strong>Reversión:</strong> Puede revertir la *última* importación si el resultado no es el esperado, usando el botón "Revertir Última Importación".</li>
-                        </ul>
-                    </div>
-                    <Input
-                        type="file"
-                        accept=".json"
-                        multiple
-                        ref={fileInputRef}
-                        onChange={handleImportFiles}
-                        className="mb-2"
-                        disabled={isImporting}
-                    />
-                    <Button onClick={handleRevertLastImport} className="w-full sm:w-auto mt-2" variant="outline" disabled={!canRevertImport || isImporting}>
-                        <RotateCcw className="mr-2 h-4 w-4" /> Revertir Última Importación
-                    </Button>
-                     {isImporting && <p className="text-sm font-semibold mt-2">Importando y fusionando datos, por favor espere...</p>}
-                    {importMessages.length > 0 && (
-                        <div className="mt-3 p-3 border rounded-md bg-background/50 max-h-60 overflow-y-auto text-xs">
-                            <h4 className="font-semibold mb-1">Resultado de la Importación y Fusión:</h4>
-                            {importMessages.map((msg, index) => (
-                                <p key={index} className="whitespace-pre-wrap">{msg}</p>
-                            ))}
-                        </div>
-                    )}
+            <div className="p-4 rounded-md bg-destructive/10 border border-destructive/30">
+                <div className="flex items-center mb-2">
+                    <AlertTriangle className="h-5 w-5 mr-2 text-destructive" />
+                    <h3 className="font-semibold text-lg text-foreground">Importar y Fusionar Datos (¡Precaución!)</h3>
                 </div>
+                <p className="text-sm mb-1 text-foreground">
+                    Seleccione uno o más archivos JSON de respaldo (<code>facturafacil_backup_*.json</code>) para importar y fusionar datos en esta instancia del navegador.
+                    Esta función está diseñada para consolidar información de múltiples cajas o respaldos.
+                </p>
+                 <div className="text-xs mb-2 text-foreground">
+                    <p><strong>Advertencia Importante:</strong> Esta acción modificará los datos actuales.</p>
+                    <ul className="list-disc pl-5 mt-1">
+                      <li><strong>RESPALDE PRIMERO:</strong> Siempre exporte sus datos actuales como respaldo antes de proceder con una importación. La importación actual reemplazará el respaldo pre-importación anterior.</li>
+                      <li><strong>Clientes:</strong> Si un cliente importado (por RIF) ya existe, sus datos demográficos se actualizarán, y sus saldos (pendiente y a favor) se <strong>sumarán</strong> a los saldos existentes. Los clientes nuevos se añadirán.</li>
+                      <li><strong>Facturas/Notas de Crédito:</strong> Las transacciones se añadirán si no existen por ID interno, evitando duplicados exactos.</li>
+                      <li><strong>Empresa:</strong> La información de la empresa se tomará del último archivo procesado.</li>
+                      <li><strong>Reversión:</strong> Puede revertir la *última* importación si el resultado no es el esperado, usando el botón "Revertir Última Importación".</li>
+                    </ul>
+                </div>
+                <Input
+                    type="file"
+                    accept=".json"
+                    multiple
+                    ref={fileInputRef}
+                    onChange={handleImportFiles}
+                    className="mb-2"
+                    disabled={isImporting}
+                />
+                <Button onClick={handleRevertLastImport} className="w-full sm:w-auto mt-2" variant="outline" disabled={!canRevertImport || isImporting}>
+                    <RotateCcw className="mr-2 h-4 w-4" /> Revertir Última Importación
+                </Button>
+                 {isImporting && <p className="text-sm font-semibold mt-2 text-foreground">Importando y fusionando datos, por favor espere...</p>}
+                {importMessages.length > 0 && (
+                    <div className="mt-3 p-3 border rounded-md bg-background/50 max-h-60 overflow-y-auto text-xs">
+                        <h4 className="font-semibold mb-1 text-foreground">Resultado de la Importación y Fusión:</h4>
+                        {importMessages.map((msg, index) => (
+                            <p key={index} className="whitespace-pre-wrap text-foreground">{msg}</p>
+                        ))}
+                    </div>
+                )}
             </div>
         </CardContent>
       </Card>
@@ -653,7 +688,7 @@ export default function SettingsPage() {
                   <li><strong><Link href="/invoices" className="text-primary hover:underline">Historial de Documentos</Link> (<History className="inline h-4 w-4" />):</strong> Para consultar facturas, notas de crédito, abonos y depósitos emitidos.</li>
                   <li><strong><Link href="/returns" className="text-primary hover:underline">Procesar Devolución / Retiro de Saldo</Link> (<Undo className="inline h-4 w-4" />):</strong> Para generar notas de crédito basadas en facturas existentes o procesar retiros de saldo a favor del cliente.</li>
                   <li><strong><Link href="/company" className="text-primary hover:underline">Configuración de Empresa</Link> (<SettingsIcon className="inline h-4 w-4" />):</strong> Para actualizar los datos fiscales de su empresa que aparecen en los documentos.</li>
-                  <li><strong><Link href="/settings" className="text-primary hover:underline">Ajustes del Entorno</Link> (<SlidersHorizontal className="inline h-4 w-4" />):</strong> Donde se encuentra ahora, para cambiar temas, gestionar datos (exportar/importar/revertir), ver información de la app y este manual.</li>
+                  <li><strong><Link href="/settings" className="text-primary hover:underline">Ajustes del Entorno</Link> (<SlidersHorizontal className="inline h-4 w-4" />):</strong> Donde se encuentra ahora, para cambiar modo de visualización, paletas de colores, gestionar datos (exportar/importar/revertir), y este manual.</li>
                 </ul>
               </AccordionContent>
             </AccordionItem>
@@ -792,7 +827,7 @@ export default function SettingsPage() {
             <AccordionItem value="item-8">
               <AccordionTrigger>Almacenamiento y Gestión de Datos (Exportar/Importar/Revertir)</AccordionTrigger>
               <AccordionContent className="space-y-2 text-sm text-muted-foreground">
-                <p>FacturaFacil utiliza el almacenamiento local de su navegador (<code>localStorage</code>) para guardar la configuración de la empresa, lista de clientes, todos los documentos generados y su preferencia de tema de color.</p>
+                <p>FacturaFacil utiliza el almacenamiento local de su navegador (<code>localStorage</code>) para guardar la configuración de la empresa, lista de clientes, todos los documentos generados, su preferencia de tema de color y modo de visualización.</p>
                 <p>En la sección <Link href="/settings" className="text-primary hover:underline">Ajustes del Entorno</Link> (<SlidersHorizontal className="inline h-4 w-4" />) &gt; "Gestión de Datos", encontrará opciones para:</p>
                 <ul className="list-disc pl-5">
                     <li><strong className="text-foreground">Exportar Datos:</strong> Descarga un archivo JSON con toda la información de su aplicación. Es crucial para tener copias de seguridad o para transferir/fusionar datos.</li>
@@ -805,7 +840,7 @@ export default function SettingsPage() {
                     </li>
                      <li><strong className="text-foreground">Revertir Última Importación:</strong> Si el resultado de una importación no es el esperado, puede usar esta opción para restaurar los datos al estado exacto en que se encontraban *antes* de la última operación de importación. Esta opción solo está disponible para la importación más reciente y si no ha sido ya revertida. Una nueva importación creará un nuevo punto de restauración.</li>
                 </ul>
-                <div className="text-xs mb-2"> {/* This is the div that was previously a p tag */}
+                 <div className="text-xs mb-2 text-foreground">
                    <p><strong>Advertencia Importante:</strong> Esta acción modificará los datos actuales.</p>
                    <ul className="list-disc pl-5 mt-1">
                      <li><strong>RESPALDE PRIMERO:</strong> Siempre exporte sus datos actuales como respaldo antes de proceder con una importación. La importación actual reemplazará el respaldo pre-importación anterior.</li>
@@ -843,7 +878,7 @@ export default function SettingsPage() {
           </div>
           <div className="flex justify-between">
             <span className="font-semibold text-foreground">Versión:</span>
-            <span className="text-muted-foreground">1.5.0 (Gestión de Datos Mejorada, Temas Dinámicos y Contraste)</span>
+            <span className="text-muted-foreground">1.6.0 (Modo Claro/Oscuro y Mejoras de UI)</span>
           </div>
           <div className="flex justify-between">
             <span className="font-semibold text-foreground">Desarrollado con:</span>
@@ -858,4 +893,3 @@ export default function SettingsPage() {
     </div>
   );
 }
-
