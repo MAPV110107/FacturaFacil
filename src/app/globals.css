@@ -5,12 +5,6 @@
 body {
   font-family: Arial, Helvetica, sans-serif;
   @apply bg-background text-foreground;
-  /* Aplicar borde negro a TODO el texto */
-  text-shadow:
-    -1px -1px 0 #000,
-     1px -1px 0 #000,
-    -1px  1px 0 #000,
-     1px  1px 0 #000;
 }
 
 @layer base {
@@ -41,7 +35,7 @@ body {
 
     --border: 0 0% 89.8%;
     --input: 0 0% 89.8%;
-    --ring: hsl(var(--accent));
+    --ring: hsl(var(--accent)); /* Cambio: anillo ahora usa el acento del tema */
     
     --chart-1: 12 76% 61%;
     --chart-2: 173 58% 39%;
@@ -50,14 +44,15 @@ body {
     --chart-5: 27 87% 67%;
     --radius: 0.5rem;
 
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 0 0% 3.9%;
-    --sidebar-primary: hsl(var(--primary)); 
-    --sidebar-primary-foreground: 0 0% 98%; 
-    --sidebar-accent: hsl(var(--accent));
-    --sidebar-accent-foreground: 0 0% 98%;   
+    /* Colores del Sidebar para tema claro */
+    --sidebar-background: 0 0% 98%; /* Fondo claro para sidebar */
+    --sidebar-foreground: 0 0% 3.9%; /* Texto oscuro en sidebar */
+    --sidebar-primary: hsl(var(--primary)); /* Usar el primario del tema */
+    --sidebar-primary-foreground: 0 0% 98%; /* Texto claro para elementos primarios del sidebar */
+    --sidebar-accent: hsl(var(--accent)); /* Usar el acento del tema */
+    --sidebar-accent-foreground: 0 0% 98%; /* Texto claro para elementos de acento del sidebar */    
     --sidebar-border: 220 13% 91%;
-    --sidebar-ring: hsl(var(--accent));
+    --sidebar-ring: hsl(var(--accent)); /* Anillo del sidebar usa el acento del tema */
   }
 
   .dark {
@@ -70,24 +65,25 @@ body {
     --popover: 0 0% 10%; /* Oscuro */
     --popover-foreground: 0 0% 98%; /* Texto claro en popovers */
 
+    /* primary-foreground y accent-foreground se mantienen blancos para el text-shadow */
     --primary: 232 63% 30%; 
-    --primary-foreground: 0 0% 98%; /* Texto claro en botones primarios */
+    --primary-foreground: 0 0% 98%; 
 
     --secondary: 0 0% 14.9%; 
-    --secondary-foreground: 0 0% 98%; /* Texto claro en botones secundarios */
+    --secondary-foreground: 0 0% 98%; /* Texto claro en botones secundarios (ahora con text-shadow) */
 
     --muted: 0 0% 14.9%;
     --muted-foreground: 0 0% 60%; /* Gris más claro para texto atenuado */
 
     --accent: 230 46% 48%; 
-    --accent-foreground: 0 0% 98%; /* Texto claro en botones de acento */
+    --accent-foreground: 0 0% 98%; 
 
     --destructive: 0 62.8% 30.6%; 
-    --destructive-foreground: 0 0% 98%; /* Texto claro en botones destructivos */
+    --destructive-foreground: 0 0% 98%; 
 
     --border: 0 0% 14.9%;
     --input: 0 0% 14.9%;
-    --ring: hsl(var(--accent)); 
+    --ring: hsl(var(--accent)); /* Cambio: anillo ahora usa el acento del tema */
     
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
@@ -95,14 +91,15 @@ body {
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
 
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 0 0% 98%; 
-    --sidebar-primary: hsl(var(--primary));
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: hsl(var(--accent));
-    --sidebar-accent-foreground: 0 0% 98%;
+    /* Colores del Sidebar para tema oscuro */
+    --sidebar-background: 240 5.9% 10%; /* Fondo oscuro para sidebar */
+    --sidebar-foreground: 0 0% 98%; /* Texto claro en sidebar */
+    --sidebar-primary: hsl(var(--primary)); /* Usar el primario del tema */
+    --sidebar-primary-foreground: 0 0% 98%; /* Texto claro para elementos primarios del sidebar */
+    --sidebar-accent: hsl(var(--accent)); /* Usar el acento del tema */
+    --sidebar-accent-foreground: 0 0% 98%; /* Texto claro para elementos de acento del sidebar */
     --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: hsl(var(--accent));
+    --sidebar-ring: hsl(var(--accent)); /* Anillo del sidebar usa el acento del tema */
   }
 }
 
@@ -110,15 +107,12 @@ body {
   * {
     @apply border-border;
   }
-  /* body @apply bg-background text-foreground; ya está arriba con el text-shadow */
+  /* body ya está configurado arriba */
 }
 
 /* 
-  Las reglas de text-shadow para botones específicos se mantienen.
-  Si el text-shadow del body y el del botón son idénticos, no habrá conflicto visual.
-  La especificidad de estas reglas de botón asegura que el color de texto 
-  (ej. text-primary-foreground) se aplique correctamente al botón, 
-  y luego el text-shadow (ya sea del body o del botón) le dará el borde.
+  Reglas de text-shadow para texto blanco en botones específicos.
+  Esto crea el efecto de borde negro alrededor del texto blanco.
 */
 .bg-primary.text-primary-foreground,
 button.bg-primary {
@@ -147,6 +141,7 @@ button.bg-accent {
      1px  1px 0 #000;
 }
 
+/* Para botones secundarios en tema oscuro, que tienen texto claro */
 .dark .bg-secondary.text-secondary-foreground,
 .dark button.bg-secondary {
    text-shadow:
