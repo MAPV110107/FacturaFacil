@@ -88,27 +88,6 @@ interface BackupData {
   version?: string;
 }
 
-const getLightnessFromHslString = (hslString: string): number => {
-  if (!hslString || typeof hslString !== 'string') return 50; 
-  const parts = hslString.trim().split(" ");
-  if (parts.length >= 3 && parts[2].endsWith('%')) {
-    try {
-      return parseFloat(parts[2].slice(0, -1));
-    } catch (e) {
-      return 50; 
-    }
-  }
-  if (parts.length === 1 && parts[0].endsWith('%')) {
-    try {
-      return parseFloat(parts[0].slice(0, -1));
-    } catch (e) {
-      return 50;
-    }
-  }
-  return 50; 
-};
-
-
 export default function SettingsPage() {
   const { toast } = useToast();
   const [activeThemeName, setActiveThemeName] = useState<string | null>(null);
@@ -140,52 +119,19 @@ export default function SettingsPage() {
 
 
   const applyThemeToDOM = useCallback((palette: ColorPalette) => {
-    document.documentElement.style.setProperty('--primary', palette.primary);
-    document.documentElement.style.setProperty('--background', palette.background);
-    document.documentElement.style.setProperty('--accent', palette.accent);
-    
-    const primaryLightness = getLightnessFromHslString(palette.primary);
-    const accentLightness = getLightnessFromHslString(palette.accent);
-    const backgroundLightness = getLightnessFromHslString(palette.background);
-
-    if (primaryLightness > 55) { 
-      document.documentElement.style.setProperty('--primary-foreground', '0 0% 3.9%'); 
-    } else { 
-      document.documentElement.style.setProperty('--primary-foreground', '0 0% 98%'); 
+    if (typeof document !== 'undefined') {
+      document.documentElement.style.setProperty('--primary', palette.primary);
+      document.documentElement.style.setProperty('--background', palette.background);
+      document.documentElement.style.setProperty('--accent', palette.accent);
+      // Foreground colors are now primarily controlled by globals.css
     }
-
-    if (accentLightness > 55) { 
-      document.documentElement.style.setProperty('--accent-foreground', '0 0% 3.9%'); 
-    } else { 
-      document.documentElement.style.setProperty('--accent-foreground', '0 0% 98%'); 
-    }
-    
-    if (backgroundLightness > 50) { 
-        document.documentElement.style.setProperty('--foreground', '0 0% 3.9%'); 
-        document.documentElement.style.setProperty('--card', '0 0% 100%');
-        document.documentElement.style.setProperty('--card-foreground', '0 0% 3.9%');
-        document.documentElement.style.setProperty('--popover', '0 0% 100%');
-        document.documentElement.style.setProperty('--popover-foreground', '0 0% 3.9%');
-        document.documentElement.style.setProperty('--secondary-foreground', '0 0% 9%');
-        document.documentElement.style.setProperty('--muted-foreground', '0 0% 45.1%');
-
-    } else { 
-        document.documentElement.style.setProperty('--foreground', '0 0% 98%'); 
-        document.documentElement.style.setProperty('--card', '0 0% 10%'); 
-        document.documentElement.style.setProperty('--card-foreground', '0 0% 98%');
-        document.documentElement.style.setProperty('--popover', '0 0% 10%');
-        document.documentElement.style.setProperty('--popover-foreground', '0 0% 98%');
-        document.documentElement.style.setProperty('--secondary-foreground', '0 0% 98%');
-        document.documentElement.style.setProperty('--muted-foreground', '0 0% 63.9%');
-    }
-
     setCurrentDisplayColors(palette);
     setActiveThemeName(palette.name);
   }, []);
 
   useEffect(() => {
     const getInitialColorValue = (cssVar: string, fallback: string) => {
-      if (typeof window !== 'undefined') {
+      if (typeof window !== 'undefined' && typeof document !== 'undefined') {
         const value = getComputedStyle(document.documentElement).getPropertyValue(cssVar).trim();
         return value || fallback;
       }
@@ -199,7 +145,7 @@ export default function SettingsPage() {
     
     if (themeToApply) {
       applyThemeToDOM(themeToApply);
-    } else {
+    } else if (typeof document !== 'undefined') {
        setCurrentDisplayColors({
         name: "Predeterminado (CSS)",
         primary: getInitialColorValue('--primary', "232 63% 30%"),
@@ -212,10 +158,12 @@ export default function SettingsPage() {
 
   const handleThemeSelect = (palette: ColorPalette) => {
     applyThemeToDOM(palette);
-    localStorage.setItem(LOCAL_STORAGE_THEME_KEY, palette.name);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(LOCAL_STORAGE_THEME_KEY, palette.name);
+    }
     toast({
       title: "Tema Aplicado",
-      description: `El ${palette.name} ha sido aplicado.`,
+      description: `El ${palette.name} ha sido aplicado. Los colores de texto ahora son predominantemente oscuros para mayor contraste.`,
     });
   };
 
@@ -492,6 +440,7 @@ export default function SettingsPage() {
           <CardDescription>
             Seleccione una paleta de colores para aplicarla instantáneamente. Su elección se guardará localmente.
             Los colores base del tema se definen en <code>src/app/globals.css</code> y pueden ser sobrescritos por su selección.
+            Los colores de texto ahora son predominantemente oscuros para mejorar el contraste.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -499,9 +448,9 @@ export default function SettingsPage() {
             <div>
               <h3 className="font-semibold text-foreground mb-2">Colores Actuales del Tema ({activeThemeName || "Desconocido"}):</h3>
               <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground ml-4">
-                <li><strong>Primario:</strong> <code>{currentDisplayColors.primary}</code> (Texto en botón: <span className="text-foreground">{getLightnessFromHslString(currentDisplayColors.primary) > 55 ? 'Oscuro' : 'Claro'}</span>)</li>
+                <li><strong>Primario:</strong> <code>{currentDisplayColors.primary}</code></li>
                 <li><strong>Fondo:</strong> <code>{currentDisplayColors.background}</code></li>
-                <li><strong>Acento:</strong> <code>{currentDisplayColors.accent}</code> (Texto en botón: <span className="text-foreground">{getLightnessFromHslString(currentDisplayColors.accent) > 55 ? 'Oscuro' : 'Claro'}</span>)</li>
+                <li><strong>Acento:</strong> <code>{currentDisplayColors.accent}</code></li>
               </ul>
             </div>
           )}
@@ -519,11 +468,7 @@ export default function SettingsPage() {
             <h3 className="font-semibold text-foreground mt-6 mb-4 text-lg">Paletas de Colores Disponibles:</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {suggestedPalettes.map((palette) => {
-                const palettePrimaryLightness = getLightnessFromHslString(palette.primary);
-                const paletteBackgroundLightness = currentDisplayColors ? getLightnessFromHslString(currentDisplayColors.background) : 96; // Assume light background if not yet set
-                const titleColor = palettePrimaryLightness > 65 && paletteBackgroundLightness > 50 
-                                   ? 'hsl(var(--foreground))' 
-                                   : `hsl(${palette.primary})`;
+                const titleColor = `hsl(${palette.primary})`;
                 return (
                   <Card key={palette.name} className={`shadow-md hover:shadow-lg transition-shadow relative overflow-hidden ${activeThemeName === palette.name ? 'border-2 border-primary ring-2 ring-primary' : 'border'}`}>
                     {activeThemeName === palette.name && (
@@ -621,7 +566,7 @@ export default function SettingsPage() {
                         Seleccione uno o más archivos JSON de respaldo (<code>facturafacil_backup_*.json</code>) para importar y fusionar datos en esta instancia del navegador.
                         Esta función está diseñada para consolidar información de múltiples cajas o respaldos.
                     </p>
-                    <div className="text-xs mb-2">
+                     <div className="text-xs mb-2">
                         <p><strong>Advertencia Importante:</strong> Esta acción modificará los datos actuales.</p>
                         <ul className="list-disc pl-5 mt-1">
                           <li><strong>RESPALDE PRIMERO:</strong> Siempre exporte sus datos actuales como respaldo antes de proceder con una importación. La importación actual reemplazará el respaldo pre-importación anterior.</li>
