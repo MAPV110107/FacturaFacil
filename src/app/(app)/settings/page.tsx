@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
@@ -24,16 +25,17 @@ import { ThemeInitializer, LOCAL_STORAGE_UI_MODE_KEY } from "@/components/theme/
 
 interface ColorPalette {
   name: string;
-  primary: string;
+  primary: string; // HSL for theme primary
   background: string; // HSL for theme card preview (and potentially globals.css if a theme overrides it)
-  accent: string;
+  accent: string; // HSL for theme accent
 }
 
+// Represents colors actually being displayed, considering light/dark mode for page background
 interface DisplayColorPalette {
   name: string;
-  primary: string;
-  actualPageBackground: string;
-  accent: string;
+  primary: string; // HSL of the current primary color
+  actualPageBackground: string; // HSL of the current page background (from :root or .dark)
+  accent: string; // HSL of the current accent color
 }
 
 
@@ -99,6 +101,13 @@ interface BackupData {
   version?: string;
 }
 
+const formatCurrency = (amount: number | undefined | null) => {
+  const CURRENCY_SYMBOL_LOCAL = "Bs."; // Define if not globally available or different
+  if (amount === undefined || amount === null) return `${CURRENCY_SYMBOL_LOCAL}0.00`;
+  return `${CURRENCY_SYMBOL_LOCAL}${amount.toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,')}`;
+};
+
+
 export default function SettingsPage() {
   const { toast } = useToast();
   const [activePaletteName, setActivePaletteName] = useState<string | null>(null);
@@ -132,21 +141,26 @@ export default function SettingsPage() {
 
   const getActualPageBackground = useCallback(() => {
      if (typeof document !== 'undefined') {
-        // Reads the CSS variable --background which is set by :root or .dark in globals.css
         return getComputedStyle(document.documentElement).getPropertyValue('--background').trim();
       }
-      return uiMode === 'dark' ? "0 0% 3.9%" : "0 0% 96%"; // Fallback, should match globals.css
+      // Fallback based on uiMode, should align with globals.css defaults for :root and .dark
+      return uiMode === 'dark' ? "0 0% 3.9%" : "0 0% 96%"; 
   }, [uiMode]);
 
   const applyPaletteToDOM = useCallback((palette: ColorPalette) => {
     if (typeof document !== 'undefined') {
       document.documentElement.style.setProperty('--primary', palette.primary);
+      // Background is now controlled by globals.css :root and .dark for page background.
+      // Palette.background is only for the theme card preview now.
+      // document.documentElement.style.setProperty('--background', palette.background); 
       document.documentElement.style.setProperty('--accent', palette.accent);
-      // Ensure text on colored buttons is white for text-shadow effect
+      
+      // Ensure text on colored buttons is white for text-shadow effect (defined in globals.css)
       document.documentElement.style.setProperty('--primary-foreground', '0 0% 98%');
       document.documentElement.style.setProperty('--accent-foreground', '0 0% 98%');
       document.documentElement.style.setProperty('--destructive-foreground', '0 0% 98%');
-      // For secondary buttons in dark mode
+      
+      // For secondary buttons, text color depends on light/dark mode (set in globals.css)
       if (document.documentElement.classList.contains('dark')) {
         document.documentElement.style.setProperty('--secondary-foreground', '0 0% 98%');
       } else {
@@ -154,11 +168,12 @@ export default function SettingsPage() {
       }
     }
 
+    // Update the display preview state after DOM might have updated
     requestAnimationFrame(() => {
         setCurrentDisplayColors({
             name: palette.name,
             primary: palette.primary,
-            actualPageBackground: getActualPageBackground(),
+            actualPageBackground: getActualPageBackground(), // Fetch the current computed background
             accent: palette.accent,
         });
     });
@@ -172,8 +187,8 @@ export default function SettingsPage() {
     const prefersDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
     const initialMode = savedMode || (prefersDark ? 'dark' : 'light');
     setUiMode(initialMode);
-    // ThemeInitializer component handles adding/removing .dark class on initial app load.
-    // Here we just sync the local state for the button.
+    // ThemeInitializer component handles adding/removing .dark class on initial app load based on this localStorage key.
+    // Here we just sync the local state for the button display.
 
     // Load saved color palette
     const savedPaletteName = typeof window !== 'undefined' ? localStorage.getItem(LOCAL_STORAGE_THEME_KEY) : null;
@@ -209,20 +224,23 @@ export default function SettingsPage() {
       }
 
       // After toggling .dark class, the --background CSS var changes.
-      // We need to re-update currentDisplayColors to reflect this.
+      // Re-update currentDisplayColors to reflect this and re-apply button text colors.
       const currentPaletteName = localStorage.getItem(LOCAL_STORAGE_THEME_KEY);
       const currentPalette = suggestedPalettes.find(p => p.name === currentPaletteName) ||
                              suggestedPalettes.find(p => p.name === "Tema Azul Original") ||
                              suggestedPalettes[0];
       if (currentPalette) {
-         requestAnimationFrame(() => { // ensure DOM has updated
+         requestAnimationFrame(() => { 
             setCurrentDisplayColors({
                 name: currentPalette.name,
                 primary: currentPalette.primary,
-                actualPageBackground: getActualPageBackground(), // Re-fetch the actual background
+                actualPageBackground: getActualPageBackground(), 
                 accent: currentPalette.accent,
             });
-            // Re-apply primary/accent foreground for dark/light secondary button text
+            // Re-apply primary/accent/destructive/secondary foreground for dark/light mode button text consistency
+            document.documentElement.style.setProperty('--primary-foreground', '0 0% 98%');
+            document.documentElement.style.setProperty('--accent-foreground', '0 0% 98%');
+            document.documentElement.style.setProperty('--destructive-foreground', '0 0% 98%');
             if (newMode === 'dark') {
                 document.documentElement.style.setProperty('--secondary-foreground', '0 0% 98%');
             } else {
@@ -230,7 +248,6 @@ export default function SettingsPage() {
             }
         });
       }
-      // Defer toast call to avoid issues during render
       setTimeout(() => {
         toast({
           title: `Modo cambiado a ${newMode === 'light' ? 'Claro' : 'Oscuro'}`,
@@ -257,7 +274,7 @@ export default function SettingsPage() {
             invoices: invoices ? JSON.parse(invoices) : [],
             exportDate: new Date().toISOString(),
             appName: "FacturaFacil",
-            version: "1.6.0",
+            version: "1.6.0", // Update if app version changes
         };
 
         const jsonString = JSON.stringify(backupData, null, 2);
@@ -365,23 +382,51 @@ export default function SettingsPage() {
                  localMessages.push(`  - Cliente RIF ${importedCustomer.rif}: ID local ${existingCustomer.id} actualizado a ${importedCustomer.id} desde archivo.`);
                 existingCustomer.id = importedCustomer.id;
               }
+              
+              let currentOutstanding = existingCustomer.outstandingBalance || 0;
+              let currentCredit = existingCustomer.creditBalance || 0;
+              let importedOutstanding = importedCustomer.outstandingBalance || 0;
+              let importedCredit = importedCustomer.creditBalance || 0;
 
-              existingCustomer.outstandingBalance = (existingCustomer.outstandingBalance || 0) + (importedCustomer.outstandingBalance || 0);
-              existingCustomer.creditBalance = (existingCustomer.creditBalance || 0) + (importedCustomer.creditBalance || 0);
+              let finalOutstanding = currentOutstanding + importedOutstanding;
+              let finalCredit = currentCredit + importedCredit;
+              let adjustmentMessage = `Balances sumados: Deuda ${formatCurrency(finalOutstanding)}, S. Favor ${formatCurrency(finalCredit)}.`;
 
+              // Apply auto-offset rule
+              if (finalOutstanding > 0 && finalCredit > 0) {
+                  const offset = Math.min(finalOutstanding, finalCredit);
+                  finalOutstanding -= offset;
+                  finalCredit -= offset;
+                  adjustmentMessage = `Balances auto-ajustados. Deuda: ${formatCurrency(currentOutstanding + importedOutstanding)} -> ${formatCurrency(finalOutstanding)}. S. Favor: ${formatCurrency(currentCredit + importedCredit)} -> ${formatCurrency(finalCredit)}.`;
+              }
+              
+              existingCustomer.outstandingBalance = finalOutstanding;
+              existingCustomer.creditBalance = finalCredit;
               consolidatedCustomers[existingCustomerIndex] = existingCustomer;
               customersMergedCount++;
-              localMessages.push(`  - Cliente RIF ${importedCustomer.rif} (${importedCustomer.name}) fusionado. Balances sumados.`);
-            } else {
+              localMessages.push(`  - Cliente RIF ${importedCustomer.rif} (${importedCustomer.name}) fusionado. ${adjustmentMessage}`);
+
+            } else { // New customer from import file
               const newCustId = importedCustomer.id || uuidv4();
+              let initialOutstanding = importedCustomer.outstandingBalance || 0;
+              let initialCredit = importedCustomer.creditBalance || 0;
+              let messageAction = "añadido";
+
+              if (initialOutstanding > 0 && initialCredit > 0) {
+                  const offset = Math.min(initialOutstanding, initialCredit);
+                  initialOutstanding -= offset;
+                  initialCredit -= offset;
+                  messageAction = "añadido y balances auto-ajustados";
+              }
+
               consolidatedCustomers.push({
                 ...importedCustomer,
                 id: newCustId,
-                outstandingBalance: importedCustomer.outstandingBalance || 0,
-                creditBalance: importedCustomer.creditBalance || 0,
+                outstandingBalance: initialOutstanding,
+                creditBalance: initialCredit,
               });
               customersAddedCount++;
-              localMessages.push(`  - Nuevo cliente ${importedCustomer.name} (RIF: ${importedCustomer.rif}) añadido con sus balances.`);
+              localMessages.push(`  - Nuevo cliente ${importedCustomer.name} (RIF: ${importedCustomer.rif}) ${messageAction}: Deuda ${formatCurrency(initialOutstanding)}, S. Favor ${formatCurrency(initialCredit)}.`);
             }
           }
         }
@@ -408,22 +453,23 @@ export default function SettingsPage() {
       }
     }
 
+    // Save consolidated data
     if (companyUpdatedThisImport && consolidatedCompanyDetails) {
         localStorage.setItem(LOCAL_STORAGE_COMPANY_KEY, JSON.stringify(consolidatedCompanyDetails));
-    } else if (!consolidatedCompanyDetails && companyUpdatedThisImport) {
+    } else if (!consolidatedCompanyDetails && companyUpdatedThisImport) { // handles case where company details might be cleared
         localStorage.removeItem(LOCAL_STORAGE_COMPANY_KEY);
     }
     localStorage.setItem(LOCAL_STORAGE_CUSTOMERS_KEY, JSON.stringify(consolidatedCustomers));
     localStorage.setItem(LOCAL_STORAGE_INVOICES_KEY, JSON.stringify(consolidatedInvoices));
 
     localStorage.setItem(LOCAL_STORAGE_LAST_IMPORT_TIMESTAMP_KEY, new Date().toISOString());
-    localStorage.setItem(LOCAL_STORAGE_LAST_IMPORT_REVERTED_KEY, 'false');
+    localStorage.setItem(LOCAL_STORAGE_LAST_IMPORT_REVERTED_KEY, 'false'); // New import means it's not reverted
     updateStatusIndicators();
 
     localMessages.push("--- Resumen de Importación y Fusión ---");
     if (companyUpdatedThisImport) localMessages.push("Información de la empresa actualizada con el último archivo válido.");
     localMessages.push(`${customersAddedCount} cliente(s) nuevo(s) añadido(s).`);
-    localMessages.push(`${customersMergedCount} cliente(s) existente(s) fusionado(s)/actualizado(s) (balances sumados).`);
+    localMessages.push(`${customersMergedCount} cliente(s) existente(s) fusionado(s)/actualizado(s).`);
     localMessages.push(`${invoicesAddedCount} factura(s)/nota(s) de crédito nueva(s) añadida(s).`);
     localMessages.push("------------------------------------");
     localMessages.push("Importación y fusión completada. Se recomienda recargar la página para ver todos los cambios.");
@@ -437,7 +483,7 @@ export default function SettingsPage() {
     });
 
     if (fileInputRef.current) {
-      fileInputRef.current.value = "";
+      fileInputRef.current.value = ""; // Reset file input
     }
   };
 
@@ -451,26 +497,34 @@ export default function SettingsPage() {
     const backupCustomers = localStorage.getItem(LOCAL_STORAGE_PRE_IMPORT_CUSTOMERS_KEY);
     const backupInvoices = localStorage.getItem(LOCAL_STORAGE_PRE_IMPORT_INVOICES_KEY);
 
+    // Check if there's actually anything to revert
     if (backupCompany === null && backupCustomers === null && backupInvoices === null) {
         toast({ title: "Error", description: "No se encontró un respaldo válido de la importación anterior.", variant: "destructive"});
+        // It might be good to also clear the pre-import keys if they are all null but canRevertImport was true
+        localStorage.removeItem(LOCAL_STORAGE_PRE_IMPORT_COMPANY_KEY);
+        localStorage.removeItem(LOCAL_STORAGE_PRE_IMPORT_CUSTOMERS_KEY);
+        localStorage.removeItem(LOCAL_STORAGE_PRE_IMPORT_INVOICES_KEY);
+        updateStatusIndicators(); // This will set canRevertImport to false
         return;
     }
 
+    // Apply backups
     if (backupCompany) localStorage.setItem(LOCAL_STORAGE_COMPANY_KEY, backupCompany);
-    else localStorage.removeItem(LOCAL_STORAGE_COMPANY_KEY);
+    else localStorage.removeItem(LOCAL_STORAGE_COMPANY_KEY); // If backup was null, ensure current is removed
 
     if (backupCustomers) localStorage.setItem(LOCAL_STORAGE_CUSTOMERS_KEY, backupCustomers);
-    else localStorage.setItem(LOCAL_STORAGE_CUSTOMERS_KEY, JSON.stringify([]));
+    else localStorage.setItem(LOCAL_STORAGE_CUSTOMERS_KEY, JSON.stringify([])); // If backup was null, set to empty array
 
     if (backupInvoices) localStorage.setItem(LOCAL_STORAGE_INVOICES_KEY, backupInvoices);
-    else localStorage.setItem(LOCAL_STORAGE_INVOICES_KEY, JSON.stringify([]));
+    else localStorage.setItem(LOCAL_STORAGE_INVOICES_KEY, JSON.stringify([])); // If backup was null, set to empty array
 
+    // Mark as reverted and clear backup
     localStorage.setItem(LOCAL_STORAGE_LAST_IMPORT_REVERTED_KEY, 'true');
     localStorage.removeItem(LOCAL_STORAGE_PRE_IMPORT_COMPANY_KEY);
     localStorage.removeItem(LOCAL_STORAGE_PRE_IMPORT_CUSTOMERS_KEY);
     localStorage.removeItem(LOCAL_STORAGE_PRE_IMPORT_INVOICES_KEY);
 
-    updateStatusIndicators();
+    updateStatusIndicators(); // This will update canRevertImport to false
 
     toast({
         title: "Importación Revertida",
@@ -655,12 +709,12 @@ export default function SettingsPage() {
                     <p><strong>Advertencia Importante:</strong> Esta acción modificará los datos actuales.</p>
                     <ul className="list-disc pl-5 mt-1">
                       <li><strong>RESPALDE PRIMERO:</strong> Siempre exporte sus datos actuales como respaldo antes de proceder con una importación. La importación actual reemplazará el respaldo pre-importación anterior.</li>
-                      <li><strong>Clientes:</strong> Si un cliente importado (por RIF) ya existe, sus datos demográficos se actualizarán, y sus saldos (pendiente y a favor) se <strong>sumarán</strong> a los saldos existentes. Los clientes nuevos se añadirán.</li>
+                      <li><strong>Clientes:</strong> Si un cliente importado (por RIF) ya existe, sus datos demográficos se actualizarán, y sus saldos (pendiente y a favor) se <strong>sumarán</strong> a los saldos existentes. Los clientes nuevos se añadirán. Los saldos resultantes se auto-ajustarán (saldo a favor cubrirá saldo pendiente si ambos existen).</li>
                       <li><strong>Facturas/Notas de Crédito:</strong> Las transacciones se añadirán si no existen por ID interno, evitando duplicados exactos.</li>
                       <li><strong>Empresa:</strong> La información de la empresa se tomará del último archivo procesado.</li>
                       <li><strong>Reversión:</strong> Puede revertir la *última* importación si el resultado no es el esperado, usando el botón "Revertir Última Importación".</li>
                     </ul>
-                </div>
+                 </div>
                 <Input
                     type="file"
                     accept=".json"
@@ -721,8 +775,8 @@ export default function SettingsPage() {
                   <li>Puede ver una lista de todos sus clientes, buscar, añadir nuevos y editar existentes.</li>
                   <li><strong>Saldos del Cliente:</strong> En la lista, verá las columnas "S. Pendiente" (Saldo Pendiente) y "S. a Favor" (Saldo a Favor).
                     <ul className="list-disc pl-5">
-                      <li>El <strong>Saldo Pendiente</strong> se incrementa si un cliente paga menos del total de una factura. Se reduce al registrar abonos.</li>
-                      <li>El <strong>Saldo a Favor</strong> se incrementa si un cliente paga más del total de una factura (y se elige abonar a cuenta) o si realiza un depósito directo. Se reduce al usarlo en una compra o al procesar un retiro de saldo.</li>
+                      <li>El <strong>Saldo Pendiente</strong> se incrementa si un cliente paga menos del total de una factura. Se reduce al registrar abonos o si un depósito a cuenta lo cubre.</li>
+                      <li>El <strong>Saldo a Favor</strong> se incrementa si un cliente paga más del total de una factura (y se elige abonar a cuenta) o si realiza un depósito directo (después de cubrir cualquier deuda pendiente). Se reduce al usarlo en una compra o al procesar un retiro de saldo.</li>
                     </ul>
                   </li>
                   <li><strong>Acciones Rápidas en la Lista:</strong>
@@ -763,7 +817,7 @@ export default function SettingsPage() {
                         </ul>
                       </li>
                       <li>Configure descuento, IVA, mensaje de agradecimiento y notas.</li>
-                      <li>Al guardar, se actualizarán los saldos del cliente si el pago fue menor (aumenta Saldo Pendiente) o mayor (aumenta Saldo a Favor, si esa fue la opción), o si se usó Saldo a Favor (reduce Saldo a Favor).</li>
+                      <li>Al guardar, se actualizarán los saldos del cliente si el pago fue menor (aumenta Saldo Pendiente) o mayor (aumenta Saldo a Favor, si esa fue la opción y después de cubrir deuda pendiente si la hubiera), o si se usó Saldo a Favor (reduce Saldo a Favor).</li>
                     </ul>
                   </li>
                   <li><strong>Registrar Abono a Deuda:</strong>
@@ -778,7 +832,7 @@ export default function SettingsPage() {
                       <li>Se accede desde el editor de facturas (botón "Registrar Depósito a Cuenta") si hay un cliente seleccionado.</li>
                       <li>El cliente se precarga. El concepto es "Depósito a Cuenta Cliente", con cantidad 1 y precio unitario cero.</li>
                       <li>El monto del depósito se define en la sección "Detalles del Pago". IVA y descuento son cero.</li>
-                      <li>Al guardar, el Saldo a Favor del cliente se incrementa.</li>
+                      <li>Al guardar, si el cliente tiene Saldo Pendiente, el depósito lo cubrirá primero. El remanente (si lo hay) se sumará al Saldo a Favor del cliente.</li>
                     </ul>
                   </li>
                    <li><strong>Cancelar Modo Especial:</strong> Si está en modo Abono o Depósito, un botón le permite volver a una factura estándar.</li>
@@ -809,7 +863,7 @@ export default function SettingsPage() {
                       <li>Acceda desde el <Link href="/invoices" className="text-primary hover:underline">Historial</Link> (<Undo className="inline h-4 w-4" />) o buscando la factura original en "Devoluciones".</li>
                       <li>Se previsualiza la factura original. Especifique los detalles del reembolso.</li>
                       <li>Al confirmar, se genera una Nota de Crédito por el total de la factura original y se guarda en el historial.</li>
-                      <li>Si el reembolso se hace a "Crédito a Cuenta Cliente", el saldo a favor del cliente se incrementará. Otros métodos de reembolso no afectan directamente los saldos del cliente aquí.</li>
+                      <li>Si el reembolso se hace a "Crédito a Cuenta Cliente", el saldo a favor del cliente se incrementará (después de cubrir cualquier deuda pendiente si la nueva lógica de saldos se aplica aquí también, lo cual debe considerarse).</li>
                     </ul>
                   </li>
                   <li><strong>Retiro de Saldo a Favor:</strong>
@@ -852,24 +906,19 @@ export default function SettingsPage() {
                 <ul className="list-disc pl-5">
                     <li><strong className="text-foreground">Exportar Datos:</strong> Descarga un archivo JSON con toda la información de su aplicación. Es crucial para tener copias de seguridad o para transferir/fusionar datos.</li>
                     <li><strong className="text-foreground">Importar y Fusionar Datos:</strong> Permite seleccionar uno o más archivos JSON de respaldo para fusionarlos con los datos existentes.
-                        <ul className="list-disc pl-5">
-                            <li>La información de la empresa se tomará del último archivo procesado.</li>
-                            <li>Los clientes se fusionan por RIF/Cédula: datos demográficos se actualizan y sus saldos (pendiente y a favor) se <strong>suman</strong>. Clientes nuevos se añaden.</li>
-                            <li>Las facturas/notas de crédito se añaden si no existen por ID interno.</li>
-                        </ul>
+                        <div className="text-xs mb-2 text-foreground"> {/* Changed from p to div */}
+                           <p><strong>Advertencia Importante:</strong> Esta acción modificará los datos actuales.</p>
+                           <ul className="list-disc pl-5 mt-1">
+                             <li><strong>RESPALDE PRIMERO:</strong> Siempre exporte sus datos actuales como respaldo antes de proceder con una importación. La importación actual reemplazará el respaldo pre-importación anterior.</li>
+                             <li><strong>Clientes:</strong> Si un cliente importado (por RIF) ya existe, sus datos demográficos se actualizarán, y sus saldos (pendiente y a favor) se <strong>sumarán</strong> a los saldos existentes. Los clientes nuevos se añadirán. Los saldos resultantes se auto-ajustarán (saldo a favor cubrirá saldo pendiente si ambos existen).</li>
+                             <li><strong>Facturas/Notas de Crédito:</strong> Las transacciones se añadirán si no existen por ID interno, evitando duplicados exactos.</li>
+                             <li><strong>Empresa:</strong> La información de la empresa se tomará del último archivo procesado.</li>
+                             <li><strong>Reversión:</strong> Puede revertir la *última* importación si el resultado no es el esperado, usando el botón "Revertir Última Importación".</li>
+                           </ul>
+                        </div>
                     </li>
                      <li><strong className="text-foreground">Revertir Última Importación:</strong> Si el resultado de una importación no es el esperado, puede usar esta opción para restaurar los datos al estado exacto en que se encontraban *antes* de la última operación de importación. Esta opción solo está disponible para la importación más reciente y si no ha sido ya revertida. Una nueva importación creará un nuevo punto de restauración.</li>
                 </ul>
-                 <div className="text-xs mb-2 text-foreground">
-                    <p><strong>Advertencia Importante:</strong> Esta acción modificará los datos actuales.</p>
-                    <ul className="list-disc pl-5 mt-1">
-                      <li><strong>RESPALDE PRIMERO:</strong> Siempre exporte sus datos actuales como respaldo antes de proceder con una importación. La importación actual reemplazará el respaldo pre-importación anterior.</li>
-                      <li><strong>Clientes:</strong> Si un cliente importado (por RIF) ya existe, sus datos demográficos se actualizarán, y sus saldos (pendiente y a favor) se <strong>sumarán</strong> a los saldos existentes. Los clientes nuevos se añadirán.</li>
-                      <li><strong>Facturas/Notas de Crédito:</strong> Las transacciones se añadirán si no existen por ID interno, evitando duplicados exactos.</li>
-                      <li><strong>Empresa:</strong> La información de la empresa se tomará del último archivo procesado.</li>
-                      <li><strong>Reversión:</strong> Puede revertir la *última* importación si el resultado no es el esperado, usando el botón "Revertir Última Importación".</li>
-                    </ul>
-                 </div>
                 <p className="font-semibold text-destructive mt-2">Consideraciones Clave del Almacenamiento Local:</p>
                 <ul className="list-disc pl-5">
                   <li>Los datos se guardan <strong>exclusivamente en el navegador y dispositivo</strong> que está utilizando.</li>

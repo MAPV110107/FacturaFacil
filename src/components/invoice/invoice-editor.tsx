@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
@@ -72,7 +73,7 @@ export function InvoiceEditor() {
   const [showNewCustomerFields, setShowNewCustomerFields] = useState(false);
   
   const isInitializingDebtPaymentRef = useRef(false);
-  const initialNormalResetDoneRef = useRef(false);
+  // const initialNormalResetDoneRef = useRef(false); // This ref seems problematic, handled differently now.
   const initialCustomersLoadAttemptedRef = useRef(false);
 
 
@@ -170,12 +171,12 @@ export function InvoiceEditor() {
     } else if (mode === 'creditDeposit' && targetCustomer) {
       initialCustomerState = { ...targetCustomer };
       initialInvoiceNumber = `DEP-${Date.now().toString().slice(-6)}`;
-      initialItemsArr = [{ id: uuidv4(), description: "Depósito a Cuenta Cliente", quantity: 1, unitPrice: 0 }];
+      initialItemsArr = [{ id: uuidv4(), description: "Depósito a Cuenta Cliente", quantity: 1, unitPrice: 0 }]; // Unit price 0 for deposit, actual amount from payments
       thankYouMsg = "Gracias por su depósito.";
       notesMsg = `Depósito a cuenta cliente. El monto se define en los métodos de pago.`;
       formTaxRate = 0;
       formIsCreditDeposit = true;
-    } else {
+    } else { // mode === 'normal' or fallback
       if (targetCustomer) {
         initialCustomerState = {...targetCustomer};
       }
@@ -192,7 +193,7 @@ export function InvoiceEditor() {
       salesperson: "",
       customerDetails: initialCustomerState,
       items: initialItemsArr,
-      paymentMethods: [{ method: "Efectivo", amount: 0, reference: "" }],
+      paymentMethods: [{ method: "Efectivo", amount: (mode === 'debtPayment' ? amount : 0) , reference: "" }],
       thankYouMessage: thankYouMsg,
       notes: notesMsg,
       taxRate: formTaxRate,
@@ -244,9 +245,9 @@ export function InvoiceEditor() {
     if (callingEffectRef) {
         callingEffectRef.current = false;
     }
-    if (mode === 'normal' && !customerId) {
-      initialNormalResetDoneRef.current = true;
-    }
+    // if (mode === 'normal' && !customerId) {
+    //   initialNormalResetDoneRef.current = true;
+    // }
 
   }, [form, customers, companyDetails, calculateTotals, calculatePaymentSummary]);
 
@@ -259,8 +260,8 @@ export function InvoiceEditor() {
     if (!isClient) return;
 
     if (searchParams.get('customerId') && customers.length === 0 && !initialCustomersLoadAttemptedRef.current) {
-        initialCustomersLoadAttemptedRef.current = true;
-        return;
+        initialCustomersLoadAttemptedRef.current = true; // Mark attempt to prevent re-entry if customers load late
+        return; // Wait for customers to potentially load
     }
 
     const customerIdParam = searchParams.get('customerId');
@@ -269,12 +270,10 @@ export function InvoiceEditor() {
     const amountParam = parseFloat(amountStrParam || '0');
 
     if (debtPaymentParam && customerIdParam && amountParam > 0) {
-        if (isInitializingDebtPaymentRef.current) {
-            return;
-        }
+        if (isInitializingDebtPaymentRef.current) return; // Prevent re-entry while initializing
         isInitializingDebtPaymentRef.current = true;
-        const targetCustomer = customers.find(c => c.id === customerIdParam);
 
+        const targetCustomer = customers.find(c => c.id === customerIdParam);
         if (targetCustomer) {
             setEditorMode('debtPayment');
             setCurrentDebtOrCreditAmount(amountParam);
@@ -285,33 +284,31 @@ export function InvoiceEditor() {
             resetFormAndState({ mode: 'debtPayment', customerId: customerIdParam, amount: amountParam, callingEffectRef: isInitializingDebtPaymentRef });
         } else {
             toast({ variant: "destructive", title: "Cliente no encontrado", description: "No se pudo encontrar el cliente para el pago de deuda." });
-            setEditorMode('normal');
-            setCurrentDebtOrCreditAmount(0);
-            setSelectedCustomerIdForDropdown(undefined);
-            setCustomerRifInput("");
-            setCustomerSearchMessage(null);
-            setShowNewCustomerFields(false);
+            setEditorMode('normal'); // Fallback to normal if customer not found
             resetFormAndState({ mode: 'normal', callingEffectRef: isInitializingDebtPaymentRef });
         }
+         // Clean up URL params only after successful initialization
         if (pathname === '/invoice/new' && searchParams.has('debtPayment')) {
              router.replace('/invoice/new', { scroll: false });
         }
-        return;
+        return; // Exit after handling debt payment mode
     }
     
+    // If not initializing debt payment, ensure the flag is false
     isInitializingDebtPaymentRef.current = false;
+    
+    // Only perform the initial "normal" reset if no specific mode is active AND form hasn't been initialized by user/other modes.
+    // Check if form is still on default values or values from a special mode that's no longer active.
+    const currentInvoiceNumber = form.getValues('invoiceNumber');
+    const isDefaultOrSpecialModeNumber = !currentInvoiceNumber || currentInvoiceNumber.startsWith("PAGO-") || currentInvoiceNumber.startsWith("DEP-");
 
-    if ((editorMode === 'debtPayment' || editorMode === 'creditDeposit') && !debtPaymentParam) {
-        // Stays in special mode if entered via button, this block intentionally left leaner
-        // to avoid premature resets from special modes.
-    }
-    else if (editorMode === 'normal' && (!form.getValues('invoiceNumber') || form.getValues('invoiceNumber').startsWith("PAGO-") || form.getValues('invoiceNumber').startsWith("DEP-")) && !selectedCustomerIdForDropdown && !initialNormalResetDoneRef.current) {
+    if (editorMode === 'normal' && isDefaultOrSpecialModeNumber && !selectedCustomerIdForDropdown) {
        resetFormAndState({ mode: 'normal' });
     }
 
 }, [
     isClient, searchParams, customers, editorMode, selectedCustomerIdForDropdown,
-    resetFormAndState, toast, pathname, router, form
+    resetFormAndState, toast, pathname, router, form // form added as dependency
 ]);
 
 
@@ -347,11 +344,12 @@ export function InvoiceEditor() {
         let overpaymentAmt = 0;
         let finalAmountDueForInvoice = amountDue;
 
-        if (amountDue < 0) {
+        if (amountDue < 0) { // Overpayment occurred
             overpaymentAmt = Math.abs(amountDue);
             if (values.overpaymentHandlingChoice === 'refundNow') {
-                finalAmountDueForInvoice = 0;
+                finalAmountDueForInvoice = 0; // Invoice considered settled if change is given
             }
+            // If 'creditToAccount', finalAmountDueForInvoice remains negative to reflect credit.
         }
 
         setLiveInvoicePreview(prev => ({
@@ -398,10 +396,16 @@ export function InvoiceEditor() {
 
     if (watchedOverpaymentHandlingChoice === 'refundNow' && actualOverpaymentAmount > 0) {
         if (changePaymentFields.length === 0) {
+            // Ensure method is set, default to Efectivo
             appendChangePayment({ method: "Efectivo", amount: actualOverpaymentAmount, reference: "" });
         } else if (changePaymentFields.length === 1) {
-            if (changePaymentFields[0].amount !== actualOverpaymentAmount) {
-                 updateChangePayment(0, { ...changePaymentFields[0], method: changePaymentFields[0].method || "Efectivo", amount: actualOverpaymentAmount });
+             const currentChangePayment = changePaymentFields[0];
+            if (currentChangePayment.amount !== actualOverpaymentAmount || !currentChangePayment.method) {
+                 updateChangePayment(0, { 
+                    method: currentChangePayment.method || "Efectivo", 
+                    amount: actualOverpaymentAmount, 
+                    reference: currentChangePayment.reference || "" 
+                });
             }
         }
     } else if (watchedOverpaymentHandlingChoice === 'creditToAccount') {
@@ -416,7 +420,7 @@ export function InvoiceEditor() {
     appendChangePayment,
     replaceChangePayments,
     updateChangePayment,
-    form
+    form // Added form as dependency
 ]);
 
 
@@ -424,22 +428,29 @@ export function InvoiceEditor() {
     if (editorMode !== 'normal') return;
     if (!customerRifInput.trim()) {
       setCustomerSearchMessage("Ingrese un RIF/Cédula para buscar.");
-      setShowNewCustomerFields(false);
-      form.reset({ ...form.getValues(), customerDetails: { ...defaultCustomer, rif: "" } });
-      setSelectedCustomerIdForDropdown(undefined);
+      setShowNewCustomerFields(false); // Do not show new customer fields if input is empty
+      // Reset only customer details part of the form, keep other invoice details
+      form.reset({ 
+        ...form.getValues(), 
+        customerDetails: { ...defaultCustomer, rif: "" } 
+      });
+      setSelectedCustomerIdForDropdown(undefined); // Clear selection from dropdown
       setSelectedCustomerAvailableCredit(0);
       return;
     }
     setIsSearchingCustomer(true);
     setCustomerSearchMessage("Buscando cliente...");
   
+    // Debounce or delay search if needed in a real API scenario
+    // For local search, direct is fine.
     const searchTerm = customerRifInput.toUpperCase().replace(/[^A-Z0-9]/gi, '');
     let foundCustomer = customers.find(c => c.rif.toUpperCase().replace(/[^A-Z0-9]/gi, '') === searchTerm);
   
+    // If not found by exact RIF, try common CI prefixes (V, E) if input is purely numeric
     if (!foundCustomer && /^[0-9]+$/.test(customerRifInput.trim())) {
       const numericPart = customerRifInput.trim();
-      const ciWithV = `V${numericPart}`;
-      const ciWithE = `E${numericPart}`;
+      const ciWithV = `V${numericPart}`; // Common for Venezolano
+      const ciWithE = `E${numericPart}`; // Common for Extranjero
       foundCustomer = customers.find(c => 
         c.rif.toUpperCase().replace(/[^A-Z0-9]/gi, '') === ciWithV || 
         c.rif.toUpperCase().replace(/[^A-Z0-9]/gi, '') === ciWithE
@@ -448,21 +459,22 @@ export function InvoiceEditor() {
   
     if (foundCustomer) {
       form.setValue("customerDetails", { ...foundCustomer }, { shouldValidate: true });
-      setCustomerRifInput(foundCustomer.rif);
+      setCustomerRifInput(foundCustomer.rif); // Update input field to reflect the stored RIF format
       setCustomerSearchMessage(`Cliente encontrado: ${foundCustomer.name}`);
       setShowNewCustomerFields(false);
-      setSelectedCustomerIdForDropdown(foundCustomer.id);
+      setSelectedCustomerIdForDropdown(foundCustomer.id); // Sync dropdown
       setSelectedCustomerAvailableCredit(foundCustomer.creditBalance || 0);
     } else {
-      form.setValue("customerDetails.id", "");
+      // Prepare form for new customer entry, keeping entered RIF
+      form.setValue("customerDetails.id", ""); // Clear ID for new customer
       form.setValue("customerDetails.name", "");
       form.setValue("customerDetails.address", "");
       form.setValue("customerDetails.phone", "");
       form.setValue("customerDetails.email", "");
-      form.setValue("customerDetails.rif", customerRifInput.toUpperCase(), { shouldValidate: true });
+      form.setValue("customerDetails.rif", customerRifInput.toUpperCase(), { shouldValidate: true }); // Use entered RIF
       setCustomerSearchMessage("Cliente no encontrado. Complete los datos para registrarlo.");
       setShowNewCustomerFields(true);
-      setSelectedCustomerIdForDropdown(undefined);
+      setSelectedCustomerIdForDropdown(undefined); // Clear dropdown selection
       setSelectedCustomerAvailableCredit(0);
     }
     setIsSearchingCustomer(false);
@@ -477,11 +489,13 @@ export function InvoiceEditor() {
     const customer = customers.find((c) => c.id === customerId);
     if (customer) {
       form.setValue("customerDetails", { ...customer }, { shouldValidate: true });
-      setCustomerRifInput(customer.rif);
+      setCustomerRifInput(customer.rif); // Sync RIF input field
       setShowNewCustomerFields(false);
       setCustomerSearchMessage(`Cliente seleccionado: ${customer.name}`);
       setSelectedCustomerAvailableCredit(customer.creditBalance || 0);
     } else {
+      // Should not happen if customerId comes from the list of customers
+      // Reset to a clean state for new customer entry if it somehow does
       form.reset({ 
         ...form.getValues(), 
         customerDetails: { ...defaultCustomer, rif: "" } 
@@ -497,18 +511,23 @@ export function InvoiceEditor() {
     const paymentMethods = form.getValues("paymentMethods");
     const currentPayment = paymentMethods[index];
     
+    // Update only the method, keep amount and reference unless specific logic dictates otherwise
     updatePayment(index, { ...currentPayment, method: newMethod, amount: currentPayment.amount });
 
+    // If "Saldo a Favor" is selected in normal mode and customer has credit
     if (newMethod === "Saldo a Favor" && editorMode === 'normal' && selectedCustomerAvailableCredit > 0) {
+        // Calculate amount needed to cover the invoice from other payments
         const invoiceTotal = liveInvoicePreview.totalAmount || 0;
         let otherPaymentsTotal = 0;
         paymentMethods.forEach((pm, i) => {
-            if (i !== index && pm.method !== "Saldo a Favor") {
+            if (i !== index && pm.method !== "Saldo a Favor") { // Exclude current and other "Saldo a Favor" entries for this calculation
                 otherPaymentsTotal += pm.amount || 0;
             }
         });
         const amountDueOnInvoice = Math.max(0, invoiceTotal - otherPaymentsTotal);
         const amountToApplyFromCredit = Math.min(selectedCustomerAvailableCredit, amountDueOnInvoice);
+        
+        // Update the current payment method's amount to what can be applied from credit
         updatePayment(index, { ...currentPayment, method: newMethod, amount: amountToApplyFromCredit });
     }
   };
@@ -522,7 +541,7 @@ export function InvoiceEditor() {
       setCustomerRifInput(customer.rif);
       setCustomerSearchMessage(`Pagando deuda de: ${customer.name}`);
       setShowNewCustomerFields(false);
-      resetFormAndState({ mode: 'debtPayment', customerId: customer.id, amount: customer.outstandingBalance });
+      resetFormAndState({ mode: 'debtPayment', customerId: customer.id, amount: customer.outstandingBalance ?? 0 });
     } else {
       toast({ variant: "destructive", title: "Sin Deuda Pendiente", description: "El cliente seleccionado no tiene deuda pendiente o no hay cliente seleccionado." });
     }
@@ -532,7 +551,7 @@ export function InvoiceEditor() {
     const customer = form.getValues("customerDetails");
     if (customer && customer.id) {
       setEditorMode('creditDeposit');
-      setCurrentDebtOrCreditAmount(0);
+      setCurrentDebtOrCreditAmount(0); // For credit deposit, amount comes from payment methods
       setSelectedCustomerIdForDropdown(customer.id);
       setCustomerRifInput(customer.rif);
       setCustomerSearchMessage(`Registrando depósito para: ${customer.name}`);
@@ -548,39 +567,44 @@ export function InvoiceEditor() {
     let customerWasModified = false;
     let newCustomerJustAdded: CustomerDetails | null = null;
 
+    // Handle new customer creation if fields are shown and no ID exists (normal mode only)
     if (showNewCustomerFields && !data.customerDetails.id && editorMode === 'normal') {
+      // Validate required fields for new customer
       if (data.customerDetails.name && data.customerDetails.rif && data.customerDetails.address) {
         const newCustomer: CustomerDetails = {
-          ...data.customerDetails,
+          ...data.customerDetails, // Includes RIF, name, address, phone, email from form
           id: uuidv4(),
-          outstandingBalance: 0,
+          outstandingBalance: 0, // New customers start with 0 balances
           creditBalance: 0,
         };
         customerToSaveOnInvoice = newCustomer;
-        customerWasModified = true;
-        newCustomerJustAdded = newCustomer;
+        customerWasModified = true; // Flag that customers list needs update
+        newCustomerJustAdded = newCustomer; // Keep track of the newly added customer
         toast({ title: "Nuevo Cliente Registrado", description: `Cliente ${newCustomer.name} añadido al sistema.` });
       } else {
         toast({ variant: "destructive", title: "Datos Incompletos del Cliente", description: "Por favor, complete nombre, RIF y dirección para el nuevo cliente." });
         if (!data.customerDetails.name) form.setError("customerDetails.name", {type: "manual", message: "Nombre requerido"});
         if (!data.customerDetails.address) form.setError("customerDetails.address", {type: "manual", message: "Dirección requerida"});
+        // RIF validation is handled by schema, but ensure it was indeed entered
         if (!data.customerDetails.rif) form.setError("customerDetails.rif", {type: "manual", message: "RIF/Cédula requerido"});
         return;
       }
     }
     
-    if (!customerToSaveOnInvoice || !customerToSaveOnInvoice.rif) {
+    // Ensure a customer is effectively selected or created
+    if (!customerToSaveOnInvoice || !customerToSaveOnInvoice.rif) { // Check RIF as a key identifier
         toast({ variant: "destructive", title: "Cliente no especificado", description: "Por favor, busque o ingrese los datos del cliente."});
         form.setError("customerDetails.rif", {type: "manual", message: "RIF/Cédula del cliente es requerido"});
         return;
     }
 
+    // Validate "Saldo a Favor" usage
     let totalCreditUsedInTransaction = 0;
     let creditUsageError = false;
-    if (editorMode === 'normal') {
+    if (editorMode === 'normal') { // Only applies to normal sales
         data.paymentMethods.forEach((pm, index) => {
             if (pm.method === "Saldo a Favor") {
-                if (pm.amount < 0) {
+                if (pm.amount < 0) { // Amount should not be negative
                      form.setError(`paymentMethods.${index}.amount`, { type: "manual", message: `Monto de saldo a favor no puede ser negativo.`});
                      creditUsageError = true;
                 }
@@ -595,6 +619,7 @@ export function InvoiceEditor() {
             }
         });
 
+        // Double check total credit used against actual available, in case multiple "Saldo a Favor" entries were made
         const currentCustForTotalCheck = customers.find(c => c.id === customerToSaveOnInvoice.id);
         const totalAvailableCreditForCheck = currentCustForTotalCheck?.creditBalance || 0;
 
@@ -610,31 +635,35 @@ export function InvoiceEditor() {
       totalPrice: item.quantity * item.unitPrice,
     }));
 
+    // For debt payment or credit deposit, tax and discount are forced to 0
     const currentTaxRate = data.isDebtPayment || data.isCreditDeposit ? 0 : (data.taxRate ?? TAX_RATE);
     const currentDiscountAmount = data.isDebtPayment || data.isCreditDeposit ? 0 : (data.discountAmount || 0);
     
     const { subTotal, discountAmount, taxAmount, totalAmount } = calculateTotals(finalItems, currentTaxRate, currentDiscountAmount);
     const { amountPaid, amountDue: rawAmountDue } = calculatePaymentSummary(data.paymentMethods, totalAmount);
 
+    // Handle overpayment logic
     let finalInvoiceAmountDue = rawAmountDue;
     let overpaymentAmountToStore = 0;
     let overpaymentHandlingToStore: 'creditedToAccount' | 'refunded' | undefined = undefined;
     let changeRefundPaymentMethodsToStore: PaymentDetails[] | undefined = undefined;
 
-    if (rawAmountDue < 0) {
+    if (rawAmountDue < 0) { // Customer overpaid
         overpaymentAmountToStore = Math.abs(rawAmountDue);
         if (data.overpaymentHandlingChoice === 'refundNow') {
             const totalChangeRefunded = (data.changeRefundPaymentMethods || []).reduce((sum, pm) => sum + pm.amount, 0);
-            if (Math.abs(totalChangeRefunded - overpaymentAmountToStore) > 0.001) {
+            // Use a small tolerance for floating point comparisons
+            if (Math.abs(totalChangeRefunded - overpaymentAmountToStore) > 0.001) { // Check if sum of change matches overpayment
                 toast({ variant: "destructive", title: "Error en Vuelto", description: `El monto del vuelto procesado (${formatCurrency(totalChangeRefunded)}) no coincide con el sobrepago (${formatCurrency(overpaymentAmountToStore)}).` });
                 form.setError("changeRefundPaymentMethods", {type: "manual", message: "El total del vuelto debe igualar el sobrepago."});
                 return;
             }
             overpaymentHandlingToStore = 'refunded';
             changeRefundPaymentMethodsToStore = data.changeRefundPaymentMethods;
-            finalInvoiceAmountDue = 0;
-        } else {
+            finalInvoiceAmountDue = 0; // Invoice is settled
+        } else { // 'creditToAccount'
             overpaymentHandlingToStore = 'creditedToAccount';
+            // finalInvoiceAmountDue remains negative, this amount will be added to customer's credit balance later
         }
     }
 
@@ -643,7 +672,7 @@ export function InvoiceEditor() {
       id: uuidv4(),
       invoiceNumber: data.invoiceNumber,
       date: data.date.toISOString(),
-      type: 'sale',
+      type: 'sale', // All documents created here are 'sale' type initially. Returns are handled elsewhere.
       isDebtPayment: editorMode === 'debtPayment',
       isCreditDeposit: editorMode === 'creditDeposit',
       companyDetails: companyDetails || defaultCompany,
@@ -658,7 +687,7 @@ export function InvoiceEditor() {
       taxAmount,
       totalAmount,
       amountPaid,
-      amountDue: finalInvoiceAmountDue,
+      amountDue: finalInvoiceAmountDue, // This is the final amount due FOR THIS INVOICE after overpayment handling
       thankYouMessage: data.thankYouMessage || DEFAULT_THANK_YOU_MESSAGE,
       notes: data.notes,
       overpaymentAmount: overpaymentAmountToStore > 0 ? overpaymentAmountToStore : undefined,
@@ -666,55 +695,86 @@ export function InvoiceEditor() {
       changeRefundPaymentMethods: changeRefundPaymentMethodsToStore,
     };
     
+    // Add new invoice to the list
     setSavedInvoices(prevInvoices => [...prevInvoices, fullInvoiceData]);
     
+    // Update customer balances
     let currentCustomersList = [...customers];
-    if (customerWasModified && newCustomerJustAdded) {
+    if (customerWasModified && newCustomerJustAdded) { // If a new customer was added during this transaction
         currentCustomersList.push(newCustomerJustAdded);
     }
 
     const customerIndex = currentCustomersList.findIndex(c => c.id === customerToSaveOnInvoice.id);
     if (customerIndex !== -1) {
         const StoredCustomer = {...currentCustomersList[customerIndex]};
+        // Ensure balances are numbers
         StoredCustomer.outstandingBalance = StoredCustomer.outstandingBalance || 0;
         StoredCustomer.creditBalance = StoredCustomer.creditBalance || 0;
 
+        // 1. If "Saldo a Favor" was used to pay for a normal sale, deduct from creditBalance
         if (totalCreditUsedInTransaction > 0 && editorMode === 'normal') {
             StoredCustomer.creditBalance -= totalCreditUsedInTransaction;
         }
 
+        // 2. Handle main transaction type effect on balances
         if (editorMode === 'debtPayment') {
             StoredCustomer.outstandingBalance = Math.max(0, StoredCustomer.outstandingBalance - amountPaid);
         } else if (editorMode === 'creditDeposit') {
-            StoredCustomer.creditBalance += amountPaid;
-        } else {
-            if (rawAmountDue > 0) {
+            // Apply new rule: If depositing and there's outstanding debt, pay debt first
+            if (StoredCustomer.outstandingBalance > 0) {
+                const amountToPayDebt = Math.min(amountPaid, StoredCustomer.outstandingBalance);
+                StoredCustomer.outstandingBalance -= amountToPayDebt;
+                const remainingDeposit = amountPaid - amountToPayDebt;
+                StoredCustomer.creditBalance += remainingDeposit;
+            } else {
+                StoredCustomer.creditBalance += amountPaid; // No debt, all deposit goes to credit
+            }
+        } else { // editorMode === 'normal'
+            // For normal sales, update balances based on underpayment or overpayment (if credited)
+            if (rawAmountDue > 0) { // Customer underpaid for this normal sale
                 StoredCustomer.outstandingBalance += rawAmountDue;
-            } else if (rawAmountDue < 0) {
+            } else if (rawAmountDue < 0) { // Customer overpaid for this normal sale
                 if (overpaymentHandlingToStore === 'creditedToAccount') {
                     StoredCustomer.creditBalance += overpaymentAmountToStore;
                 }
+                // If 'refundNow', balances are not affected by the overpayment itself, as change was given.
             }
         }
         currentCustomersList[customerIndex] = StoredCustomer;
-    } else if (newCustomerJustAdded) {
-        let newCustWithBalance = {...newCustomerJustAdded};
-        newCustWithBalance.outstandingBalance = 0;
-        newCustWithBalance.creditBalance = 0;
+    } else if (newCustomerJustAdded) { // This block handles a NEW customer created during this transaction.
+                                     // (customerIndex was -1, but newCustomerJustAdded exists)
+        // This is the first transaction for this new customer.
+        // Initialize their balances and apply transaction effects.
+        let newCustWithBalance = {...newCustomerJustAdded}; // Already has ID, RIF, name, etc.
+        newCustWithBalance.outstandingBalance = 0; // Start with 0
+        newCustWithBalance.creditBalance = 0;   // Start with 0
+
         if (editorMode === 'creditDeposit') {
+            // New customer, no pre-existing debt. All deposit goes to credit.
             newCustWithBalance.creditBalance += amountPaid;
-        } else {
-             if (rawAmountDue > 0) newCustWithBalance.outstandingBalance += rawAmountDue;
-             else if (rawAmountDue < 0 && overpaymentHandlingToStore === 'creditedToAccount') {
+        } else if (editorMode === 'normal') {
+             if (rawAmountDue > 0) { // Underpaid their first purchase
+                newCustWithBalance.outstandingBalance += rawAmountDue;
+             } else if (rawAmountDue < 0 && overpaymentHandlingToStore === 'creditedToAccount') { // Overpaid and credited
                 newCustWithBalance.creditBalance += overpaymentAmountToStore;
              }
         }
+        // 'debtPayment' mode is not applicable for a brand new customer's first transaction.
+        
+        // Find the newly added customer in the list (if it was pushed earlier) and update it
         const newCustIndexInList = currentCustomersList.findIndex(c => c.id === newCustWithBalance.id);
-        if (newCustIndexInList !== -1) currentCustomersList[newCustIndexInList] = newCustWithBalance;
+        if (newCustIndexInList !== -1) {
+            currentCustomersList[newCustIndexInList] = newCustWithBalance;
+        } else {
+            // This case should ideally not happen if newCustomerJustAdded was pushed correctly
+            // But as a fallback, add it.
+            currentCustomersList.push(newCustWithBalance);
+        }
     }
     
     setCustomers(currentCustomersList);
     
+    // Toast notification
     let toastTitle = "Factura Guardada";
     if (editorMode === 'debtPayment') toastTitle = "Abono a Deuda Registrado";
     if (editorMode === 'creditDeposit') toastTitle = "Depósito a Cuenta Registrado";
@@ -729,19 +789,23 @@ export function InvoiceEditor() {
       ),
     });
     
+    // Reset editor to normal mode and clear fields for new invoice
     setEditorMode('normal');
     setCurrentDebtOrCreditAmount(0);
-    setSelectedCustomerIdForDropdown(undefined);
-    setCustomerRifInput("");
-    setCustomerSearchMessage(null);
-    setShowNewCustomerFields(false);
-    resetFormAndState({ mode: 'normal' });
-    if (pathname === '/invoice/new' && searchParams.has('debtPayment')) {
+    setSelectedCustomerIdForDropdown(undefined); // Clear customer selection
+    setCustomerRifInput(""); // Clear RIF input
+    setCustomerSearchMessage(null); // Clear search message
+    setShowNewCustomerFields(false); // Hide new customer fields
+    resetFormAndState({ mode: 'normal' }); // Reset form to clean slate for a normal invoice
+    
+    // Clean up URL if it had params
+    if (pathname === '/invoice/new' && searchParams.toString()) { // Check if any search params exist
         router.replace('/invoice/new', { scroll: false });
     }
   }
   
   const handleCancelInvoice = () => {
+    // Reset everything to a clean "normal" invoice state
     setEditorMode('normal');
     setCurrentDebtOrCreditAmount(0);
     setSelectedCustomerIdForDropdown(undefined);
@@ -753,13 +817,14 @@ export function InvoiceEditor() {
         title: "Creación Cancelada",
         description: "El documento ha sido descartado.",
     });
-    if (pathname === '/invoice/new' && searchParams.has('debtPayment')) {
+    // Clean up URL if it had params
+    if (pathname === '/invoice/new' && searchParams.toString()) {
         router.replace('/invoice/new', { scroll: false });
     }
-    router.push('/dashboard');
+    router.push('/dashboard'); // Optionally redirect or just clear form
   };
 
-  const previewCompanyDetails = companyDetails;
+  const previewCompanyDetails = companyDetails; // Use the one from localStorage
   const getEditorTitle = () => {
     if (editorMode === 'debtPayment') return "Registrar Abono a Deuda";
     if (editorMode === 'creditDeposit') return "Registrar Depósito a Cuenta Cliente";
@@ -775,13 +840,15 @@ export function InvoiceEditor() {
     );
   }
 
+  // Determine if debt payment or credit deposit buttons should be shown for the currently selected/entered customer
   const currentCustomerForActions = form.getValues("customerDetails");
   const showOverpaymentSection = liveInvoicePreview.overpaymentAmount && liveInvoicePreview.overpaymentAmount > 0.001 && editorMode === 'normal';
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
       <form onSubmit={form.handleSubmit(onSubmit)} className="lg:col-span-2 space-y-8 no-print">
-        <Form {...form}>
+        <Form {...form}> {/* Ensure Form context wraps everything */}
+            {/* Invoice Header Card: Number, Date, Cashier, Salesperson */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-xl flex items-center text-primary">
@@ -828,6 +895,8 @@ export function InvoiceEditor() {
                               mode="single"
                               selected={field.value}
                               onSelect={(date) => {
+                                  // Ensure a date is selected, then update.
+                                  // The field.onChange from RHF expects a Date object or null.
                                   if (date) field.onChange(date);
                               }}
                               initialFocus
@@ -872,11 +941,13 @@ export function InvoiceEditor() {
               </CardContent>
             </Card>
 
+            {/* Customer Details Card */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-xl flex items-center text-primary"><Users className="mr-2 h-5 w-5" />Información del Cliente</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* RIF Search and Select Dropdown */}
                 <div className="flex flex-col sm:flex-row gap-2 items-end">
                   <FormItem className="flex-grow">
                     <FormLabel htmlFor="customerRifInput">RIF/Cédula del Cliente</FormLabel>
@@ -886,9 +957,9 @@ export function InvoiceEditor() {
                         placeholder="Ingrese RIF/Cédula y presione Enter o Busque"
                         value={customerRifInput}
                         onChange={(e) => setCustomerRifInput(e.target.value)}
-                        onBlur={handleRifSearch}
-                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleRifSearch(); }}}
-                        disabled={editorMode !== 'normal'}
+                        onBlur={handleRifSearch} // Search on blur
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleRifSearch(); }}} // Search on Enter
+                        disabled={editorMode !== 'normal'} // Disable if not in normal invoice mode
                       />
                     </FormControl>
                   </FormItem>
@@ -897,8 +968,10 @@ export function InvoiceEditor() {
                   </Button>
                 </div>
 
+                {/* Customer Search Message */}
                 {customerSearchMessage && <p className={`text-sm mt-1 ${form.formState.errors.customerDetails?.rif || form.formState.errors.customerDetails?.name ? 'text-destructive' : 'text-muted-foreground'}`}>{customerSearchMessage}</p>}
                 
+                {/* Customer Detail Fields (potentially for new customer) */}
                 <div className="space-y-3 pt-3 border-t mt-3">
                   <FormField control={form.control} name="customerDetails.rif" render={({ field }) => (
                       <FormItem>
@@ -937,6 +1010,7 @@ export function InvoiceEditor() {
                   )} />
                 </div>
 
+                {/* Customer Select Dropdown */}
                 <FormItem className="mt-4">
                   <FormLabel>O seleccionar de la lista:</FormLabel>
                   <Select onValueChange={handleCustomerSelectFromDropdown} value={selectedCustomerIdForDropdown || ""} disabled={editorMode !== 'normal'}>
@@ -956,6 +1030,7 @@ export function InvoiceEditor() {
                   <FormMessage>{form.formState.errors.customerDetails && typeof form.formState.errors.customerDetails !== 'string' && (form.formState.errors.customerDetails as any)?.message}</FormMessage>
                 </FormItem>
 
+                {/* Buttons for Debt Payment / Credit Deposit */}
                 {editorMode === 'normal' && currentCustomerForActions?.id && (
                   <div className="pt-4 mt-4 border-t space-y-2 sm:space-y-0 sm:flex sm:gap-2">
                     {(currentCustomerForActions.outstandingBalance ?? 0) > 0 && (
@@ -968,11 +1043,13 @@ export function InvoiceEditor() {
                       </Button>
                   </div>
                 )}
+                {/* Button to cancel special mode */}
                 {editorMode !== 'normal' && (
                   <div className="pt-4 mt-4 border-t">
                       <Button type="button" variant="outline" onClick={() => {
                         setEditorMode('normal');
                         setCurrentDebtOrCreditAmount(0);
+                        // Reset form to normal, potentially keeping selected customer if valid
                         resetFormAndState({mode: 'normal', customerId: selectedCustomerIdForDropdown });
                       }} className="w-full">
                           <Ban className="mr-2 h-4 w-4" /> Cancelar Modo Especial / Nueva Factura
@@ -983,6 +1060,7 @@ export function InvoiceEditor() {
               </CardContent>
             </Card>
 
+            {/* Invoice Items Card */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-xl flex items-center text-primary"><Receipt className="mr-2 h-5 w-5" />Artículos del Documento</CardTitle>
@@ -1036,12 +1114,12 @@ export function InvoiceEditor() {
                           <FormControl>
                             <Input 
                               {...f} 
-                              value={(editorMode === 'creditDeposit' && f.value === 0) ? '' : (f.value === 0 ? '' : f.value)}
+                              value={(editorMode === 'creditDeposit' && f.value === 0) ? '' : (f.value === 0 ? '' : f.value)} // Clear '0' for non-credit-deposit unit price
                               onChange={e => f.onChange(parseFloat(e.target.value) || 0)}
                               type="number" 
                               step="0.01" 
                               placeholder="0.00" 
-                              readOnly={editorMode === 'debtPayment' || (editorMode === 'creditDeposit' && f.name === `items.${index}.unitPrice`)}
+                              readOnly={editorMode === 'debtPayment' || (editorMode === 'creditDeposit' && f.name === `items.${index}.unitPrice`)} // Unit price fixed for credit deposit
                             />
                           </FormControl> 
                           <FormMessage />
@@ -1054,7 +1132,7 @@ export function InvoiceEditor() {
                       size="icon" 
                       onClick={() => removeItem(index)} 
                       className="text-destructive hover:text-destructive/80" 
-                      disabled={editorMode !== 'normal' || itemFields.length <= 1}
+                      disabled={editorMode !== 'normal' || itemFields.length <= 1} // Can't remove if not normal mode or only one item
                     >
                       <Trash2 className="h-5 w-5" />
                     </Button>
@@ -1080,6 +1158,7 @@ export function InvoiceEditor() {
               </CardContent>
             </Card>
             
+            {/* Payment Details Card */}
             <Card>
               <CardHeader>
                   <CardTitle className="text-xl flex items-center text-primary"><DollarSign className="mr-2 h-5 w-5" />Detalles del Pago</CardTitle>
@@ -1096,6 +1175,7 @@ export function InvoiceEditor() {
                                       <Select 
                                         onValueChange={(value) => handlePaymentMethodChange(index, value)} 
                                         value={f.value}
+                                        // Disable "Saldo a Favor" if not applicable or in special modes where it's not the primary payment
                                         disabled={editorMode !== 'normal' && f.value === 'Saldo a Favor'}
                                       >
                                         <FormControl>
@@ -1108,6 +1188,7 @@ export function InvoiceEditor() {
                                               <SelectItem value="Transferencia">Transferencia</SelectItem>
                                               <SelectItem value="Pago Móvil">Pago Móvil</SelectItem>
                                               <SelectItem value="Zelle">Zelle</SelectItem>
+                                              {/* Show "Saldo a Favor" only in normal mode and if customer has credit */}
                                               {selectedCustomerAvailableCredit > 0 && editorMode === 'normal' && (
                                                 <SelectItem value="Saldo a Favor">
                                                   Saldo a Favor (Disp: {formatCurrency(selectedCustomerAvailableCredit)})
@@ -1129,11 +1210,12 @@ export function InvoiceEditor() {
                                       <FormControl>
                                         <Input 
                                           {...f} 
-                                          value={f.value === 0 ? '' : f.value}
+                                          value={f.value === 0 ? '' : f.value} // Display empty string for 0
                                           onChange={e => f.onChange(parseFloat(e.target.value) || 0)}
                                           type="number" 
                                           step="0.01" 
                                           placeholder="0.00"
+                                          // ReadOnly if using Saldo a Favor and it auto-fills, or not in normal credit deposit mode for amount input
                                           readOnly={form.getValues(`paymentMethods.${index}.method`) === 'Saldo a Favor' && editorMode === 'normal' && (liveInvoicePreview.totalAmount || 0) <= selectedCustomerAvailableCredit && (liveInvoicePreview.totalAmount || 0) > 0} 
                                         />
                                       </FormControl>
@@ -1164,6 +1246,7 @@ export function InvoiceEditor() {
               </CardContent>
             </Card>
 
+            {/* Overpayment Handling Card - only if overpayment occurred in normal mode */}
             {showOverpaymentSection && (
                  <Card>
                     <CardHeader>
@@ -1209,6 +1292,7 @@ export function InvoiceEditor() {
                             )}
                         />
 
+                        {/* Details for "Refund Now" choice */}
                         {form.watch("overpaymentHandlingChoice") === 'refundNow' && (
                             <div className="space-y-4 pt-4 border-t">
                                 <h3 className="text-md font-semibold text-muted-foreground">Detalles del Vuelto/Reembolso:</h3>
@@ -1278,6 +1362,7 @@ export function InvoiceEditor() {
                 </Card>
             )}
 
+            {/* Additional Settings Card: Discount, Tax, Messages */}
             <Card>
               <CardHeader>
                   <CardTitle className="text-xl flex items-center text-primary"><Settings className="mr-2 h-5 w-5" />Configuración Adicional</CardTitle>
@@ -1295,12 +1380,12 @@ export function InvoiceEditor() {
                               <FormControl>
                                 <Input 
                                   {...field} 
-                                  value={field.value === 0 ? '' : field.value}
+                                  value={field.value === 0 ? '' : field.value} // Display empty for 0
                                   onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
                                   type="number" 
                                   step="0.01" 
                                   placeholder="0.00"
-                                  readOnly={editorMode !== 'normal'} 
+                                  readOnly={editorMode !== 'normal'} // Discount only in normal mode
                                 />
                               </FormControl>
                               {editorMode !== 'normal' && <p className="text-xs text-muted-foreground mt-1">Los descuentos no aplican en este modo.</p>}
@@ -1321,7 +1406,7 @@ export function InvoiceEditor() {
                                   step="0.01" 
                                   placeholder="0.16" 
                                   onChange={e => field.onChange(parseFloat(e.target.value) || 0)} 
-                                  readOnly={editorMode !== 'normal'} 
+                                  readOnly={editorMode !== 'normal'} // Tax only in normal mode
                                 />
                               </FormControl>
                               {editorMode !== 'normal' && <p className="text-xs text-muted-foreground mt-1">El IVA no aplica en este modo.</p>}
@@ -1367,6 +1452,7 @@ export function InvoiceEditor() {
         </Form>
       </form>
       
+      {/* Invoice Preview Section */}
       <div className="lg:col-span-1 space-y-4 sticky top-20"> 
         <Card className="shadow-md no-print" data-invoice-preview-header>
           <CardHeader>
@@ -1382,4 +1468,3 @@ export function InvoiceEditor() {
     </div>
   );
 }
-
