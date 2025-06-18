@@ -131,9 +131,19 @@ export default function SettingsPage() {
       document.documentElement.style.setProperty('--background', palette.background);
       document.documentElement.style.setProperty('--accent', palette.accent);
       
-      // --primary-foreground, --accent-foreground etc. are now controlled by globals.css
-      // to ensure text on colored buttons is white (for text-shadow)
-      // and general page text is dark/light based on theme.
+      // Ensure text on colored buttons is white (for text-shadow from globals.css)
+      // These are fixed and don't depend on palette lightness anymore for text color.
+      document.documentElement.style.setProperty('--primary-foreground', '0 0% 98%');
+      document.documentElement.style.setProperty('--accent-foreground', '0 0% 98%');
+      document.documentElement.style.setProperty('--destructive-foreground', '0 0% 98%');
+      
+      // For dark theme, secondary-foreground is also light
+      if (document.documentElement.classList.contains('dark')) {
+        document.documentElement.style.setProperty('--secondary-foreground', '0 0% 98%');
+      } else {
+        // In light theme, secondary-foreground is dark (defined in globals.css)
+        // No need to set it here dynamically unless a specific theme required it.
+      }
     }
     
     setCurrentDisplayColors({
@@ -163,11 +173,13 @@ export default function SettingsPage() {
     if (themeToApply) {
       applyThemeToDOM(themeToApply);
     } else if (typeof document !== 'undefined') {
+       // This branch might not be hit if a default theme is always found
+       // But as a fallback, set current display colors based on CSS vars
        setCurrentDisplayColors({
         name: "Predeterminado (CSS)",
-        primary: getInitialColorValue('--primary', "232 63% 30%"),
-        background: getInitialColorValue('--background', "0 0% 96%"),
-        accent: getInitialColorValue('--accent', "230 46% 48%"),
+        primary: getInitialColorValue('--primary', "232 63% 30%"), // Fallback from globals.css
+        background: getInitialColorValue('--background', "0 0% 96%"), // Fallback from globals.css
+        accent: getInitialColorValue('--accent', "230 46% 48%"), // Fallback from globals.css
       });
       setActiveThemeName("Predeterminado (CSS)");
     }
@@ -463,16 +475,16 @@ export default function SettingsPage() {
         <CardContent className="space-y-6">
           {currentDisplayColors && (
             <div>
-              <h3 className="font-semibold text-foreground mb-2">Colores Actuales Aplicados ({activeThemeName || "Desconocido"}):</h3>
+              <h3 className="font-semibold text-foreground mb-2">Tema Actual Aplicado: ({activeThemeName || "Desconocido"})</h3>
               <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground ml-4">
-                <li><strong>Fondo de Página:</strong> <code>{currentDisplayColors.background}</code></li>
-                <li><strong>Color Primario (Botones, Títulos, etc.):</strong> <code>{currentDisplayColors.primary}</code></li>
-                <li><strong>Color de Acento:</strong> <code>{currentDisplayColors.accent}</code></li>
+                <li><strong>Fondo de Página (CSS var --background):</strong> <code>{currentDisplayColors.background}</code></li>
+                <li><strong>Color Primario (Botones, Títulos, etc. - CSS var --primary):</strong> <code>{currentDisplayColors.primary}</code></li>
+                <li><strong>Color de Acento (CSS var --accent):</strong> <code>{currentDisplayColors.accent}</code></li>
               </ul>
             </div>
           )}
           
-          <div className="p-4 rounded-md bg-accent/10 border border-accent/30 text-accent-foreground">
+          <div className="p-4 rounded-md bg-accent/10 border border-accent/30 text-foreground">
             <p className="text-sm font-medium">
               Para cambiar la paleta de colores de la aplicación, seleccione una de las opciones a continuación.
             </p>
@@ -560,7 +572,7 @@ export default function SettingsPage() {
                 </ul>
             </div>
 
-            <div className="p-4 rounded-md bg-accent/10 border border-accent/30 text-accent-foreground space-y-3">
+            <div className="p-4 rounded-md bg-accent/10 border border-accent/30 text-foreground space-y-3">
                 <div>
                     <h3 className="font-semibold text-lg mb-2">Exportar Datos</h3>
                     <p className="text-sm">
@@ -573,10 +585,10 @@ export default function SettingsPage() {
                 </div>
             </div>
 
-            <div className="p-4 rounded-md bg-destructive/10 border border-destructive/30 text-destructive-foreground space-y-3">
+            <div className="p-4 rounded-md bg-destructive/10 border border-destructive/30 text-foreground space-y-3">
                 <div>
                     <div className="flex items-center mb-2">
-                        <AlertTriangle className="h-5 w-5 mr-2" />
+                        <AlertTriangle className="h-5 w-5 mr-2 text-destructive" />
                         <h3 className="font-semibold text-lg">Importar y Fusionar Datos (¡Precaución!)</h3>
                     </div>
                     <p className="text-sm mb-1">
@@ -793,6 +805,16 @@ export default function SettingsPage() {
                     </li>
                      <li><strong className="text-foreground">Revertir Última Importación:</strong> Si el resultado de una importación no es el esperado, puede usar esta opción para restaurar los datos al estado exacto en que se encontraban *antes* de la última operación de importación. Esta opción solo está disponible para la importación más reciente y si no ha sido ya revertida. Una nueva importación creará un nuevo punto de restauración.</li>
                 </ul>
+                <div className="text-xs mb-2"> {/* This is the div that was previously a p tag */}
+                   <p><strong>Advertencia Importante:</strong> Esta acción modificará los datos actuales.</p>
+                   <ul className="list-disc pl-5 mt-1">
+                     <li><strong>RESPALDE PRIMERO:</strong> Siempre exporte sus datos actuales como respaldo antes de proceder con una importación. La importación actual reemplazará el respaldo pre-importación anterior.</li>
+                     <li><strong>Clientes:</strong> Si un cliente importado (por RIF) ya existe, sus datos demográficos se actualizarán, y sus saldos (pendiente y a favor) se <strong>sumarán</strong> a los saldos existentes. Los clientes nuevos se añadirán.</li>
+                     <li><strong>Facturas/Notas de Crédito:</strong> Las transacciones se añadirán si no existen por ID interno, evitando duplicados exactos.</li>
+                     <li><strong>Empresa:</strong> La información de la empresa se tomará del último archivo procesado.</li>
+                     <li><strong>Reversión:</strong> Puede revertir la *última* importación si el resultado no es el esperado, usando el botón "Revertir Última Importación".</li>
+                   </ul>
+                 </div>
                 <p className="font-semibold text-destructive mt-2">Consideraciones Clave del Almacenamiento Local:</p>
                 <ul className="list-disc pl-5">
                   <li>Los datos se guardan <strong>exclusivamente en el navegador y dispositivo</strong> que está utilizando.</li>
@@ -836,3 +858,4 @@ export default function SettingsPage() {
     </div>
   );
 }
+
