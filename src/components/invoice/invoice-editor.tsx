@@ -11,7 +11,7 @@ import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import useLocalStorage from "@/hooks/use-local-storage";
 import type { Invoice, CompanyDetails, CustomerDetails, InvoiceItem, PaymentDetails } from "@/lib/types";
 import { DEFAULT_COMPANY_ID } from "@/lib/types";
-import { invoiceFormSchema } from "@/lib/schemas"; 
+import { invoiceFormSchema } from "@/lib/schemas";
 import { CURRENCY_SYMBOL, DEFAULT_THANK_YOU_MESSAGE, TAX_RATE } from "@/lib/constants";
 
 import { Button } from "@/components/ui/button";
@@ -77,9 +77,9 @@ export function InvoiceEditor() {
 
 
   const initialLivePreviewState: Partial<Invoice> = {
-    id: '', 
+    id: '',
     invoiceNumber: "",
-    date: new Date(0).toISOString(), 
+    date: new Date(0).toISOString(),
     type: 'sale',
     companyDetails: companyDetails || defaultCompany,
     cashierNumber: "",
@@ -108,8 +108,8 @@ export function InvoiceEditor() {
   const form = useForm<InvoiceFormData>({
     resolver: zodResolver(invoiceFormSchema),
     defaultValues: {
-      invoiceNumber: "", 
-      date: new Date(), 
+      invoiceNumber: "",
+      date: new Date(),
       type: 'sale',
       originalInvoiceId: undefined,
       isDebtPayment: false,
@@ -140,7 +140,7 @@ export function InvoiceEditor() {
   
   const calculatePaymentSummary = useCallback((payments: PaymentDetails[], totalAmount: number) => {
     const amountPaid = payments.reduce((sum, p) => sum + p.amount, 0);
-    const amountDue = totalAmount - amountPaid; 
+    const amountDue = totalAmount - amountPaid;
     return { amountPaid, amountDue };
   }, []);
 
@@ -170,13 +170,13 @@ export function InvoiceEditor() {
     } else if (mode === 'creditDeposit' && targetCustomer) {
       initialCustomerState = { ...targetCustomer };
       initialInvoiceNumber = `DEP-${Date.now().toString().slice(-6)}`;
-      initialItemsArr = [{ id: uuidv4(), description: "Depósito a Cuenta Cliente", quantity: 1, unitPrice: 0 }]; 
+      initialItemsArr = [{ id: uuidv4(), description: "Depósito a Cuenta Cliente", quantity: 1, unitPrice: 0 }];
       thankYouMsg = "Gracias por su depósito.";
       notesMsg = `Depósito a cuenta cliente. El monto se define en los métodos de pago.`;
       formTaxRate = 0;
       formIsCreditDeposit = true;
-    } else { 
-      if (targetCustomer) { 
+    } else {
+      if (targetCustomer) {
         initialCustomerState = {...targetCustomer};
       }
     }
@@ -195,7 +195,7 @@ export function InvoiceEditor() {
       paymentMethods: [{ method: "Efectivo", amount: 0, reference: "" }],
       thankYouMessage: thankYouMsg,
       notes: notesMsg,
-      taxRate: formTaxRate, 
+      taxRate: formTaxRate,
       discountAmount: 0,
       overpaymentHandlingChoice: 'creditToAccount',
       changeRefundPaymentMethods: [],
@@ -214,8 +214,8 @@ export function InvoiceEditor() {
     const { amountPaid, amountDue } = calculatePaymentSummary(formValuesToReset.paymentMethods || [], totalAmount);
 
     setLiveInvoicePreview({
-      ...initialLivePreviewState, 
-      id: '', 
+      ...initialLivePreviewState,
+      id: '',
       invoiceNumber: formValuesToReset.invoiceNumber,
       date: formValuesToReset.date ? formValuesToReset.date.toISOString() : new Date().toISOString(),
       type: 'sale',
@@ -241,10 +241,10 @@ export function InvoiceEditor() {
       changeRefundPaymentMethods: formValuesToReset.changeRefundPaymentMethods as PaymentDetails[],
     });
     
-    if (callingEffectRef) { 
+    if (callingEffectRef) {
         callingEffectRef.current = false;
     }
-    if (mode === 'normal' && !customerId) { 
+    if (mode === 'normal' && !customerId) {
       initialNormalResetDoneRef.current = true;
     }
 
@@ -259,7 +259,7 @@ export function InvoiceEditor() {
     if (!isClient) return;
 
     if (searchParams.get('customerId') && customers.length === 0 && !initialCustomersLoadAttemptedRef.current) {
-        initialCustomersLoadAttemptedRef.current = true; 
+        initialCustomersLoadAttemptedRef.current = true;
         return;
     }
 
@@ -291,10 +291,10 @@ export function InvoiceEditor() {
             setCustomerRifInput("");
             setCustomerSearchMessage(null);
             setShowNewCustomerFields(false);
-            resetFormAndState({ mode: 'normal', callingEffectRef: isInitializingDebtPaymentRef }); 
+            resetFormAndState({ mode: 'normal', callingEffectRef: isInitializingDebtPaymentRef });
         }
         if (pathname === '/invoice/new' && searchParams.has('debtPayment')) {
-             router.replace('/invoice/new', { scroll: false }); 
+             router.replace('/invoice/new', { scroll: false });
         }
         return;
     }
@@ -310,7 +310,7 @@ export function InvoiceEditor() {
     }
 
 }, [
-    isClient, searchParams, customers, editorMode, selectedCustomerIdForDropdown, 
+    isClient, searchParams, customers, editorMode, selectedCustomerIdForDropdown,
     resetFormAndState, toast, pathname, router, form
 ]);
 
@@ -347,7 +347,7 @@ export function InvoiceEditor() {
         let overpaymentAmt = 0;
         let finalAmountDueForInvoice = amountDue;
 
-        if (amountDue < 0) { 
+        if (amountDue < 0) {
             overpaymentAmt = Math.abs(amountDue);
             if (values.overpaymentHandlingChoice === 'refundNow') {
                 finalAmountDueForInvoice = 0;
@@ -369,10 +369,10 @@ export function InvoiceEditor() {
             taxAmount,
             totalAmount,
             amountPaid,
-            amountDue: finalAmountDueForInvoice, 
+            amountDue: finalAmountDueForInvoice,
             thankYouMessage: values.thankYouMessage || DEFAULT_THANK_YOU_MESSAGE,
             notes: values.notes,
-            type: 'sale', 
+            type: 'sale',
             isDebtPayment: !!values.isDebtPayment,
             isCreditDeposit: !!values.isCreditDeposit,
             overpaymentAmount: overpaymentAmt,
@@ -410,18 +410,18 @@ export function InvoiceEditor() {
         }
     }
   }, [
-    form.watch("overpaymentHandlingChoice"), 
-    liveInvoicePreview.overpaymentAmount, 
-    changePaymentFields, 
-    appendChangePayment, 
-    replaceChangePayments, 
+    form.watch("overpaymentHandlingChoice"),
+    liveInvoicePreview.overpaymentAmount,
+    changePaymentFields,
+    appendChangePayment,
+    replaceChangePayments,
     updateChangePayment,
-    form 
+    form
 ]);
 
 
   const handleRifSearch = async () => {
-    if (editorMode !== 'normal') return; 
+    if (editorMode !== 'normal') return;
     if (!customerRifInput.trim()) {
       setCustomerSearchMessage("Ingrese un RIF/Cédula para buscar.");
       setShowNewCustomerFields(false);
@@ -436,7 +436,7 @@ export function InvoiceEditor() {
     const searchTerm = customerRifInput.toUpperCase().replace(/[^A-Z0-9]/gi, '');
     let foundCustomer = customers.find(c => c.rif.toUpperCase().replace(/[^A-Z0-9]/gi, '') === searchTerm);
   
-    if (!foundCustomer && /^[0-9]+$/.test(customerRifInput.trim())) { 
+    if (!foundCustomer && /^[0-9]+$/.test(customerRifInput.trim())) {
       const numericPart = customerRifInput.trim();
       const ciWithV = `V${numericPart}`;
       const ciWithE = `E${numericPart}`;
@@ -454,7 +454,7 @@ export function InvoiceEditor() {
       setSelectedCustomerIdForDropdown(foundCustomer.id);
       setSelectedCustomerAvailableCredit(foundCustomer.creditBalance || 0);
     } else {
-      form.setValue("customerDetails.id", ""); 
+      form.setValue("customerDetails.id", "");
       form.setValue("customerDetails.name", "");
       form.setValue("customerDetails.address", "");
       form.setValue("customerDetails.phone", "");
@@ -473,12 +473,12 @@ export function InvoiceEditor() {
         toast({title: "Modo especial activo", description: "Cancele el modo especial actual para cambiar de cliente.", variant: "destructive"});
         return;
     }
-    setSelectedCustomerIdForDropdown(customerId); 
+    setSelectedCustomerIdForDropdown(customerId);
     const customer = customers.find((c) => c.id === customerId);
     if (customer) {
       form.setValue("customerDetails", { ...customer }, { shouldValidate: true });
-      setCustomerRifInput(customer.rif); 
-      setShowNewCustomerFields(false); 
+      setCustomerRifInput(customer.rif);
+      setShowNewCustomerFields(false);
       setCustomerSearchMessage(`Cliente seleccionado: ${customer.name}`);
       setSelectedCustomerAvailableCredit(customer.creditBalance || 0);
     } else {
@@ -497,13 +497,13 @@ export function InvoiceEditor() {
     const paymentMethods = form.getValues("paymentMethods");
     const currentPayment = paymentMethods[index];
     
-    updatePayment(index, { ...currentPayment, method: newMethod, amount: currentPayment.amount }); 
+    updatePayment(index, { ...currentPayment, method: newMethod, amount: currentPayment.amount });
 
     if (newMethod === "Saldo a Favor" && editorMode === 'normal' && selectedCustomerAvailableCredit > 0) {
         const invoiceTotal = liveInvoicePreview.totalAmount || 0;
         let otherPaymentsTotal = 0;
         paymentMethods.forEach((pm, i) => {
-            if (i !== index && pm.method !== "Saldo a Favor") { 
+            if (i !== index && pm.method !== "Saldo a Favor") {
                 otherPaymentsTotal += pm.amount || 0;
             }
         });
@@ -523,7 +523,6 @@ export function InvoiceEditor() {
       setCustomerSearchMessage(`Pagando deuda de: ${customer.name}`);
       setShowNewCustomerFields(false);
       resetFormAndState({ mode: 'debtPayment', customerId: customer.id, amount: customer.outstandingBalance });
-      // initialNormalResetDoneRef.current = true; // Removed
     } else {
       toast({ variant: "destructive", title: "Sin Deuda Pendiente", description: "El cliente seleccionado no tiene deuda pendiente o no hay cliente seleccionado." });
     }
@@ -533,13 +532,12 @@ export function InvoiceEditor() {
     const customer = form.getValues("customerDetails");
     if (customer && customer.id) {
       setEditorMode('creditDeposit');
-      setCurrentDebtOrCreditAmount(0); 
+      setCurrentDebtOrCreditAmount(0);
       setSelectedCustomerIdForDropdown(customer.id);
       setCustomerRifInput(customer.rif);
       setCustomerSearchMessage(`Registrando depósito para: ${customer.name}`);
       setShowNewCustomerFields(false);
       resetFormAndState({ mode: 'creditDeposit', customerId: customer.id });
-      // initialNormalResetDoneRef.current = true; // Removed
     } else {
       toast({ variant: "destructive", title: "Cliente no seleccionado", description: "Por favor, seleccione o busque un cliente primero." });
     }
@@ -550,7 +548,7 @@ export function InvoiceEditor() {
     let customerWasModified = false;
     let newCustomerJustAdded: CustomerDetails | null = null;
 
-    if (showNewCustomerFields && !data.customerDetails.id && editorMode === 'normal') { 
+    if (showNewCustomerFields && !data.customerDetails.id && editorMode === 'normal') {
       if (data.customerDetails.name && data.customerDetails.rif && data.customerDetails.address) {
         const newCustomer: CustomerDetails = {
           ...data.customerDetails,
@@ -558,8 +556,8 @@ export function InvoiceEditor() {
           outstandingBalance: 0,
           creditBalance: 0,
         };
-        customerToSaveOnInvoice = newCustomer; 
-        customerWasModified = true; 
+        customerToSaveOnInvoice = newCustomer;
+        customerWasModified = true;
         newCustomerJustAdded = newCustomer;
         toast({ title: "Nuevo Cliente Registrado", description: `Cliente ${newCustomer.name} añadido al sistema.` });
       } else {
@@ -567,7 +565,7 @@ export function InvoiceEditor() {
         if (!data.customerDetails.name) form.setError("customerDetails.name", {type: "manual", message: "Nombre requerido"});
         if (!data.customerDetails.address) form.setError("customerDetails.address", {type: "manual", message: "Dirección requerida"});
         if (!data.customerDetails.rif) form.setError("customerDetails.rif", {type: "manual", message: "RIF/Cédula requerido"});
-        return; 
+        return;
       }
     }
     
@@ -616,26 +614,26 @@ export function InvoiceEditor() {
     const currentDiscountAmount = data.isDebtPayment || data.isCreditDeposit ? 0 : (data.discountAmount || 0);
     
     const { subTotal, discountAmount, taxAmount, totalAmount } = calculateTotals(finalItems, currentTaxRate, currentDiscountAmount);
-    const { amountPaid, amountDue: rawAmountDue } = calculatePaymentSummary(data.paymentMethods, totalAmount); 
+    const { amountPaid, amountDue: rawAmountDue } = calculatePaymentSummary(data.paymentMethods, totalAmount);
 
     let finalInvoiceAmountDue = rawAmountDue;
     let overpaymentAmountToStore = 0;
     let overpaymentHandlingToStore: 'creditedToAccount' | 'refunded' | undefined = undefined;
     let changeRefundPaymentMethodsToStore: PaymentDetails[] | undefined = undefined;
 
-    if (rawAmountDue < 0) { 
+    if (rawAmountDue < 0) {
         overpaymentAmountToStore = Math.abs(rawAmountDue);
         if (data.overpaymentHandlingChoice === 'refundNow') {
             const totalChangeRefunded = (data.changeRefundPaymentMethods || []).reduce((sum, pm) => sum + pm.amount, 0);
-            if (Math.abs(totalChangeRefunded - overpaymentAmountToStore) > 0.001) { 
+            if (Math.abs(totalChangeRefunded - overpaymentAmountToStore) > 0.001) {
                 toast({ variant: "destructive", title: "Error en Vuelto", description: `El monto del vuelto procesado (${formatCurrency(totalChangeRefunded)}) no coincide con el sobrepago (${formatCurrency(overpaymentAmountToStore)}).` });
                 form.setError("changeRefundPaymentMethods", {type: "manual", message: "El total del vuelto debe igualar el sobrepago."});
                 return;
             }
             overpaymentHandlingToStore = 'refunded';
             changeRefundPaymentMethodsToStore = data.changeRefundPaymentMethods;
-            finalInvoiceAmountDue = 0; 
-        } else { 
+            finalInvoiceAmountDue = 0;
+        } else {
             overpaymentHandlingToStore = 'creditedToAccount';
         }
     }
@@ -645,11 +643,11 @@ export function InvoiceEditor() {
       id: uuidv4(),
       invoiceNumber: data.invoiceNumber,
       date: data.date.toISOString(),
-      type: 'sale', 
+      type: 'sale',
       isDebtPayment: editorMode === 'debtPayment',
       isCreditDeposit: editorMode === 'creditDeposit',
       companyDetails: companyDetails || defaultCompany,
-      customerDetails: customerToSaveOnInvoice, 
+      customerDetails: customerToSaveOnInvoice,
       cashierNumber: data.cashierNumber,
       salesperson: data.salesperson,
       items: finalItems,
@@ -671,13 +669,13 @@ export function InvoiceEditor() {
     setSavedInvoices(prevInvoices => [...prevInvoices, fullInvoiceData]);
     
     let currentCustomersList = [...customers];
-    if (customerWasModified && newCustomerJustAdded) { 
+    if (customerWasModified && newCustomerJustAdded) {
         currentCustomersList.push(newCustomerJustAdded);
     }
 
     const customerIndex = currentCustomersList.findIndex(c => c.id === customerToSaveOnInvoice.id);
     if (customerIndex !== -1) {
-        const StoredCustomer = {...currentCustomersList[customerIndex]}; 
+        const StoredCustomer = {...currentCustomersList[customerIndex]};
         StoredCustomer.outstandingBalance = StoredCustomer.outstandingBalance || 0;
         StoredCustomer.creditBalance = StoredCustomer.creditBalance || 0;
 
@@ -689,23 +687,23 @@ export function InvoiceEditor() {
             StoredCustomer.outstandingBalance = Math.max(0, StoredCustomer.outstandingBalance - amountPaid);
         } else if (editorMode === 'creditDeposit') {
             StoredCustomer.creditBalance += amountPaid;
-        } else { 
-            if (rawAmountDue > 0) { 
+        } else {
+            if (rawAmountDue > 0) {
                 StoredCustomer.outstandingBalance += rawAmountDue;
-            } else if (rawAmountDue < 0) { 
+            } else if (rawAmountDue < 0) {
                 if (overpaymentHandlingToStore === 'creditedToAccount') {
                     StoredCustomer.creditBalance += overpaymentAmountToStore;
                 }
             }
         }
         currentCustomersList[customerIndex] = StoredCustomer;
-    } else if (newCustomerJustAdded) { 
+    } else if (newCustomerJustAdded) {
         let newCustWithBalance = {...newCustomerJustAdded};
         newCustWithBalance.outstandingBalance = 0;
         newCustWithBalance.creditBalance = 0;
         if (editorMode === 'creditDeposit') {
             newCustWithBalance.creditBalance += amountPaid;
-        } else { 
+        } else {
              if (rawAmountDue > 0) newCustWithBalance.outstandingBalance += rawAmountDue;
              else if (rawAmountDue < 0 && overpaymentHandlingToStore === 'creditedToAccount') {
                 newCustWithBalance.creditBalance += overpaymentAmountToStore;
@@ -731,15 +729,14 @@ export function InvoiceEditor() {
       ),
     });
     
-    setEditorMode('normal'); 
-    setCurrentDebtOrCreditAmount(0); 
-    setSelectedCustomerIdForDropdown(undefined); 
-    setCustomerRifInput(""); 
-    setCustomerSearchMessage(null); 
-    setShowNewCustomerFields(false); 
-    // initialNormalResetDoneRef.current = false; // Let resetFormAndState manage this
-    resetFormAndState({ mode: 'normal' }); 
-    if (pathname === '/invoice/new' && searchParams.has('debtPayment')) { 
+    setEditorMode('normal');
+    setCurrentDebtOrCreditAmount(0);
+    setSelectedCustomerIdForDropdown(undefined);
+    setCustomerRifInput("");
+    setCustomerSearchMessage(null);
+    setShowNewCustomerFields(false);
+    resetFormAndState({ mode: 'normal' });
+    if (pathname === '/invoice/new' && searchParams.has('debtPayment')) {
         router.replace('/invoice/new', { scroll: false });
     }
   }
@@ -751,16 +748,15 @@ export function InvoiceEditor() {
     setCustomerRifInput("");
     setCustomerSearchMessage(null);
     setShowNewCustomerFields(false);
-    // initialNormalResetDoneRef.current = false; // Let resetFormAndState manage this
     resetFormAndState({ mode: 'normal' });
     toast({
         title: "Creación Cancelada",
         description: "El documento ha sido descartado.",
     });
-    if (pathname === '/invoice/new' && searchParams.has('debtPayment')) { 
+    if (pathname === '/invoice/new' && searchParams.has('debtPayment')) {
         router.replace('/invoice/new', { scroll: false });
     }
-    router.push('/dashboard'); 
+    router.push('/dashboard');
   };
 
   const previewCompanyDetails = companyDetails;
@@ -1072,7 +1068,7 @@ export function InvoiceEditor() {
                   </Button>
                 )}
                 {editorMode !== 'normal' && (
-                  <div className="flex items-center p-3 rounded-md bg-accent/10 text-accent-foreground border border-accent/30">
+                  <div className="flex items-center p-3 rounded-md bg-accent/10 text-foreground border border-accent/30">
                     <Info className="h-5 w-5 mr-2" />
                     <p className="text-sm">
                       {editorMode === 'debtPayment' 
