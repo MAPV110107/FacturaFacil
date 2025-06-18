@@ -19,19 +19,20 @@ import { DEFAULT_COMPANY_ID } from "@/lib/types";
 import { v4 as uuidv4 } from "uuid";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { ThemeInitializer, LOCAL_STORAGE_UI_MODE_KEY } from "@/components/theme/theme-initializer";
+
 
 interface ColorPalette {
   name: string;
   primary: string;
-  // background HSL is for the theme card preview, not for global page background override
-  backgroundPreview: string; 
+  background: string; // HSL for theme card preview (and potentially globals.css if a theme overrides it)
   accent: string;
 }
 
 interface DisplayColorPalette {
   name: string;
   primary: string;
-  actualPageBackground: string; // Reflects the true page background from CSS
+  actualPageBackground: string;
   accent: string;
 }
 
@@ -40,43 +41,43 @@ const suggestedPalettes: ColorPalette[] = [
   {
     name: "Tema Azul Original",
     primary: "232 63% 30%", // Dark Blue
-    backgroundPreview: "0 0% 96%", // Light Gray (for preview tile)
+    background: "0 0% 96%", // Light Gray (for preview tile & potentially globals)
     accent: "230 46% 48%",   // Medium Blue
   },
   {
     name: "Tema Rojo",
     primary: "0 70% 50%",    // Red
-    backgroundPreview: "0 0% 96%", // Light Gray
+    background: "0 0% 96%", // Light Gray
     accent: "30 80% 60%",   // Orange-Red
   },
   {
     name: "Tema Verde",
     primary: "120 60% 35%",  // Dark Green
-    backgroundPreview: "0 0% 96%", // Light Gray
+    background: "0 0% 96%", // Light Gray
     accent: "140 50% 55%",  // Medium Green
   },
   {
     name: "Tema Amarillo",
     primary: "45 70% 45%",   // Dark Yellow/Gold
-    backgroundPreview: "0 0% 98%", // Very Light Gray
+    background: "0 0% 98%", // Very Light Gray
     accent: "60 90% 70%",   // Light Yellow
   },
   {
     name: "Tema Morado",
     primary: "270 50% 45%",  // Purple
-    backgroundPreview: "0 0% 96%", // Light Gray
+    background: "0 0% 96%", // Light Gray
     accent: "290 60% 65%",  // Pink-Purple
   },
   {
     name: "Tema Naranja",
     primary: "30 90% 50%",   // Bright Orange
-    backgroundPreview: "0 0% 96%", // Light Gray
+    background: "0 0% 96%", // Light Gray
     accent: "40 100% 65%",  // Lighter Orange
   },
 ];
 
 const LOCAL_STORAGE_THEME_KEY = "facturafacil-theme";
-const LOCAL_STORAGE_UI_MODE_KEY = "facturafacil-uimode";
+// LOCAL_STORAGE_UI_MODE_KEY is imported from theme-initializer
 const LOCAL_STORAGE_COMPANY_KEY = "companyDetails";
 const LOCAL_STORAGE_CUSTOMERS_KEY = "customers";
 const LOCAL_STORAGE_INVOICES_KEY = "invoices";
@@ -110,7 +111,7 @@ export default function SettingsPage() {
   const [lastImportTimestamp, setLastImportTimestamp] = useState<string | null>(null);
   const [isLastImportReverted, setIsLastImportReverted] = useState<boolean>(false);
   const [canRevertImport, setCanRevertImport] = useState<boolean>(false);
-  
+
   const [uiMode, setUiMode] = useState<'light' | 'dark'>('light');
 
 
@@ -129,26 +130,30 @@ export default function SettingsPage() {
     updateStatusIndicators();
   }, [updateStatusIndicators]);
 
-  const getActualPageBackground = () => {
+  const getActualPageBackground = useCallback(() => {
      if (typeof document !== 'undefined') {
-        return getComputedStyle(document.documentElement).getPropertyValue('--background').trim() || 
-               (document.documentElement.classList.contains('dark') ? "0 0% 3.9%" : "0 0% 96%");
+        // Reads the CSS variable --background which is set by :root or .dark in globals.css
+        return getComputedStyle(document.documentElement).getPropertyValue('--background').trim();
       }
-      return uiMode === 'dark' ? "0 0% 3.9%" : "0 0% 96%"; // Fallback
-  };
+      return uiMode === 'dark' ? "0 0% 3.9%" : "0 0% 96%"; // Fallback, should match globals.css
+  }, [uiMode]);
 
   const applyPaletteToDOM = useCallback((palette: ColorPalette) => {
     if (typeof document !== 'undefined') {
       document.documentElement.style.setProperty('--primary', palette.primary);
       document.documentElement.style.setProperty('--accent', palette.accent);
-      
-      // Text on colored buttons should be white with black border (text-shadow from globals.css)
+      // Ensure text on colored buttons is white for text-shadow effect
       document.documentElement.style.setProperty('--primary-foreground', '0 0% 98%');
       document.documentElement.style.setProperty('--accent-foreground', '0 0% 98%');
       document.documentElement.style.setProperty('--destructive-foreground', '0 0% 98%');
+      // For secondary buttons in dark mode
+      if (document.documentElement.classList.contains('dark')) {
+        document.documentElement.style.setProperty('--secondary-foreground', '0 0% 98%');
+      } else {
+        document.documentElement.style.setProperty('--secondary-foreground', '0 0% 3.9%');
+      }
     }
-    
-    // Update currentDisplayColors state AFTER styles might have been flushed by the browser
+
     requestAnimationFrame(() => {
         setCurrentDisplayColors({
             name: palette.name,
@@ -158,7 +163,7 @@ export default function SettingsPage() {
         });
     });
     setActivePaletteName(palette.name);
-  }, [ setActivePaletteName]);
+  }, [getActualPageBackground]);
 
 
   useEffect(() => {
@@ -172,14 +177,15 @@ export default function SettingsPage() {
 
     // Load saved color palette
     const savedPaletteName = typeof window !== 'undefined' ? localStorage.getItem(LOCAL_STORAGE_THEME_KEY) : null;
-    const paletteToApply = suggestedPalettes.find(p => p.name === savedPaletteName) || 
-                           suggestedPalettes.find(p => p.name === "Tema Azul Original") || 
+    const paletteToApply = suggestedPalettes.find(p => p.name === savedPaletteName) ||
+                           suggestedPalettes.find(p => p.name === "Tema Azul Original") ||
                            suggestedPalettes[0];
-    
+
     if (paletteToApply) {
       applyPaletteToDOM(paletteToApply);
     }
-  }, [applyPaletteToDOM]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [applyPaletteToDOM]); // applyPaletteToDOM is stable due to useCallback
 
   const handlePaletteSelect = (palette: ColorPalette) => {
     applyPaletteToDOM(palette);
@@ -201,28 +207,35 @@ export default function SettingsPage() {
       } else {
         document.documentElement.classList.remove('dark');
       }
-      
+
       // After toggling .dark class, the --background CSS var changes.
       // We need to re-update currentDisplayColors to reflect this.
       const currentPaletteName = localStorage.getItem(LOCAL_STORAGE_THEME_KEY);
-      const currentPalette = suggestedPalettes.find(p => p.name === currentPaletteName) || 
-                             suggestedPalettes.find(p => p.name === "Tema Azul Original") || 
+      const currentPalette = suggestedPalettes.find(p => p.name === currentPaletteName) ||
+                             suggestedPalettes.find(p => p.name === "Tema Azul Original") ||
                              suggestedPalettes[0];
       if (currentPalette) {
-        // Re-call applyPaletteToDOM not to change primary/accent, but to update display with new actualPageBackground
-         requestAnimationFrame(() => {
+         requestAnimationFrame(() => { // ensure DOM has updated
             setCurrentDisplayColors({
                 name: currentPalette.name,
                 primary: currentPalette.primary,
-                actualPageBackground: getActualPageBackground(),
+                actualPageBackground: getActualPageBackground(), // Re-fetch the actual background
                 accent: currentPalette.accent,
             });
+            // Re-apply primary/accent foreground for dark/light secondary button text
+            if (newMode === 'dark') {
+                document.documentElement.style.setProperty('--secondary-foreground', '0 0% 98%');
+            } else {
+                document.documentElement.style.setProperty('--secondary-foreground', '0 0% 3.9%');
+            }
         });
       }
-
-      toast({
-        title: `Modo cambiado a ${newMode === 'light' ? 'Claro' : 'Oscuro'}`,
-      });
+      // Defer toast call to avoid issues during render
+      setTimeout(() => {
+        toast({
+          title: `Modo cambiado a ${newMode === 'light' ? 'Claro' : 'Oscuro'}`,
+        });
+      }, 0);
       return newMode;
     });
   };
@@ -244,7 +257,7 @@ export default function SettingsPage() {
             invoices: invoices ? JSON.parse(invoices) : [],
             exportDate: new Date().toISOString(),
             appName: "FacturaFacil",
-            version: "1.6.0", 
+            version: "1.6.0",
         };
 
         const jsonString = JSON.stringify(backupData, null, 2);
@@ -297,11 +310,11 @@ export default function SettingsPage() {
     else localStorage.removeItem(LOCAL_STORAGE_PRE_IMPORT_CUSTOMERS_KEY);
     if (currentInvoicesJson) localStorage.setItem(LOCAL_STORAGE_PRE_IMPORT_INVOICES_KEY, currentInvoicesJson);
     else localStorage.removeItem(LOCAL_STORAGE_PRE_IMPORT_INVOICES_KEY);
-    
+
     let consolidatedCompanyDetails: CompanyDetails | null = currentCompanyJson ? JSON.parse(currentCompanyJson) : null;
     let consolidatedCustomers: CustomerDetails[] = currentCustomersJson ? JSON.parse(currentCustomersJson) : [];
     let consolidatedInvoices: Invoice[] = currentInvoicesJson ? JSON.parse(currentInvoicesJson) : [];
-    
+
     let companyUpdatedThisImport = false;
     let customersAddedCount = 0;
     let customersMergedCount = 0;
@@ -320,7 +333,7 @@ export default function SettingsPage() {
         }
 
         if (data.companyDetails) {
-          if (data.companyDetails.name && data.companyDetails.rif) { 
+          if (data.companyDetails.name && data.companyDetails.rif) {
             consolidatedCompanyDetails = { ...data.companyDetails, id: DEFAULT_COMPANY_ID };
             companyUpdatedThisImport = true;
             localMessages.push(`- Detalles de la empresa actualizados desde ${file.name}.`);
@@ -336,14 +349,14 @@ export default function SettingsPage() {
               continue;
             }
             const importedRifClean = importedCustomer.rif.toUpperCase().replace(/[^A-Z0-9]/gi, '');
-            
+
             const existingCustomerIndex = consolidatedCustomers.findIndex(
               c => c.rif.toUpperCase().replace(/[^A-Z0-9]/gi, '') === importedRifClean
             );
 
-            if (existingCustomerIndex !== -1) { 
+            if (existingCustomerIndex !== -1) {
               const existingCustomer = consolidatedCustomers[existingCustomerIndex];
-              
+
               existingCustomer.name = importedCustomer.name || existingCustomer.name;
               existingCustomer.address = importedCustomer.address || existingCustomer.address;
               existingCustomer.phone = importedCustomer.phone || existingCustomer.phone;
@@ -355,12 +368,12 @@ export default function SettingsPage() {
 
               existingCustomer.outstandingBalance = (existingCustomer.outstandingBalance || 0) + (importedCustomer.outstandingBalance || 0);
               existingCustomer.creditBalance = (existingCustomer.creditBalance || 0) + (importedCustomer.creditBalance || 0);
-              
+
               consolidatedCustomers[existingCustomerIndex] = existingCustomer;
               customersMergedCount++;
               localMessages.push(`  - Cliente RIF ${importedCustomer.rif} (${importedCustomer.name}) fusionado. Balances sumados.`);
-            } else { 
-              const newCustId = importedCustomer.id || uuidv4(); 
+            } else {
+              const newCustId = importedCustomer.id || uuidv4();
               consolidatedCustomers.push({
                 ...importedCustomer,
                 id: newCustId,
@@ -372,7 +385,7 @@ export default function SettingsPage() {
             }
           }
         }
-        
+
         if (data.invoices && Array.isArray(data.invoices)) {
           for (const importedInvoice of data.invoices) {
             if (!importedInvoice.id || !importedInvoice.invoiceNumber) {
@@ -397,16 +410,16 @@ export default function SettingsPage() {
 
     if (companyUpdatedThisImport && consolidatedCompanyDetails) {
         localStorage.setItem(LOCAL_STORAGE_COMPANY_KEY, JSON.stringify(consolidatedCompanyDetails));
-    } else if (!consolidatedCompanyDetails && companyUpdatedThisImport) { 
+    } else if (!consolidatedCompanyDetails && companyUpdatedThisImport) {
         localStorage.removeItem(LOCAL_STORAGE_COMPANY_KEY);
     }
     localStorage.setItem(LOCAL_STORAGE_CUSTOMERS_KEY, JSON.stringify(consolidatedCustomers));
     localStorage.setItem(LOCAL_STORAGE_INVOICES_KEY, JSON.stringify(consolidatedInvoices));
-    
+
     localStorage.setItem(LOCAL_STORAGE_LAST_IMPORT_TIMESTAMP_KEY, new Date().toISOString());
     localStorage.setItem(LOCAL_STORAGE_LAST_IMPORT_REVERTED_KEY, 'false');
     updateStatusIndicators();
-    
+
     localMessages.push("--- Resumen de Importación y Fusión ---");
     if (companyUpdatedThisImport) localMessages.push("Información de la empresa actualizada con el último archivo válido.");
     localMessages.push(`${customersAddedCount} cliente(s) nuevo(s) añadido(s).`);
@@ -420,11 +433,11 @@ export default function SettingsPage() {
     toast({
       title: "Importación y Fusión Finalizada",
       description: "Los datos han sido procesados. Revise los mensajes para detalles. Recargue la página.",
-      duration: 10000, 
+      duration: 10000,
     });
 
     if (fileInputRef.current) {
-      fileInputRef.current.value = ""; 
+      fileInputRef.current.value = "";
     }
   };
 
@@ -456,7 +469,7 @@ export default function SettingsPage() {
     localStorage.removeItem(LOCAL_STORAGE_PRE_IMPORT_COMPANY_KEY);
     localStorage.removeItem(LOCAL_STORAGE_PRE_IMPORT_CUSTOMERS_KEY);
     localStorage.removeItem(LOCAL_STORAGE_PRE_IMPORT_INVOICES_KEY);
-    
+
     updateStatusIndicators();
 
     toast({
@@ -478,6 +491,7 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-8 max-w-4xl mx-auto">
+      <ThemeInitializer /> {/* Ensures theme (dark/light) is set on load */}
       <Card className="shadow-lg">
         <CardHeader>
           <div className="flex items-center space-x-3">
@@ -491,7 +505,7 @@ export default function SettingsPage() {
           </div>
         </CardHeader>
       </Card>
-      
+
       <Card>
         <CardHeader>
           <div className="flex items-center space-x-3">
@@ -499,13 +513,13 @@ export default function SettingsPage() {
             <CardTitle className="text-xl text-primary">Apariencia y Tema</CardTitle>
           </div>
            <CardDescription>
-            Seleccione una paleta de colores para primario y acento. El fondo de página general y los colores de texto se controlan con el "Modo de Visualización".
+            Cambie el modo de visualización y seleccione una paleta de colores para primario y acento. El fondo de página general y los colores de texto se controlan con el "Modo de Visualización".
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
             <div>
-              <h3 className="font-semibold text-foreground mb-1">Modo de Visualización Actual:</h3>
+              <h3 className="font-semibold text-foreground mb-1">Modo de Visualización:</h3>
               <Button onClick={handleToggleUiMode} variant="outline" className="w-full">
                 {uiMode === 'light' ? <Moon className="mr-2 h-4 w-4" /> : <Sun className="mr-2 h-4 w-4" />}
                 Cambiar a Modo {uiMode === 'light' ? 'Oscuro' : 'Claro'}
@@ -516,18 +530,18 @@ export default function SettingsPage() {
                 <h3 className="font-semibold text-foreground mb-2">Paleta Actual Aplicada: ({activePaletteName || "Desconocido"})</h3>
                 <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground ml-4">
                   <li><strong>Fondo de Página (Actual):</strong> <code>{currentDisplayColors.actualPageBackground}</code></li>
-                  <li><strong>Color Primario (Botones, Títulos):</strong> <code>{currentDisplayColors.primary}</code></li>
+                  <li><strong>Color Primario:</strong> <code>{currentDisplayColors.primary}</code></li>
                   <li><strong>Color de Acento:</strong> <code>{currentDisplayColors.accent}</code></li>
                 </ul>
               </div>
             )}
           </div>
-          
+
           <div className="p-4 rounded-md bg-accent/10 border border-accent/30 text-foreground">
             <p className="text-sm font-medium">
               Para cambiar la paleta de colores (primario y acento) de la aplicación, seleccione una de las opciones a continuación.
             </p>
-             <p className="text-xs mt-1">
+             <p className="text-xs mt-1 text-muted-foreground">
               Si desea que una paleta específica sea la predeterminada para todos los usuarios (modificando <code>globals.css</code>), puede solicitarlo al asistente de IA.
             </p>
           </div>
@@ -537,10 +551,10 @@ export default function SettingsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {suggestedPalettes.map((palette) => {
                 const titleColor = `hsl(${palette.primary})`;
-                const cardBgPreview = `hsl(${palette.backgroundPreview})`;
+                const cardBgPreview = `hsl(${palette.background})`; // background from palette is for this preview card only
                 return (
-                  <Card 
-                    key={palette.name} 
+                  <Card
+                    key={palette.name}
                     className={`shadow-md hover:shadow-lg transition-shadow relative overflow-hidden ${activePaletteName === palette.name ? 'border-2 border-primary ring-2 ring-primary' : 'border'}`}
                     style={{ backgroundColor: cardBgPreview }}
                   >
@@ -560,7 +574,13 @@ export default function SettingsPage() {
                           <code className="ml-1 text-xs bg-muted p-1 rounded" style={{color: 'hsl(var(--card-foreground))'}}>{palette.primary}</code>
                         </div>
                       </div>
-                       {/* BackgroundPreview is for the card itself, not a global override */}
+                      <div className="flex items-center">
+                        <div className="inline-block w-5 h-5 rounded-sm mr-2 border" style={{ backgroundColor: `hsl(${palette.background})` }} />
+                        <div>
+                          <span className="font-semibold" style={{color: 'hsl(var(--card-foreground))'}}>Fondo (muestra):</span>
+                          <code className="ml-1 text-xs bg-muted p-1 rounded" style={{color: 'hsl(var(--card-foreground))'}}>{palette.background}</code>
+                        </div>
+                      </div>
                       <div className="flex items-center">
                         <div className="inline-block w-5 h-5 rounded-sm mr-2 border" style={{ backgroundColor: `hsl(${palette.accent})` }} />
                         <div>
@@ -568,9 +588,9 @@ export default function SettingsPage() {
                           <code className="ml-1 text-xs bg-muted p-1 rounded" style={{color: 'hsl(var(--card-foreground))'}}>{palette.accent}</code>
                         </div>
                       </div>
-                      <Button 
-                        onClick={() => handlePaletteSelect(palette)} 
-                        variant="outline" 
+                      <Button
+                        onClick={() => handlePaletteSelect(palette)}
+                        variant="outline"
                         className="w-full mt-4"
                         disabled={activePaletteName === palette.name}
                       >
@@ -603,7 +623,7 @@ export default function SettingsPage() {
                     <li>Última Exportación: <span className="font-medium text-foreground">{formatTimestamp(lastExportTimestamp)}</span></li>
                     <li>Última Importación: <span className="font-medium text-foreground">{formatTimestamp(lastImportTimestamp)}</span></li>
                     <li>
-                        Estado Última Importación: 
+                        Estado Última Importación:
                         <span className={`font-medium ${isLastImportReverted ? 'text-destructive' : 'text-green-600'}`}>
                             {lastImportTimestamp ? (isLastImportReverted ? ' Revertida' : ' Aplicada') : ' N/A'}
                         </span>
@@ -627,10 +647,10 @@ export default function SettingsPage() {
                     <AlertTriangle className="h-5 w-5 mr-2 text-destructive" />
                     <h3 className="font-semibold text-lg text-foreground">Importar y Fusionar Datos (¡Precaución!)</h3>
                 </div>
-                <p className="text-sm mb-1 text-foreground">
-                    Seleccione uno o más archivos JSON de respaldo (<code>facturafacil_backup_*.json</code>) para importar y fusionar datos en esta instancia del navegador.
-                    Esta función está diseñada para consolidar información de múltiples cajas o respaldos.
-                </p>
+                 <div className="text-sm mb-1 text-foreground">
+                    <p>Seleccione uno o más archivos JSON de respaldo (<code>facturafacil_backup_*.json</code>) para importar y fusionar datos en esta instancia del navegador.
+                    Esta función está diseñada para consolidar información de múltiples cajas o respaldos.</p>
+                </div>
                  <div className="text-xs mb-2 text-foreground">
                     <p><strong>Advertencia Importante:</strong> Esta acción modificará los datos actuales.</p>
                     <ul className="list-disc pl-5 mt-1">
@@ -724,7 +744,7 @@ export default function SettingsPage() {
                 </div>
               </AccordionContent>
             </AccordionItem>
-            
+
             <AccordionItem value="item-3">
               <AccordionTrigger>Crear Documentos (Facturas, Abonos, Depósitos)</AccordionTrigger>
               <AccordionContent className="space-y-3 text-sm text-muted-foreground">
@@ -803,7 +823,7 @@ export default function SettingsPage() {
                 </ol>
               </AccordionContent>
             </AccordionItem>
-            
+
             <AccordionItem value="item-6">
               <AccordionTrigger>Configuración de Empresa</AccordionTrigger>
               <AccordionContent className="space-y-2 text-sm text-muted-foreground">
@@ -831,7 +851,7 @@ export default function SettingsPage() {
                 <p>En la sección <Link href="/settings" className="text-primary hover:underline">Ajustes del Entorno</Link> (<SlidersHorizontal className="inline h-4 w-4" />) &gt; "Gestión de Datos", encontrará opciones para:</p>
                 <ul className="list-disc pl-5">
                     <li><strong className="text-foreground">Exportar Datos:</strong> Descarga un archivo JSON con toda la información de su aplicación. Es crucial para tener copias de seguridad o para transferir/fusionar datos.</li>
-                    <li><strong className="text-foreground">Importar y Fusionar Datos:</strong> Permite seleccionar uno o más archivos JSON de respaldo para fusionarlos con los datos existentes. 
+                    <li><strong className="text-foreground">Importar y Fusionar Datos:</strong> Permite seleccionar uno o más archivos JSON de respaldo para fusionarlos con los datos existentes.
                         <ul className="list-disc pl-5">
                             <li>La información de la empresa se tomará del último archivo procesado.</li>
                             <li>Los clientes se fusionan por RIF/Cédula: datos demográficos se actualizan y sus saldos (pendiente y a favor) se <strong>suman</strong>. Clientes nuevos se añaden.</li>
@@ -841,14 +861,14 @@ export default function SettingsPage() {
                      <li><strong className="text-foreground">Revertir Última Importación:</strong> Si el resultado de una importación no es el esperado, puede usar esta opción para restaurar los datos al estado exacto en que se encontraban *antes* de la última operación de importación. Esta opción solo está disponible para la importación más reciente y si no ha sido ya revertida. Una nueva importación creará un nuevo punto de restauración.</li>
                 </ul>
                  <div className="text-xs mb-2 text-foreground">
-                   <p><strong>Advertencia Importante:</strong> Esta acción modificará los datos actuales.</p>
-                   <ul className="list-disc pl-5 mt-1">
-                     <li><strong>RESPALDE PRIMERO:</strong> Siempre exporte sus datos actuales como respaldo antes de proceder con una importación. La importación actual reemplazará el respaldo pre-importación anterior.</li>
-                     <li><strong>Clientes:</strong> Si un cliente importado (por RIF) ya existe, sus datos demográficos se actualizarán, y sus saldos (pendiente y a favor) se <strong>sumarán</strong> a los saldos existentes. Los clientes nuevos se añadirán.</li>
-                     <li><strong>Facturas/Notas de Crédito:</strong> Las transacciones se añadirán si no existen por ID interno, evitando duplicados exactos.</li>
-                     <li><strong>Empresa:</strong> La información de la empresa se tomará del último archivo procesado.</li>
-                     <li><strong>Reversión:</strong> Puede revertir la *última* importación si el resultado no es el esperado, usando el botón "Revertir Última Importación".</li>
-                   </ul>
+                    <p><strong>Advertencia Importante:</strong> Esta acción modificará los datos actuales.</p>
+                    <ul className="list-disc pl-5 mt-1">
+                      <li><strong>RESPALDE PRIMERO:</strong> Siempre exporte sus datos actuales como respaldo antes de proceder con una importación. La importación actual reemplazará el respaldo pre-importación anterior.</li>
+                      <li><strong>Clientes:</strong> Si un cliente importado (por RIF) ya existe, sus datos demográficos se actualizarán, y sus saldos (pendiente y a favor) se <strong>sumarán</strong> a los saldos existentes. Los clientes nuevos se añadirán.</li>
+                      <li><strong>Facturas/Notas de Crédito:</strong> Las transacciones se añadirán si no existen por ID interno, evitando duplicados exactos.</li>
+                      <li><strong>Empresa:</strong> La información de la empresa se tomará del último archivo procesado.</li>
+                      <li><strong>Reversión:</strong> Puede revertir la *última* importación si el resultado no es el esperado, usando el botón "Revertir Última Importación".</li>
+                    </ul>
                  </div>
                 <p className="font-semibold text-destructive mt-2">Consideraciones Clave del Almacenamiento Local:</p>
                 <ul className="list-disc pl-5">
