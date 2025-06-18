@@ -65,12 +65,11 @@ body {
     --popover: 0 0% 10%; /* Oscuro */
     --popover-foreground: 0 0% 98%; /* Texto claro en popovers */
 
-    /* primary-foreground y accent-foreground se mantienen blancos para el text-shadow */
     --primary: 232 63% 30%; 
     --primary-foreground: 0 0% 98%; 
 
     --secondary: 0 0% 14.9%; 
-    --secondary-foreground: 0 0% 98%; /* Texto claro en botones secundarios (ahora con text-shadow) */
+    --secondary-foreground: 0 0% 98%; 
 
     --muted: 0 0% 14.9%;
     --muted-foreground: 0 0% 60%; /* Gris más claro para texto atenuado */
@@ -109,48 +108,6 @@ body {
   }
   /* body ya está configurado arriba */
 }
-
-/* 
-  Reglas de text-shadow para texto blanco en botones específicos.
-  Esto crea el efecto de borde negro alrededor del texto blanco.
-*/
-.bg-primary.text-primary-foreground,
-button.bg-primary {
-  text-shadow:
-    -1px -1px 0 #000,
-     1px -1px 0 #000,
-    -1px  1px 0 #000,
-     1px  1px 0 #000;
-}
-
-.bg-destructive.text-destructive-foreground,
-button.bg-destructive {
-  text-shadow:
-    -1px -1px 0 #000,
-     1px -1px 0 #000,
-    -1px  1px 0 #000,
-     1px  1px 0 #000;
-}
-
-.bg-accent.text-accent-foreground,
-button.bg-accent {
-   text-shadow:
-    -1px -1px 0 #000,
-     1px -1px 0 #000,
-    -1px  1px 0 #000,
-     1px  1px 0 #000;
-}
-
-/* Para botones secundarios en tema oscuro, que tienen texto claro */
-.dark .bg-secondary.text-secondary-foreground,
-.dark button.bg-secondary {
-   text-shadow:
-    -1px -1px 0 #000,
-     1px -1px 0 #000,
-    -1px  1px 0 #000,
-     1px  1px 0 #000;
-}
-
 
 @media print {
   body {
