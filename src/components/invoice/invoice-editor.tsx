@@ -32,6 +32,8 @@ import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 
 type InvoiceFormData = z.infer<typeof invoiceFormSchema>;
+type InvoiceItemForm = InvoiceFormData['items'][number];
+
 
 const defaultCompany: CompanyDetails = { id: DEFAULT_COMPANY_ID, name: "", rif: "", address: "" };
 const defaultCustomer: CustomerDetails = { id: "", name: "", rif: "", address: "", phone: "", email: "", outstandingBalance: 0, creditBalance: 0 };
@@ -88,8 +90,9 @@ export function InvoiceEditor() {
     items: [{ id: uuidv4(), description: "", quantity: 1, unitPrice: 0, totalPrice: 0}],
     paymentMethods: [{ method: "Efectivo", amount: 0, reference: "" }],
     subTotal: 0,
-    discountAmount: 0,
-    taxRate: TAX_RATE, // Decimal for preview
+    discountPercentage: 0,
+    discountValue: 0,
+    taxRate: TAX_RATE, 
     taxAmount: 0,
     totalAmount: 0,
     amountPaid: 0,
@@ -124,20 +127,21 @@ export function InvoiceEditor() {
       applyTax: true,
       taxRate: TAX_RATE * 100, // Percentage for form input
       applyDiscount: false,
-      discountAmount: 0,
+      discountPercentage: 0,
+      discountValue: 0,
       overpaymentHandlingChoice: 'creditToAccount',
       changeRefundPaymentMethods: [],
     },
   });
 
-  const calculateTotals = useCallback((items: InvoiceItem[], taxRatePercentValue: number, discountAmountValue: number, applyTaxFlag: boolean, applyDiscountFlag: boolean) => {
+  const calculateTotals = useCallback((items: InvoiceItem[], taxRatePercentValue: number, discountValueFromForm: number, applyTaxFlag: boolean) => {
     const subTotal = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
-    const actualDiscountAmount = applyDiscountFlag ? (discountAmountValue || 0) : 0;
-    const taxableAmount = Math.max(0, subTotal - actualDiscountAmount);
+    const actualDiscountValue = discountValueFromForm; // discountValueFromForm is already 0 if applyDiscount is false
+    const taxableAmount = Math.max(0, subTotal - actualDiscountValue);
     const actualTaxRateDecimal = applyTaxFlag ? (taxRatePercentValue || 0) / 100 : 0;
     const taxAmount = taxableAmount * actualTaxRateDecimal;
     const totalAmount = taxableAmount + taxAmount;
-    return { subTotal, discountAmount: actualDiscountAmount, taxAmount, totalAmount };
+    return { subTotal, discountAmount: actualDiscountValue, taxAmount, totalAmount };
   }, []);
   
   const calculatePaymentSummary = useCallback((payments: PaymentDetails[], totalAmount: number) => {
@@ -159,7 +163,8 @@ export function InvoiceEditor() {
     let formTaxRatePercent = TAX_RATE * 100; // Percentage
     let formApplyTax = true;
     let formApplyDiscount = false;
-    let formDiscountAmount = 0;
+    let formDiscountPercentage = 0;
+    let formDiscountValue = 0;
     let formIsDebtPayment = false;
     let formIsCreditDeposit = false;
     
@@ -174,7 +179,8 @@ export function InvoiceEditor() {
       formTaxRatePercent = 0;
       formApplyTax = false;
       formApplyDiscount = false;
-      formDiscountAmount = 0;
+      formDiscountPercentage = 0;
+      formDiscountValue = 0;
       formIsDebtPayment = true;
     } else if (mode === 'creditDeposit' && targetCustomer) {
       initialCustomerState = { ...targetCustomer };
@@ -185,7 +191,8 @@ export function InvoiceEditor() {
       formTaxRatePercent = 0;
       formApplyTax = false;
       formApplyDiscount = false;
-      formDiscountAmount = 0;
+      formDiscountPercentage = 0;
+      formDiscountValue = 0;
       formIsCreditDeposit = true;
     } else { 
       if (targetCustomer) {
@@ -210,7 +217,8 @@ export function InvoiceEditor() {
       applyTax: formApplyTax,
       taxRate: formTaxRatePercent,
       applyDiscount: formApplyDiscount,
-      discountAmount: formDiscountAmount,
+      discountPercentage: formDiscountPercentage,
+      discountValue: formDiscountValue,
       overpaymentHandlingChoice: 'creditToAccount',
       changeRefundPaymentMethods: [],
     };
@@ -223,11 +231,12 @@ export function InvoiceEditor() {
         totalPrice: (item.quantity || 0) * (item.unitPrice || 0),
       })) as InvoiceItem[];
     const currentTaxRatePercent = formValuesToReset.taxRate ?? TAX_RATE * 100;
-    const currentDiscountAmount = formValuesToReset.discountAmount || 0;
     const currentApplyTax = formValuesToReset.applyTax ?? true;
-    const currentApplyDiscount = formValuesToReset.applyDiscount ?? false;
+    const currentDiscountValue = formValuesToReset.discountValue || 0;
+    const currentDiscountPercentage = formValuesToReset.discountPercentage || 0;
 
-    const { subTotal, discountAmount, taxAmount, totalAmount } = calculateTotals(currentItems, currentTaxRatePercent, currentDiscountAmount, currentApplyTax, currentApplyDiscount);
+
+    const { subTotal, discountAmount, taxAmount, totalAmount } = calculateTotals(currentItems, currentTaxRatePercent, currentDiscountValue, currentApplyTax);
     const { amountPaid, amountDue } = calculatePaymentSummary(formValuesToReset.paymentMethods || [], totalAmount);
 
     setLiveInvoicePreview({
@@ -243,8 +252,9 @@ export function InvoiceEditor() {
       items: currentItems,
       paymentMethods: formValuesToReset.paymentMethods as PaymentDetails[],
       subTotal,
-      discountAmount,
-      taxRate: currentApplyTax ? (currentTaxRatePercent / 100) : 0, // Store decimal in preview
+      discountPercentage: currentDiscountPercentage,
+      discountValue: discountAmount, // This is actualDiscountValue from calculateTotals
+      taxRate: currentApplyTax ? (currentTaxRatePercent / 100) : 0, 
       taxAmount,
       totalAmount,
       amountPaid,
@@ -348,11 +358,13 @@ export function InvoiceEditor() {
         })) as InvoiceItem[];
         
         const currentTaxRatePercent = values.isDebtPayment || values.isCreditDeposit ? 0 : (values.taxRate ?? TAX_RATE * 100);
-        const currentDiscountAmount = values.isDebtPayment || values.isCreditDeposit ? 0 : (values.discountAmount || 0);
         const currentApplyTax = values.isDebtPayment || values.isCreditDeposit ? false : (values.applyTax ?? true);
-        const currentApplyDiscount = values.isDebtPayment || values.isCreditDeposit ? false : (values.applyDiscount ?? false);
+        
+        const currentDiscountValue = (values.isDebtPayment || values.isCreditDeposit || !values.applyDiscount) ? 0 : (values.discountValue || 0);
+        const currentDiscountPercentage = (values.isDebtPayment || values.isCreditDeposit || !values.applyDiscount) ? 0 : (values.discountPercentage || 0);
 
-        const { subTotal, discountAmount, taxAmount, totalAmount } = calculateTotals(currentItems, currentTaxRatePercent, currentDiscountAmount, currentApplyTax, currentApplyDiscount);
+
+        const { subTotal, discountAmount, taxAmount, totalAmount } = calculateTotals(currentItems, currentTaxRatePercent, currentDiscountValue, currentApplyTax);
         const { amountPaid, amountDue } = calculatePaymentSummary(values.paymentMethods || [], totalAmount);
 
         let overpaymentAmt = 0;
@@ -375,8 +387,9 @@ export function InvoiceEditor() {
             items: currentItems,
             paymentMethods: values.paymentMethods as PaymentDetails[],
             subTotal,
-            discountAmount,
-            taxRate: currentApplyTax ? (currentTaxRatePercent / 100) : 0, // Store decimal in preview
+            discountPercentage: currentDiscountPercentage,
+            discountValue: discountAmount, // This is actualDiscountValue from calculateTotals
+            taxRate: currentApplyTax ? (currentTaxRatePercent / 100) : 0, 
             taxAmount,
             totalAmount,
             amountPaid,
@@ -438,7 +451,7 @@ export function InvoiceEditor() {
   // Effect to synchronize applyTax and taxRate
   useEffect(() => {
     const applyTaxValue = form.watch('applyTax');
-    const currentTaxRateValue = form.watch('taxRate'); // This is percentage
+    const currentTaxRateValue = form.watch('taxRate'); 
 
     if (editorMode !== 'normal') {
       if (form.getValues('applyTax') !== false) form.setValue('applyTax', false, { shouldValidate: true });
@@ -453,23 +466,76 @@ export function InvoiceEditor() {
     }
   }, [form.watch('applyTax'), editorMode, form]);
 
-  // Effect to synchronize applyDiscount and discountAmount
+  
+  const watchedItems = form.watch('items');
+  const watchedApplyDiscount = form.watch('applyDiscount');
+
+  const calculateSubTotal = useCallback((currentItems: InvoiceItemForm[] = []) => {
+    return currentItems.reduce((sum, item) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0);
+  }, []);
+
+  // Effect for discountPercentage change
   useEffect(() => {
-    const applyDiscountValue = form.watch('applyDiscount');
-    const currentDiscountAmount = form.watch('discountAmount');
+    if (!watchedApplyDiscount || editorMode !== 'normal') return;
 
-    if (editorMode !== 'normal') {
-      if (form.getValues('applyDiscount') !== false) form.setValue('applyDiscount', false, { shouldValidate: true });
-      if (form.getValues('discountAmount') !== 0) form.setValue('discountAmount', 0, { shouldValidate: true });
-      return;
-    }
+    const percentage = form.getValues('discountPercentage');
+    const subTotal = calculateSubTotal(watchedItems);
 
-    if (applyDiscountValue === false && currentDiscountAmount !== 0) {
-      form.setValue('discountAmount', 0, { shouldValidate: true });
+    if (subTotal > 0 && typeof percentage === 'number') {
+        const calculatedValue = (percentage / 100) * subTotal;
+        if (Math.abs((form.getValues('discountValue') || 0) - calculatedValue) > 0.001) {
+            form.setValue('discountValue', parseFloat(calculatedValue.toFixed(2)), { shouldValidate: true });
+        }
+    } else if (subTotal === 0 && typeof percentage === 'number') {
+        if (form.getValues('discountValue') !== 0) {
+            form.setValue('discountValue', 0, { shouldValidate: true });
+        }
     }
-    // If applyDiscountValue is true, we let the user input the amount, so no automatic setting of discountAmount here
-    // unless it was previously 0 and now needs to be enabled for input. The field itself handles this.
-  }, [form.watch('applyDiscount'), editorMode, form]);
+  }, [form.watch('discountPercentage'), watchedItems, watchedApplyDiscount, editorMode, form, calculateSubTotal]);
+
+  // Effect for discountValue change
+  useEffect(() => {
+    if (!watchedApplyDiscount || editorMode !== 'normal') return;
+
+    const value = form.getValues('discountValue');
+    const subTotal = calculateSubTotal(watchedItems);
+
+    if (subTotal > 0 && typeof value === 'number') {
+        const calculatedPercentage = (value / subTotal) * 100;
+        if (Math.abs((form.getValues('discountPercentage') || 0) - calculatedPercentage) > 0.001) {
+            form.setValue('discountPercentage', parseFloat(calculatedPercentage.toFixed(2)), { shouldValidate: true });
+        }
+    } else if (subTotal === 0 && typeof value === 'number' && value !== 0) {
+        if (form.getValues('discountPercentage') !== 0) {
+            form.setValue('discountPercentage', 0, { shouldValidate: true }); // Or 100 if value > 0, but 0 is safer
+        }
+    } else if (typeof value === 'number' && value === 0) {
+        if (form.getValues('discountPercentage') !== 0) {
+            form.setValue('discountPercentage', 0, { shouldValidate: true });
+        }
+    }
+  }, [form.watch('discountValue'), watchedItems, watchedApplyDiscount, editorMode, form, calculateSubTotal]);
+
+  // Effect to clear discounts if applyDiscount is unchecked or mode changes
+  useEffect(() => {
+    if (!watchedApplyDiscount || editorMode !== 'normal') {
+        const currentPercentage = form.getValues('discountPercentage');
+        const currentValue = form.getValues('discountValue');
+        let changed = false;
+        if (currentPercentage !== 0) {
+            form.setValue('discountPercentage', 0, { shouldValidate: true, shouldDirty: false }); // Avoid dirtying if only mode changed
+            changed = true;
+        }
+        if (currentValue !== 0) {
+            form.setValue('discountValue', 0, { shouldValidate: true, shouldDirty: false });
+            changed = true;
+        }
+        // If applyDiscount was explicitly unchecked by user, then mark form as dirty
+        if (changed && form.formState.dirtyFields.applyDiscount) {
+            form.setValue('applyDiscount', form.getValues('applyDiscount'), {shouldDirty: true});
+        }
+    }
+  }, [watchedApplyDiscount, editorMode, form]);
 
 
   const handleRifSearch = async () => {
@@ -667,12 +733,11 @@ export function InvoiceEditor() {
     }));
 
     const currentTaxRatePercent = data.isDebtPayment || data.isCreditDeposit ? 0 : (data.taxRate ?? TAX_RATE * 100);
-    const currentDiscountAmountRaw = data.isDebtPayment || data.isCreditDeposit ? 0 : (data.discountAmount || 0);
     const currentApplyTax = data.isDebtPayment || data.isCreditDeposit ? false : (data.applyTax ?? true);
-    const currentApplyDiscount = data.isDebtPayment || data.isCreditDeposit ? false : (data.applyDiscount ?? false);
-    const currentDiscountAmount = currentApplyDiscount ? currentDiscountAmountRaw : 0;
+    
+    const currentDiscountValue = (data.isDebtPayment || data.isCreditDeposit || !data.applyDiscount) ? 0 : (data.discountValue || 0);
 
-    const { subTotal, discountAmount, taxAmount, totalAmount } = calculateTotals(finalItems, currentTaxRatePercent, currentDiscountAmount, currentApplyTax, currentApplyDiscount);
+    const { subTotal, discountAmount, taxAmount, totalAmount } = calculateTotals(finalItems, currentTaxRatePercent, currentDiscountValue, currentApplyTax);
     
     let currentCustomersList = [...customers];
     if (customerWasModified && newCustomerJustAdded) { 
@@ -684,7 +749,7 @@ export function InvoiceEditor() {
 
     let finalInvoiceNotes = data.notes || "";
     let finalPaymentMethodsForInvoice = [...data.paymentMethods];
-    let finalAmountPaidOnInvoice = data.paymentMethods.reduce((sum, p) => sum + p.amount, 0); // Initial amount paid from form
+    let finalAmountPaidOnInvoice = data.paymentMethods.reduce((sum, p) => sum + p.amount, 0); 
     let finalAmountDueForInvoiceRecord: number;
 
 
@@ -693,10 +758,8 @@ export function InvoiceEditor() {
         StoredCustomer.creditBalance = StoredCustomer.creditBalance || 0;
 
         if (editorMode === 'normal') {
-            // 1. Deduct EXPLICITLY selected "Saldo a Favor" from customer's balance
             StoredCustomer.creditBalance -= totalExplicitCreditUsedInTransaction;
 
-            // 2. Calculate shortfall based on what customer paid (excluding explicit credit already handled)
             let amountPaidByCustomerExcludingExplicitCredit = 0;
             data.paymentMethods.forEach(pm => {
                 if (pm.method !== "Saldo a Favor") {
@@ -706,11 +769,10 @@ export function InvoiceEditor() {
             const totalEffectivelyPaidByCustomer = amountPaidByCustomerExcludingExplicitCredit + totalExplicitCreditUsedInTransaction;
             let currentShortfall = totalAmount - totalEffectivelyPaidByCustomer;
             
-            // 3. Apply AUTOMATIC credit usage if shortfall and available credit
             let autoCreditUsed = 0;
             if (currentShortfall > 0 && StoredCustomer.creditBalance > 0) {
                 autoCreditUsed = Math.min(currentShortfall, StoredCustomer.creditBalance);
-                StoredCustomer.creditBalance -= autoCreditUsed; // Deduct auto-used credit
+                StoredCustomer.creditBalance -= autoCreditUsed; 
 
                 const autoCreditPaymentEntry: PaymentDetails = {
                     method: "Saldo a Favor (Auto)",
@@ -722,16 +784,15 @@ export function InvoiceEditor() {
                 finalInvoiceNotes += `${finalInvoiceNotes ? '\n' : ''}Se utilizaron ${formatCurrency(autoCreditUsed)} del saldo a favor (auto.) para cubrir el pago.`;
                 currentShortfall -= autoCreditUsed; 
             }
-            finalAmountPaidOnInvoice += autoCreditUsed; // Update total paid on invoice
+            finalAmountPaidOnInvoice += autoCreditUsed; 
 
-            // 4. Handle Overpayment or Final Underpayment
             let overpaymentAmountToStore = 0;
             let overpaymentHandlingToStore: 'creditedToAccount' | 'refunded' | undefined = undefined;
             let changeRefundPaymentMethodsToStore: PaymentDetails[] | undefined = undefined;
             
             const netAmountDueAfterAllPayments = totalAmount - finalAmountPaidOnInvoice;
 
-            if (netAmountDueAfterAllPayments < 0) { // Overpayment
+            if (netAmountDueAfterAllPayments < 0) { 
                 overpaymentAmountToStore = Math.abs(netAmountDueAfterAllPayments);
                 if (data.overpaymentHandlingChoice === 'refundNow') {
                     const totalChangeRefunded = (data.changeRefundPaymentMethods || []).reduce((sum, pm) => sum + pm.amount, 0);
@@ -742,23 +803,23 @@ export function InvoiceEditor() {
                     }
                     overpaymentHandlingToStore = 'refunded';
                     changeRefundPaymentMethodsToStore = data.changeRefundPaymentMethods;
-                    finalAmountDueForInvoiceRecord = 0; // Invoice settled
-                } else { // 'creditToAccount'
+                    finalAmountDueForInvoiceRecord = 0; 
+                } else { 
                     overpaymentHandlingToStore = 'creditedToAccount';
-                    StoredCustomer.creditBalance += overpaymentAmountToStore; // Add overpayment to customer's credit
-                    finalAmountDueForInvoiceRecord = 0; // Invoice settled in terms of its own balance, credit handled separately
+                    StoredCustomer.creditBalance += overpaymentAmountToStore; 
+                    finalAmountDueForInvoiceRecord = 0; 
                 }
-            } else if (netAmountDueAfterAllPayments > 0) { // Final Underpayment
+            } else if (netAmountDueAfterAllPayments > 0) { 
                 StoredCustomer.outstandingBalance += netAmountDueAfterAllPayments;
                 finalAmountDueForInvoiceRecord = netAmountDueAfterAllPayments;
-            } else { // Perfectly paid
+            } else { 
                 finalAmountDueForInvoiceRecord = 0;
             }
 
         } else if (editorMode === 'debtPayment') {
             StoredCustomer.outstandingBalance = Math.max(0, StoredCustomer.outstandingBalance - finalAmountPaidOnInvoice);
-            finalAmountDueForInvoiceRecord = totalAmount - finalAmountPaidOnInvoice; // Should be 0 if fully paid
-        } else { // editorMode === 'creditDeposit'
+            finalAmountDueForInvoiceRecord = totalAmount - finalAmountPaidOnInvoice; 
+        } else { 
             if (StoredCustomer.outstandingBalance > 0) {
                 const amountToPayDebt = Math.min(finalAmountPaidOnInvoice, StoredCustomer.outstandingBalance);
                 StoredCustomer.outstandingBalance -= amountToPayDebt;
@@ -767,10 +828,9 @@ export function InvoiceEditor() {
             } else {
                 StoredCustomer.creditBalance += finalAmountPaidOnInvoice;
             }
-            finalAmountDueForInvoiceRecord = totalAmount - finalAmountPaidOnInvoice; // Should be 0 for deposits
+            finalAmountDueForInvoiceRecord = totalAmount - finalAmountPaidOnInvoice; 
         }
         
-        // Update customer in the list
         if (customerIndex !== -1) {
             currentCustomersList[customerIndex] = StoredCustomer;
         } else if (newCustomerJustAdded) { 
@@ -800,8 +860,9 @@ export function InvoiceEditor() {
       items: finalItems,
       paymentMethods: finalPaymentMethodsForInvoice,
       subTotal,
-      discountAmount: data.applyDiscount ? (data.discountAmount || 0) : 0,
-      taxRate: data.applyTax ? ((data.taxRate || 0) / 100) : 0, // Store decimal
+      discountPercentage: data.applyDiscount ? (data.discountPercentage || 0) : undefined,
+      discountValue: data.applyDiscount ? (data.discountValue || 0) : undefined,
+      taxRate: data.applyTax ? ((data.taxRate || 0) / 100) : 0, 
       taxAmount,
       totalAmount,
       amountPaid: finalAmountPaidOnInvoice,
@@ -1384,51 +1445,70 @@ export function InvoiceEditor() {
                   <CardTitle className="text-xl flex items-center text-primary"><Settings className="mr-2 h-5 w-5" />Configuración Adicional</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                  <div className="flex flex-col space-y-2 md:flex-row md:space-y-0 md:space-x-4 md:items-end">
+                  <FormField
+                      control={form.control}
+                      name="applyDiscount"
+                      render={({ field }) => (
+                          <FormItem className="flex flex-row items-center space-x-2 space-y-0">
+                              <FormControl>
+                                  <Checkbox
+                                      checked={field.value}
+                                      onCheckedChange={field.onChange}
+                                      disabled={editorMode !== 'normal'}
+                                      id="applyDiscountCheckbox"
+                                  />
+                              </FormControl>
+                              <FormLabel htmlFor="applyDiscountCheckbox" className="font-normal cursor-pointer !mt-0">
+                                  Aplicar Descuento
+                              </FormLabel>
+                          </FormItem>
+                      )}
+                  />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <FormField
                           control={form.control}
-                          name="applyDiscount"
+                          name="discountPercentage"
                           render={({ field }) => (
-                              <FormItem className="flex flex-row items-center space-x-2 space-y-0 pt-2 md:pt-0 md:self-center">
+                              <FormItem>
+                                  <FormLabel>Descuento (%)</FormLabel>
                                   <FormControl>
-                                      <Checkbox
-                                          checked={field.value}
-                                          onCheckedChange={field.onChange}
-                                          disabled={editorMode !== 'normal'}
-                                          id="applyDiscountCheckbox"
+                                      <Input 
+                                          {...field} 
+                                          value={field.value === 0 && !form.getFieldState('discountPercentage').isDirty ? '' : field.value} 
+                                          onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
+                                          type="number" 
+                                          step="0.01" 
+                                          placeholder="0.00"
+                                          disabled={!form.watch('applyDiscount') || editorMode !== 'normal'} 
                                       />
                                   </FormControl>
-                                  <FormLabel htmlFor="applyDiscountCheckbox" className="font-normal cursor-pointer !mt-0">
-                                      Aplicar Descuento
-                                  </FormLabel>
+                                  <FormMessage />
                               </FormItem>
                           )}
                       />
                       <FormField
                           control={form.control}
-                          name="discountAmount"
+                          name="discountValue"
                           render={({ field }) => (
-                              <FormItem className="flex-grow">
-                                  <FormLabel className="flex items-center">
-                                      Monto de Descuento ({CURRENCY_SYMBOL})
-                                  </FormLabel>
+                              <FormItem>
+                                  <FormLabel>Descuento ({CURRENCY_SYMBOL})</FormLabel>
                                   <FormControl>
                                       <Input 
-                                      {...field} 
-                                      value={field.value === 0 ? '' : field.value} 
-                                      onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
-                                      type="number" 
-                                      step="0.01" 
-                                      placeholder="0.00"
-                                      disabled={!form.watch('applyDiscount') || editorMode !== 'normal'} 
+                                          {...field} 
+                                          value={field.value === 0 && !form.getFieldState('discountValue').isDirty ? '' : field.value}
+                                          onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
+                                          type="number" 
+                                          step="0.01" 
+                                          placeholder="0.00"
+                                          disabled={!form.watch('applyDiscount') || editorMode !== 'normal'} 
                                       />
                                   </FormControl>
-                                  {(editorMode !== 'normal' || !form.watch('applyDiscount')) && <p className="text-xs text-muted-foreground mt-1">Los descuentos no aplican o están desactivados.</p>}
                                   <FormMessage />
                               </FormItem>
                           )}
                       />
                   </div>
+                  {(!form.watch('applyDiscount') || editorMode !== 'normal') && <p className="text-xs text-muted-foreground">Los descuentos no aplican o están desactivados.</p>}
                   
                   <div className="flex flex-col space-y-2 md:flex-row md:space-y-0 md:space-x-4 md:items-end"> 
                     <FormField

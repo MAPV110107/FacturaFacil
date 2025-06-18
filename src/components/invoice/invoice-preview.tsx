@@ -42,18 +42,16 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
 
   const actualInvoiceDate = invoice.date ? new Date(invoice.date) : new Date();
   const subTotal = invoice.subTotal ?? 0;
-  const discountAmount = invoice.discountAmount ?? 0;
+  const discountValue = invoice.discountValue ?? 0;
+  const discountPercentage = invoice.discountPercentage ?? 0;
   const taxAmount = invoice.taxAmount ?? 0;
   const totalAmount = invoice.totalAmount ?? 0;
   const taxRate = invoice.taxRate ?? 0;
   const amountPaid = invoice.amountPaid ?? 0;
   
-  // invoice.amountDue in the live preview already reflects the final state after overpayment handling.
-  // if overpayment was refunded, invoice.amountDue is 0.
-  // if overpayment was credited, invoice.amountDue is negative.
   const finalAmountDueForDisplay = invoice.amountDue ?? 0;
 
-  const taxableBase = subTotal - discountAmount;
+  const taxableBase = subTotal - discountValue;
   const isReturn = invoice.type === 'return';
   const isDebtPayment = invoice.isDebtPayment ?? false;
   const isCreditDeposit = invoice.isCreditDeposit ?? false;
@@ -164,8 +162,8 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
 
         <div className="mt-2 space-y-0.5">
           <p className="font-semibold">{formatLine("SUBTOTAL:", formatCurrency(subTotal))}</p>
-          {discountAmount > 0 && (
-            <p>{formatLine("DESCUENTO:", `-${formatCurrency(discountAmount)}`)}</p>
+          {discountValue > 0 && (
+            <p>{formatLine(`DESCUENTO (${discountPercentage.toFixed(2)}%):`, `-${formatCurrency(discountValue)}`)}</p>
           )}
            {(taxAmount > 0 || isDebtPayment || isCreditDeposit) && ( 
             <p>{formatLine(`BASE IMPONIBLE:`, formatCurrency(taxableBase))}</p>
@@ -226,3 +224,4 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
     </Card>
   );
 }
+

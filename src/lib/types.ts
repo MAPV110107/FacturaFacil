@@ -50,10 +50,11 @@ export interface Invoice {
   paymentMethods: PaymentDetails[];
   
   subTotal: number; // Sum of item.totalPrice
-  discountAmount?: number; // Optional discount amount
+  discountPercentage?: number; // Optional discount percentage applied
+  discountValue?: number; // Optional discount value applied (monetary)
   taxRate: number; // Tax rate applied (e.g., 0.16 for 16%)
-  taxAmount: number; // Calculated on (subTotal - discountAmount) * taxRate
-  totalAmount: number; // (subTotal - discountAmount) + taxAmount
+  taxAmount: number; // Calculated on (subTotal - discountValue) * taxRate
+  totalAmount: number; // (subTotal - discountValue) + taxAmount
   
   amountPaid: number; // Total amount received from customer for this invoice
   amountDue: number; // Final balance of THIS invoice: totalAmount - amountPaid (can be negative if overpaid and change processed)
@@ -72,3 +73,4 @@ export interface Invoice {
 }
 
 export const DEFAULT_COMPANY_ID = "main_company_details";
+
