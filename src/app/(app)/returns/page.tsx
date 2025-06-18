@@ -492,8 +492,8 @@ export default function ReturnsPage() {
                     </p>
                   )}
                   {editorMode === 'creditWithdrawal' && (
-                    <div className="flex items-center p-3 mt-2 rounded-md bg-accent/10 text-accent-foreground border border-accent/30">
-                        <Info className="h-5 w-5 mr-2" />
+                    <div className="flex items-center p-3 mt-2 rounded-md bg-accent/10 text-foreground border border-accent/30">
+                        <Info className="h-5 w-5 mr-2 text-accent" />
                         <p className="text-sm">
                             El saldo a favor del cliente <span className="font-semibold">{foundInvoice.customerDetails.name}</span> se reducirá en <span className="font-semibold">{formatCurrency(foundInvoice.totalAmount)}</span>.
                         </p>
