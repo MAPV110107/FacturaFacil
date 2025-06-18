@@ -65,6 +65,7 @@ export interface Invoice {
   salesperson?: string;
   notes?: string;
   thankYouMessage: string;
+  warrantyText?: string; // Text for warranty notes
 
   // Fields for handling overpayment
   overpaymentAmount?: number; // The absolute value of the overpayment (amountPaid - totalAmount) if > 0
@@ -73,4 +74,3 @@ export interface Invoice {
 }
 
 export const DEFAULT_COMPANY_ID = "main_company_details";
-

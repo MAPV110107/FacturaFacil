@@ -23,7 +23,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { InvoicePreview } from "./invoice-preview";
 import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, Trash2, Users, FileText, DollarSign, Settings, Receipt, CalendarDays, Info, Save, Percent, Search, Ban, ArrowRight, HandCoins, PiggyBank, XCircle, WalletCards, RotateCcw } from "lucide-react";
+import { PlusCircle, Trash2, Users, FileText, DollarSign, Settings, Receipt, CalendarDays, Info, Save, Percent, Search, Ban, ArrowRight, HandCoins, PiggyBank, XCircle, WalletCards, RotateCcw, ShieldCheck } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Form, FormField, FormItem, FormControl, FormLabel, FormMessage } from "@/components/ui/form";
@@ -99,6 +99,7 @@ export function InvoiceEditor() {
     amountDue: 0,
     thankYouMessage: DEFAULT_THANK_YOU_MESSAGE,
     notes: "",
+    warrantyText: "",
     isDebtPayment: false,
     isCreditDeposit: false,
     overpaymentAmount: 0,
@@ -129,6 +130,8 @@ export function InvoiceEditor() {
       applyDiscount: false,
       discountPercentage: 0,
       discountValue: 0,
+      applyWarranty: false,
+      warrantyText: "",
       overpaymentHandlingChoice: 'creditToAccount',
       changeRefundPaymentMethods: [],
     },
@@ -167,6 +170,8 @@ export function InvoiceEditor() {
     let formDiscountValue = 0;
     let formIsDebtPayment = false;
     let formIsCreditDeposit = false;
+    let formApplyWarranty = false;
+    let formWarrantyText = "";
     
     const targetCustomer = customers.find(c => c.id === customerId);
 
@@ -182,6 +187,7 @@ export function InvoiceEditor() {
       formDiscountPercentage = 0;
       formDiscountValue = 0;
       formIsDebtPayment = true;
+      formApplyWarranty = false;
     } else if (mode === 'creditDeposit' && targetCustomer) {
       initialCustomerState = { ...targetCustomer };
       initialInvoiceNumber = `DEP-${Date.now().toString().slice(-6)}`;
@@ -194,6 +200,7 @@ export function InvoiceEditor() {
       formDiscountPercentage = 0;
       formDiscountValue = 0;
       formIsCreditDeposit = true;
+      formApplyWarranty = false;
     } else { 
       if (targetCustomer) {
         initialCustomerState = {...targetCustomer};
@@ -219,6 +226,8 @@ export function InvoiceEditor() {
       applyDiscount: formApplyDiscount,
       discountPercentage: formDiscountPercentage,
       discountValue: formDiscountValue,
+      applyWarranty: formApplyWarranty,
+      warrantyText: formWarrantyText,
       overpaymentHandlingChoice: 'creditToAccount',
       changeRefundPaymentMethods: [],
     };
@@ -261,6 +270,7 @@ export function InvoiceEditor() {
       amountDue,
       thankYouMessage: formValuesToReset.thankYouMessage || DEFAULT_THANK_YOU_MESSAGE,
       notes: formValuesToReset.notes,
+      warrantyText: formValuesToReset.applyWarranty ? formValuesToReset.warrantyText : undefined,
       isDebtPayment: !!formValuesToReset.isDebtPayment,
       isCreditDeposit: !!formValuesToReset.isCreditDeposit,
       overpaymentAmount: amountDue < 0 ? Math.abs(amountDue) : 0,
@@ -396,6 +406,7 @@ export function InvoiceEditor() {
             amountDue: finalAmountDueForInvoice,
             thankYouMessage: values.thankYouMessage || DEFAULT_THANK_YOU_MESSAGE,
             notes: values.notes,
+            warrantyText: values.applyWarranty ? values.warrantyText : undefined,
             type: 'sale',
             isDebtPayment: !!values.isDebtPayment,
             isCreditDeposit: !!values.isCreditDeposit,
@@ -536,6 +547,19 @@ export function InvoiceEditor() {
         }
     }
   }, [watchedApplyDiscount, editorMode, form]);
+
+  // Effect for applyWarranty
+  const watchedApplyWarranty = form.watch('applyWarranty');
+  useEffect(() => {
+    if (editorMode !== 'normal') {
+      if (form.getValues('applyWarranty')) form.setValue('applyWarranty', false, { shouldValidate: true });
+      if (form.getValues('warrantyText')) form.setValue('warrantyText', '', { shouldValidate: true });
+      return;
+    }
+    if (!watchedApplyWarranty) {
+      if (form.getValues('warrantyText')) form.setValue('warrantyText', '', { shouldValidate: true });
+    }
+  }, [watchedApplyWarranty, editorMode, form]);
 
 
   const handleRifSearch = async () => {
@@ -819,7 +843,7 @@ export function InvoiceEditor() {
         } else if (editorMode === 'debtPayment') {
             StoredCustomer.outstandingBalance = Math.max(0, StoredCustomer.outstandingBalance - finalAmountPaidOnInvoice);
             finalAmountDueForInvoiceRecord = totalAmount - finalAmountPaidOnInvoice; 
-        } else { 
+        } else { // creditDeposit mode
             if (StoredCustomer.outstandingBalance > 0) {
                 const amountToPayDebt = Math.min(finalAmountPaidOnInvoice, StoredCustomer.outstandingBalance);
                 StoredCustomer.outstandingBalance -= amountToPayDebt;
@@ -869,6 +893,7 @@ export function InvoiceEditor() {
       amountDue: finalAmountDueForInvoiceRecord, 
       thankYouMessage: data.thankYouMessage || DEFAULT_THANK_YOU_MESSAGE,
       notes: finalInvoiceNotes,
+      warrantyText: data.applyWarranty ? data.warrantyText : undefined,
       overpaymentAmount: (editorMode === 'normal' && (totalAmount - finalAmountPaidOnInvoice) < -0.001) ? Math.abs(totalAmount - finalAmountPaidOnInvoice) : undefined,
       overpaymentHandling: (editorMode === 'normal' && (totalAmount - finalAmountPaidOnInvoice) < -0.001) ? (data.overpaymentHandlingChoice === 'refundNow' ? 'refunded' : 'creditedToAccount') : undefined,
       changeRefundPaymentMethods: (editorMode === 'normal' && (totalAmount - finalAmountPaidOnInvoice) < -0.001 && data.overpaymentHandlingChoice === 'refundNow') ? data.changeRefundPaymentMethods : undefined,
@@ -1444,71 +1469,73 @@ export function InvoiceEditor() {
               <CardHeader>
                   <CardTitle className="text-xl flex items-center text-primary"><Settings className="mr-2 h-5 w-5" />Configuración Adicional</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                  <FormField
-                      control={form.control}
-                      name="applyDiscount"
-                      render={({ field }) => (
-                          <FormItem className="flex flex-row items-center space-x-2 space-y-0">
-                              <FormControl>
-                                  <Checkbox
-                                      checked={field.value}
-                                      onCheckedChange={field.onChange}
-                                      disabled={editorMode !== 'normal'}
-                                      id="applyDiscountCheckbox"
-                                  />
-                              </FormControl>
-                              <FormLabel htmlFor="applyDiscountCheckbox" className="font-normal cursor-pointer !mt-0">
-                                  Aplicar Descuento
-                              </FormLabel>
-                          </FormItem>
-                      )}
-                  />
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <FormField
-                          control={form.control}
-                          name="discountPercentage"
-                          render={({ field }) => (
-                              <FormItem>
-                                  <FormLabel>Descuento (%)</FormLabel>
-                                  <FormControl>
-                                      <Input 
-                                          {...field} 
-                                          value={field.value === 0 && !form.getFieldState('discountPercentage').isDirty ? '' : field.value} 
-                                          onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
-                                          type="number" 
-                                          step="0.01" 
-                                          placeholder="0.00"
-                                          disabled={!form.watch('applyDiscount') || editorMode !== 'normal'} 
-                                      />
-                                  </FormControl>
-                                  <FormMessage />
-                              </FormItem>
-                          )}
-                      />
-                      <FormField
-                          control={form.control}
-                          name="discountValue"
-                          render={({ field }) => (
-                              <FormItem>
-                                  <FormLabel>Descuento ({CURRENCY_SYMBOL})</FormLabel>
-                                  <FormControl>
-                                      <Input 
-                                          {...field} 
-                                          value={field.value === 0 && !form.getFieldState('discountValue').isDirty ? '' : field.value}
-                                          onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
-                                          type="number" 
-                                          step="0.01" 
-                                          placeholder="0.00"
-                                          disabled={!form.watch('applyDiscount') || editorMode !== 'normal'} 
-                                      />
-                                  </FormControl>
-                                  <FormMessage />
-                              </FormItem>
-                          )}
-                      />
+              <CardContent className="space-y-6">
+                  <div>
+                    <FormField
+                        control={form.control}
+                        name="applyDiscount"
+                        render={({ field }) => (
+                            <FormItem className="flex flex-row items-center space-x-2 space-y-0">
+                                <FormControl>
+                                    <Checkbox
+                                        checked={field.value}
+                                        onCheckedChange={field.onChange}
+                                        disabled={editorMode !== 'normal'}
+                                        id="applyDiscountCheckbox"
+                                    />
+                                </FormControl>
+                                <FormLabel htmlFor="applyDiscountCheckbox" className="font-normal cursor-pointer !mt-0">
+                                    Aplicar Descuento
+                                </FormLabel>
+                            </FormItem>
+                        )}
+                    />
+                    {form.watch('applyDiscount') && editorMode === 'normal' && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2 pl-6">
+                            <FormField
+                                control={form.control}
+                                name="discountPercentage"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Descuento (%)</FormLabel>
+                                        <FormControl>
+                                            <Input 
+                                                {...field} 
+                                                value={field.value === 0 && !form.getFieldState('discountPercentage').isDirty ? '' : field.value} 
+                                                onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
+                                                type="number" 
+                                                step="0.01" 
+                                                placeholder="0.00"
+                                            />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                            <FormField
+                                control={form.control}
+                                name="discountValue"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Descuento ({CURRENCY_SYMBOL})</FormLabel>
+                                        <FormControl>
+                                            <Input 
+                                                {...field} 
+                                                value={field.value === 0 && !form.getFieldState('discountValue').isDirty ? '' : field.value}
+                                                onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
+                                                type="number" 
+                                                step="0.01" 
+                                                placeholder="0.00"
+                                            />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                        </div>
+                    )}
+                    {(!form.watch('applyDiscount') || editorMode !== 'normal') && <p className="text-xs text-muted-foreground mt-1">Los descuentos están desactivados o no aplican para este modo.</p>}
                   </div>
-                  {(!form.watch('applyDiscount') || editorMode !== 'normal') && <p className="text-xs text-muted-foreground">Los descuentos no aplican o están desactivados.</p>}
                   
                   <div className="flex flex-col space-y-2 md:flex-row md:space-y-0 md:space-x-4 md:items-end"> 
                     <FormField
@@ -1549,11 +1576,53 @@ export function InvoiceEditor() {
                               />
                             </FormControl>
                           </div>
-                          {(editorMode !== 'normal' || !form.watch('applyTax')) && <p className="text-xs text-muted-foreground mt-1">El IVA no aplica o está desactivado.</p>}
+                          {(editorMode !== 'normal' || !form.watch('applyTax')) && <p className="text-xs text-muted-foreground mt-1">El IVA está desactivado o no aplica para este modo.</p>}
                           <FormMessage />
                         </FormItem>
                       )}
                     />
+                  </div>
+
+                  <div>
+                    <FormField
+                      control={form.control}
+                      name="applyWarranty"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center space-x-2 space-y-0">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              disabled={editorMode !== 'normal'}
+                              id="applyWarrantyCheckbox"
+                            />
+                          </FormControl>
+                          <FormLabel htmlFor="applyWarrantyCheckbox" className="font-normal cursor-pointer !mt-0">
+                            Aplicar Nota de Garantía
+                          </FormLabel>
+                        </FormItem>
+                      )}
+                    />
+                    {form.watch('applyWarranty') && editorMode === 'normal' && (
+                      <FormField
+                        control={form.control}
+                        name="warrantyText"
+                        render={({ field }) => (
+                          <FormItem className="mt-2 pl-6">
+                            <FormLabel htmlFor="warrantyText">Texto de la Garantía</FormLabel>
+                            <FormControl>
+                              <Textarea 
+                                id="warrantyText"
+                                placeholder="Ej: Garantía válida por 30 días contra defectos de fábrica."
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+                    {(!form.watch('applyWarranty') || editorMode !== 'normal') && <p className="text-xs text-muted-foreground mt-1">La garantía está desactivada o no aplica para este modo.</p>}
                   </div>
                   
                   <FormField
@@ -1573,7 +1642,7 @@ export function InvoiceEditor() {
                       render={({ field }) => (
                           <FormItem>
                               <FormLabel>Notas Adicionales (Opcional)</FormLabel>
-                              <FormControl><Textarea {...field} placeholder="Ej: Garantía válida por 30 días." /></FormControl>
+                              <FormControl><Textarea {...field} placeholder="Ej: Pago parcial recibido." /></FormControl>
                               <FormMessage />
                           </FormItem>
                       )}
@@ -1609,4 +1678,3 @@ export function InvoiceEditor() {
     </div>
   );
 }
-

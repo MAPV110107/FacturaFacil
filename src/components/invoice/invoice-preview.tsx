@@ -4,7 +4,7 @@
 import type { Invoice, InvoiceItem, CompanyDetails, CustomerDetails, PaymentDetails } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Printer } from "lucide-react";
+import { Printer, ShieldCheck } from "lucide-react"; // Added ShieldCheck
 import { SENIAT_TEXT, CURRENCY_SYMBOL, FISCAL_PRINTER_LINE_WIDTH } from "@/lib/constants";
 import React from "react";
 import { cn } from "@/lib/utils";
@@ -212,6 +212,12 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
         <div className="text-center mt-3">
           <p>{invoice.thankYouMessage || (isReturn ? "Devolución procesada." : isDebtPayment ? "Abono registrado." : isCreditDeposit ? "Depósito registrado." : "¡Gracias por su compra!")}</p>
           {invoice.notes && <p className="text-xs italic mt-1">{invoice.notes}</p>}
+          {invoice.warrantyText && (
+            <div className="mt-2 text-xs italic border-t border-dashed pt-1">
+              <p className="font-semibold">NOTA DE GARANTÍA:</p>
+              <p>{invoice.warrantyText}</p>
+            </div>
+          )}
         </div>
 
       </CardContent>
@@ -224,4 +230,3 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
     </Card>
   );
 }
-
