@@ -2,14 +2,14 @@
 "use client";
 // No static import of html2pdf here
 import { useState } from "react";
-import { Button } from "@/components/ui/button"; // Using ShadCN Button for consistency
+import { Button } from "@/components/ui/button"; 
 import { Printer, FileText } from "lucide-react";
 
 export default function FacturaPrintControls() {
   const [formato, setFormato] = useState<"a4" | "80mm">("a4");
   const [isPrinting, setIsPrinting] = useState(false);
 
-  const printFactura = async () => { // Made async
+  const printFactura = async () => { 
     const element = document.getElementById("factura");
     if (!element) {
       console.error("Elemento #factura no encontrado.");
@@ -18,6 +18,8 @@ export default function FacturaPrintControls() {
     }
 
     setIsPrinting(true);
+    const pdfClass = formato === "80mm" ? "printing-80mm" : "printing-a4";
+    document.documentElement.classList.add(pdfClass);
 
     try {
       // Dynamically import html2pdf.js
@@ -27,11 +29,12 @@ export default function FacturaPrintControls() {
         filename: `factura_${formato}.pdf`,
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: {
-          scale: 2,
+          scale: formato === "a4" ? 2 : 3, // Higher scale for 80mm for better text rendering if needed
           logging: true,
           useCORS: true,
           scrollX: 0,
-          scrollY: -window.scrollY
+          scrollY: -window.scrollY,
+          // It's important that #factura is styled by `html.printing-xxx` before this runs
         },
         pagebreak: { mode: ['avoid-all', 'css', 'legacy'] as any[] }
       };
@@ -40,7 +43,7 @@ export default function FacturaPrintControls() {
 
       if (formato === "a4") {
         specificOptions = {
-          margin: [10, 10, 10, 10], // top, left, bottom, right in mm
+          margin: [10, 10, 10, 10], 
           jsPDF: {
             unit: "mm",
             format: "a4",
@@ -49,24 +52,28 @@ export default function FacturaPrintControls() {
         };
       } else { // 80mm
         specificOptions = {
-          margin: [2, 2, 2, 2], // Minimal margin for thermal printers
+          margin: [2, 2, 2, 2], 
           jsPDF: {
             unit: "mm",
-            format: [80, 297], // Width 80mm, height can be auto or a large value like 297 (A4 height)
+            format: [80, 297], // Width 80mm, height can be "auto" or large like A4 height
             orientation: "portrait"
           }
         };
       }
 
       const options = { ...commonOptions, ...specificOptions };
+      
+      // Ensure styles are applied before capture
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      // html2pdf().set().from().save() returns a Promise
+
       await html2pdf().from(element).set(options).save();
 
     } catch (error) {
       console.error("Error al cargar o generar el PDF:", error);
       alert("Hubo un error al generar el PDF. Revise la consola para más detalles.");
     } finally {
+      document.documentElement.classList.remove(pdfClass);
       setIsPrinting(false);
     }
   };

@@ -140,7 +140,7 @@ body {
   * {
     border-width: 0 !important;
     margin: 0 !important;
-    /* padding: 0 !important; --- REMOVED THIS LINE in a previous iteration --- */
+    /* padding: 0 !important; -- REMOVED this specific line in a previous iteration */
     box-shadow: none !important;
     background: transparent !important;
     color: black !important;
@@ -311,76 +311,73 @@ body {
 }
 
 /* Estilos A4 para impresión (usados por html2pdf en page.tsx) */
-@media print and (width: 210mm) {
-  @page a4-page { /* Renamed @page rule */
-    size: A4;
-    margin: 10mm;
-  }
-
-  html.printing-a4, body.printing-a4 { /* Apply to html/body when html2pdf adds this class */
-    width: 210mm; 
-    height: 297mm; 
-    margin: 0 !important;
-    padding: 0 !important;
-    background: white !important;
-    color: black !important;
-    font-size: 10pt !important;
-  }
-
-  body.printing-a4 #factura {
-    width: 190mm !important; /* 210mm - 2*10mm de margen */
-    min-height: 277mm !important; /* Ensures content fills page if short */
-    margin: 0 !important; 
-    padding: 0 !important; 
-    box-shadow: none !important;
-    border: none !important;
-  }
+html.printing-a4 #factura {
+  width: 190mm !important; /* 210mm - 2*10mm de margen jsPDF */
+  padding: 0 !important; 
+  margin: 0 auto !important; /* Centrar en el PDF si es necesario */
+  box-shadow: none !important;
+  border: none !important;
+  font-size: 10pt !important; /* Tamaño de fuente base para A4 */
+  line-height: 1.4 !important;
 }
+html.printing-a4 {
+  background: white !important; /* Fondo para el PDF */
+}
+html.printing-a4 * {
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+}
+
 
 /* Estilos 80mm para impresión (usados por html2pdf en page.tsx) */
-@media print and (width: 80mm) {
-  @page thermal-page { /* Renamed @page rule */
-    size: 80mm auto; 
-    margin: 0mm; 
-  }
-
-  html.printing-80mm, body.printing-80mm { /* Apply to html/body when html2pdf adds this class */
-    width: 80mm !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    background: white !important;
-    color: black !important;
-    font-size: 9pt !important; 
-    line-height: 1.2 !important;
-  }
-
-  body.printing-80mm #factura {
-    width: 72mm !important; /* Example: 80mm - (2*4mm internal padding if html2pdf adds its own margins) */
-    margin: 0 auto !important; 
-    padding: 0 !important; 
-    box-shadow: none !important;
-    border: none !important;
-  }
-  
-  body.printing-80mm #factura h2 {
-    font-size: 1.2em !important;
-  }
-  body.printing-80mm #factura h3 {
-    font-size: 1.1em !important;
-  }
-  body.printing-80mm #factura p, 
-  body.printing-80mm #factura td, 
-  body.printing-80mm #factura th {
-    font-size: 0.95em !important;
-    line-height: 1.1 !important;
-  }
-  body.printing-80mm #factura .text-xs {
-      font-size: 0.85em !important;
-  }
+html.printing-80mm #factura {
+  width: 72mm !important; /* 80mm - (2*jsPDF_margin) - (2*internal_padding_if_any) */
+  padding: 0 !important; /* El padding de InvoicePreview (5mm) ya está dentro de su 78mm */
+  margin: 0 auto !important; /* Centrar en el PDF de 80mm */
+  box-shadow: none !important;
+  border: none !important;
+  font-size: 9pt !important; /* Tamaño de fuente base para 80mm */
+  line-height: 1.2 !important;
+}
+html.printing-80mm {
+  background: white !important; /* Fondo para el PDF */
+}
+/* Estilos más específicos para 80mm si es necesario ajustar InvoicePreview aún más */
+html.printing-80mm #factura .receipt-font {
+  font-size: 9pt !important; /* Asegurar que el contenido interno también use 9pt */
+  line-height: 1.2 !important;
+  /* El padding de 5mm de InvoicePreview.card se mantiene, lo que es bueno */
+}
+html.printing-80mm #factura .receipt-font [data-company-details-block] > img[data-ai-hint~="company logo"] {
+  max-height: 12mm !important; /* Un poco más pequeño para 80mm */
+}
+html.printing-80mm #factura .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] {
+  grid-template-columns: 2fr 0.7fr 1fr 1fr !important; /* Ajustar columnas si es necesario */
+  gap: 0.3mm 0.8mm !important;
+}
+html.printing-80mm * {
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
 }
 
+
+/* @page rules for browser's direct print, html2pdf uses jsPDF options for page size/margins */
+@page a4-page { /* Renamed @page rule */
+  size: A4;
+  margin: 10mm;
+}
+@page thermal-page { /* Renamed @page rule */
+  size: 80mm auto; 
+  margin: 0mm; 
+}
+
+
 /* Para ocultar los controles de impresión de la página de prueba cuando html2pdf está activo */
-.html2pdf__container .print-controls-container { /* Assuming FacturaPrintControls adds this class to its div */
+/* Tambien oculta header/footer globales durante la generacion de PDF */
+.printing-a4 .print-controls-container,
+.printing-80mm .print-controls-container,
+.printing-a4 header.sticky, .printing-a4 body > div > footer,
+.printing-80mm header.sticky, .printing-80mm body > div > footer {
   display: none !important;
 }
 
