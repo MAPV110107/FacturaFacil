@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -113,7 +114,7 @@ body {
   /* body ya está configurado arriba */
 }
 
-/* PRINT STYLES */
+/* PRINT STYLES - AGGRESSIVE RESET AND REBUILD */
 @media print {
   html, body {
     width: 100% !important;
@@ -130,11 +131,16 @@ body {
     border: none !important;
   }
 
-  .no-print, body > header, body > footer, body > div > header, body > div > footer, .lg\:col-span-1.space-y-4.sticky.top-20, div[data-invoice-preview-header] {
+  /* Hide everything except the main content's direct parent for the invoice page */
+  body > *:not(div:first-child), 
+  body > div:first-child > *:not(main),
+  .no-print, 
+  body > header, body > footer, body > div > header, body > div > footer,
+  div[data-invoice-preview-header] {
     display: none !important;
   }
   
-  body > div:first-child > main { /* Target the main content area */
+  body > div:first-child > main { /* Target the main content area for invoice */
     padding: 0 !important;
     margin: 0 !important;
     width: auto !important; /* Let it be natural or controlled by child */
@@ -146,25 +152,26 @@ body {
     box-shadow: none !important;
   }
 
+  /* The actual receipt card */
   div[data-invoice-preview-container].card {
-    display: block !important;
-    width: 78mm !important; /* Fixed width for thermal roll / base for A4 scaling */
+    display: block !important; /* Ensure it's a block for margin auto to work */
+    width: 78mm !important; 
     min-width: 78mm !important; 
     max-width: 78mm !important; 
-    height: auto !important; /* Height adjusts to content */
-    margin: 0 auto !important; /* Center on page if A4 */
+    height: auto !important; 
+    margin: 0 auto !important; /* Center on page if A4/Letter */
     padding: 0 !important;
     border: none !important;
     box-shadow: none !important;
     border-radius: 0 !important;
     background-color: white !important;
-    overflow: visible !important; /* Allow content to flow naturally */
-    page-break-inside: avoid !important; /* Try to keep receipt on one page if possible */
+    overflow: visible !important;
+    page-break-inside: avoid !important;
   }
   
-  /* Make sure CardContent inside the preview also has no extra styling */
+  /* The content wrapper inside the card */
   div[data-invoice-preview-container].card > .receipt-font {
-    padding: 4mm !important; /* Internal padding for receipt content */
+    padding: 3mm !important; /* Internal padding for receipt content */
     margin: 0 !important;
     border: none !important;
     box-shadow: none !important;
@@ -173,73 +180,101 @@ body {
     box-sizing: border-box !important;
   }
 
-  /* Reset styles for elements within the receipt */
-  .receipt-font, .receipt-font *, .receipt-font p, .receipt-font div, .receipt-font span, .receipt-font hr, .receipt-font table, .receipt-font tbody, .receipt-font tr, .receipt-font td, .receipt-font th {
+  /* Universal reset for elements INSIDE the receipt content */
+  .receipt-font, .receipt-font *, .receipt-font p, .receipt-font div, .receipt-font span, .receipt-font hr, .receipt-font table, .receipt-font tbody, .receipt-font tr, .receipt-font td, .receipt-font th, .receipt-font img {
     font-family: 'Courier New', Courier, monospace !important;
     font-size: 9pt !important;
     line-height: 1.2 !important;
     color: black !important;
-    background-color: transparent !important; /* Ensure no accidental backgrounds */
+    background-color: transparent !important;
     text-shadow: none !important;
-    border: none !important; /* Remove all borders from children unless specified */
+    border: none !important; /* Aggressively remove all borders */
     box-shadow: none !important;
-    margin-bottom: 0.5px !important; 
+    margin: 0 !important; /* Reset margins for tighter control */
+    padding: 0 !important; /* Reset paddings */
+    border-radius: 0 !important;
   }
-
+  
+  /* Re-apply minimal margins for specific elements if needed */
+   .receipt-font p, .receipt-font div {
+     margin-bottom: 0.5px !important; 
+   }
+  .receipt-font .text-center { text-align: center !important; }
   .receipt-font .text-lg { font-size: 11pt !important; }
   .receipt-font .text-sm { font-size: 9pt !important; }
   .receipt-font .text-xs { font-size: 8pt !important; }
   .receipt-font .font-bold { font-weight: bold !important; }
+  .receipt-font .font-semibold { font-weight: 600 !important; } /* Use a numeric value for semibold */
+  .receipt-font .italic { font-style: italic !important; }
   .receipt-font .truncate { 
     overflow: visible !important; 
     white-space: normal !important; 
     word-break: break-word !important; 
   }
-  .receipt-font .my-1, .receipt-font .my-2 {
-    margin-top: 2px !important;
-    margin-bottom: 2px !important;
-  }
-  
+  .receipt-font .my-1 { margin-top: 1mm !important; margin-bottom: 1mm !important; }
+  .receipt-font .my-2 { margin-top: 2mm !important; margin-bottom: 2mm !important; }
+  .receipt-font .mb-1 { margin-bottom: 1mm !important; }
+  .receipt-font .mb-2 { margin-bottom: 2mm !important; }
+  .receipt-font .mt-1 { margin-top: 1mm !important; }
+  .receipt-font .mt-2 { margin-top: 2mm !important; }
+  .receipt-font .mt-3 { margin-top: 3mm !important; }
+  .receipt-font .pt-1 { padding-top: 1mm !important; }
+
   /* Dotted line specific style */
   .receipt-font .DottedLine { 
     border-style: dashed !important;
     border-width: 1px 0 0 0 !important; /* Only top border */
     border-color: black !important;
-    height: 0px !important;
+    height: 0px !important; /* HR has no height if only top/bottom border */
     margin: 1mm 0 !important; /* Consistent small margin */
+    padding: 0 !important;
+    background-color: transparent !important;
   }
 
-  /* Grid for item lines - Reverted to grid, simpler for this context */
+  /* Grid for item lines */
   .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] {
     display: grid !important;
-    grid-template-columns: 2fr 1fr 1fr 1fr !important; /* Explicit column definition */
+    grid-template-columns: 2fr 1fr 1fr 1fr !important; 
     width: 100% !important;
-    gap: 2px !important; /* Minimal gap */
+    gap: 1mm !important; /* Minimal gap */
+    padding: 0.5mm 0 !important;
   }
   .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div {
-    padding: 0 !important; /* Minimal padding for cells */
-    word-break: break-word; /* Allow long words to break */
+    padding: 0 !important; 
+    word-break: break-word !important; 
+    text-align: left !important; /* Default for description */
   }
-  .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div:nth-child(n+2) { /* Align right for numeric columns */
+  /* Align numeric columns (Cant, P.Unit, Total) to the right */
+  .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div:nth-child(2),
+  .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div:nth-child(3),
+  .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div:nth-child(4) {
     text-align: right !important;
   }
 
+
   /* Watermark and Logo */
-  .print-receipt .watermark-text {
+  .receipt-font .watermark-text { /* Target within receipt-font if it's there */
     font-size: 30pt !important; 
     opacity: 0.08 !important; 
     color: #999999 !important;
     transform: rotate(-35deg) translateY(-20px) translateX(-20px) !important;
+    position: absolute !important; /* Ensure it's positioned correctly */
+    z-index: -1 !important; /* Behind content */
   }
 
-  .print-receipt img[data-ai-hint~="company logo"] {
-     max-height: 25mm !important;
-     max-width: 100% !important; /* Use 100% of the 68mm (78mm - padding) */
-     width: auto; /* Maintain aspect ratio */
+  .receipt-font img[data-ai-hint~="company logo"] { /* Target within receipt-font */
+     max-height: 20mm !important; /* Slightly reduced for better spacing */
+     max-width: 100% !important; 
+     width: auto !important; 
      object-fit: contain !important;
-     margin-bottom: 2mm !important;
+     margin: 1mm auto 1mm auto !important; /* Consistent margins */
      display: block !important;
-     margin-left: auto !important;
-     margin-right: auto !important;
   }
+  
+  /* Space out sections clearly */
+  .receipt-font > div:not(:last-child) { /* Add some space between direct div children of receipt-font */
+    margin-bottom: 1.5mm !important;
+  }
+  .receipt-font .space-y-0\.5 > * + * { margin-top: 0.5mm !important; } /* For fine-grained spacing */
+  .receipt-font .space-y-1 > * + * { margin-top: 1mm !important; }
 }

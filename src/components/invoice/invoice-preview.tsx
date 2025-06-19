@@ -27,7 +27,7 @@ const formatLine = (left: string, right: string, width: number = FISCAL_PRINTER_
   return `${sanitizedLeft}${' '.repeat(spaces)}${sanitizedRight}`;
 };
 
-const DottedLine = () => <hr className="DottedLine border-t border-dashed border-foreground my-1" />;
+const DottedLine = () => <hr className="DottedLine my-1" />; // Removed border classes, will be styled in CSS
 
 export function InvoicePreview({ invoice, companyDetails, className }: InvoicePreviewProps) {
   
@@ -105,12 +105,13 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
         <div className="text-center mb-1">
           <p className="font-bold text-lg my-1">{SENIAT_TEXT}</p>
         </div>
+        
         <DottedLine />
 
         <div className="text-center my-2">
           {c?.logoUrl && c.logoUrl !== 'https://placehold.co/150x50.png' && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={c.logoUrl} alt={`${c.name} logo`} className="max-h-12 mx-auto mb-2 object-contain print-only" data-ai-hint="company logo"/>
+            <img src={c.logoUrl} alt={`${c.name} logo`} className="mx-auto mb-2 object-contain" data-ai-hint="company logo" style={{maxHeight: '50px'}}/>
           )}
           <p className="font-bold text-sm">{c?.name || "Nombre de Empresa"}</p>
           <p>RIF: {c?.rif || "J-00000000-0"}</p>
@@ -143,12 +144,14 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
         <DottedLine />
 
         <div className="mb-1">
-          <div className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-x-1 font-semibold pb-0.5 mb-0.5"> {/* Removed border-b border-dashed */}
+          {/* Item Table Header */}
+          <div className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-x-1 font-semibold pb-0.5 mb-0.5">
             <div className="text-left">Descrip.</div>
             <div className="text-right">Cant.</div>
             <div className="text-right">P.Unit</div>
             <div className="text-right">Total</div>
           </div>
+          {/* Item Rows */}
           {items.map((item) => (
             <div key={item.id} className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-x-1 leading-tight">
               <div className="text-left truncate">{item.description}</div>
@@ -216,7 +219,8 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
         </div>
         
         {invoice.warrantyText && (
-          <div className="text-center mt-2 text-xs italic border-t border-dashed pt-1">
+          <div className="text-center mt-2 pt-1"> {/* Removed border, rely on DottedLine if needed before this */}
+            <DottedLine />
             <p className="font-semibold">NOTA DE GARANTÍA:</p>
             <p>{invoice.warrantyText}</p>
           </div>
