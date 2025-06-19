@@ -116,6 +116,17 @@ body {
 
 /* PRINT STYLES - AGGRESSIVE RESET AND REBUILD */
 @media print {
+  /* Ocultar elementos específicos no deseados para la impresión */
+  .no-print,
+  header[class*="sticky"], /* SiteHeader */
+  body > div > footer, /* Footer global del AppLayout */
+  div[data-invoice-preview-header], /* El CardHeader de la previsualización en pantalla */
+  main > form[class*="lg:col-span-2"] /* El formulario de edición de factura */
+  {
+    display: none !important;
+  }
+
+  /* Resetear html y body para la impresión */
   html, body {
     width: 100% !important;
     height: auto !important;
@@ -130,20 +141,13 @@ body {
     box-shadow: none !important;
     border: none !important;
   }
-
-  /* Hide everything except the main content's direct parent for the invoice page */
-  body > *:not(div:first-child), 
-  body > div:first-child > *:not(main),
-  .no-print, 
-  body > header, body > footer, body > div > header, body > div > footer,
-  div[data-invoice-preview-header] {
-    display: none !important;
-  }
   
-  body > div:first-child > main { /* Target the main content area for invoice */
+  /* Asegurar que el contenedor <main> se comporte bien */
+  main {
+    display: block !important; /* Asegurar que es un bloque */
     padding: 0 !important;
     margin: 0 !important;
-    width: auto !important; /* Let it be natural or controlled by child */
+    width: 100% !important; /* Que ocupe el ancho para el centrado del hijo */
     max-width: none !important;
     height: auto !important;
     overflow: visible !important;
@@ -152,14 +156,15 @@ body {
     box-shadow: none !important;
   }
 
-  /* The actual receipt card */
+  /* El contenedor de la factura (InvoicePreview Card) es el único que debe "existir" visualmente */
+  /* y debe estar centrado si el papel es más ancho que 78mm */
   div[data-invoice-preview-container].card {
-    display: block !important; /* Ensure it's a block for margin auto to work */
+    display: block !important;
     width: 78mm !important; 
     min-width: 78mm !important; 
     max-width: 78mm !important; 
     height: auto !important; 
-    margin: 0 auto !important; /* Center on page if A4/Letter */
+    margin: 0 auto !important; /* Centrado horizontal en la hoja (ej. A4) */
     padding: 0 !important;
     border: none !important;
     box-shadow: none !important;
@@ -169,48 +174,49 @@ body {
     page-break-inside: avoid !important;
   }
   
-  /* The content wrapper inside the card */
+  /* Contenido interno del recibo */
   div[data-invoice-preview-container].card > .receipt-font {
-    padding: 3mm !important; /* Internal padding for receipt content */
+    padding: 3mm !important; /* Padding interno del recibo */
     margin: 0 !important;
     border: none !important;
     box-shadow: none !important;
     background-color: white !important;
-    width: 100% !important; /* Full width of its 78mm parent */
+    width: 100% !important; /* Ocupa el 100% de su padre de 78mm */
     box-sizing: border-box !important;
   }
 
-  /* Universal reset for elements INSIDE the receipt content */
+  /* Estilos de texto universales para el contenido del recibo */
   .receipt-font, .receipt-font *, .receipt-font p, .receipt-font div, .receipt-font span, .receipt-font hr, .receipt-font table, .receipt-font tbody, .receipt-font tr, .receipt-font td, .receipt-font th, .receipt-font img {
     font-family: 'Courier New', Courier, monospace !important;
-    font-size: 9pt !important;
+    font-size: 9pt !important; /* Ajustar si es necesario, 8pt-10pt es común */
     line-height: 1.2 !important;
     color: black !important;
     background-color: transparent !important;
     text-shadow: none !important;
-    border: none !important; /* Aggressively remove all borders */
+    border: none !important; /* Quitar todos los bordes internos */
     box-shadow: none !important;
-    margin: 0 !important; /* Reset margins for tighter control */
-    padding: 0 !important; /* Reset paddings */
+    margin: 0 !important; /* Resetear márgenes */
+    padding: 0 !important; /* Resetear paddings */
     border-radius: 0 !important;
   }
   
-  /* Re-apply minimal margins for specific elements if needed */
+  /* Re-aplicar márgenes/paddings mínimos para legibilidad dentro del recibo */
    .receipt-font p, .receipt-font div {
-     margin-bottom: 0.5px !important; 
+     margin-bottom: 0.5px !important; /* Espacio mínimo entre párrafos/divs */
    }
   .receipt-font .text-center { text-align: center !important; }
   .receipt-font .text-lg { font-size: 11pt !important; }
   .receipt-font .text-sm { font-size: 9pt !important; }
   .receipt-font .text-xs { font-size: 8pt !important; }
   .receipt-font .font-bold { font-weight: bold !important; }
-  .receipt-font .font-semibold { font-weight: 600 !important; } /* Use a numeric value for semibold */
+  .receipt-font .font-semibold { font-weight: 600 !important; } /* Usar valor numérico para semibold */
   .receipt-font .italic { font-style: italic !important; }
   .receipt-font .truncate { 
-    overflow: visible !important; 
+    overflow: visible !important; /* Mostrar todo el texto en impresión */
     white-space: normal !important; 
     word-break: break-word !important; 
   }
+  /* Márgenes específicos con unidades de impresión */
   .receipt-font .my-1 { margin-top: 1mm !important; margin-bottom: 1mm !important; }
   .receipt-font .my-2 { margin-top: 2mm !important; margin-bottom: 2mm !important; }
   .receipt-font .mb-1 { margin-bottom: 1mm !important; }
@@ -220,31 +226,31 @@ body {
   .receipt-font .mt-3 { margin-top: 3mm !important; }
   .receipt-font .pt-1 { padding-top: 1mm !important; }
 
-  /* Dotted line specific style */
+  /* Estilo específico para la línea punteada (<hr class="DottedLine">) */
   .receipt-font .DottedLine { 
     border-style: dashed !important;
-    border-width: 1px 0 0 0 !important; /* Only top border */
+    border-width: 1px 0 0 0 !important; /* Solo borde superior */
     border-color: black !important;
-    height: 0px !important; /* HR has no height if only top/bottom border */
-    margin: 1mm 0 !important; /* Consistent small margin */
+    height: 0px !important; /* hr con solo borde superior/inferior no necesita altura */
+    margin: 1mm 0 !important; /* Margen consistente */
     padding: 0 !important;
     background-color: transparent !important;
   }
 
-  /* Grid for item lines */
+  /* Grid para líneas de ítems: nombre del producto, cantidad, precio unitario, total */
   .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] {
     display: grid !important;
-    grid-template-columns: 2fr 1fr 1fr 1fr !important; 
+    grid-template-columns: 2fr 1fr 1fr 1fr !important; /* Descripción más ancha */
     width: 100% !important;
-    gap: 1mm !important; /* Minimal gap */
-    padding: 0.5mm 0 !important;
+    gap: 1mm !important; /* Espacio mínimo entre columnas */
+    padding: 0.5mm 0 !important; /* Padding vertical ligero para cada línea */
   }
   .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div {
     padding: 0 !important; 
-    word-break: break-word !important; 
-    text-align: left !important; /* Default for description */
+    word-break: break-word !important; /* Evitar que textos largos rompan el layout */
+    text-align: left !important; /* Alineación por defecto para descripción */
   }
-  /* Align numeric columns (Cant, P.Unit, Total) to the right */
+  /* Alineación a la derecha para columnas numéricas */
   .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div:nth-child(2),
   .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div:nth-child(3),
   .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div:nth-child(4) {
@@ -252,31 +258,43 @@ body {
   }
 
 
-  /* Watermark and Logo */
-  .receipt-font .watermark-text { /* Target within receipt-font if it's there */
-    font-size: 30pt !important; 
+  /* Watermark (si se usa, debe estar dentro de .receipt-font) */
+  .receipt-font .watermark-text {
+    font-size: 30pt !important; /* Ajustar según necesidad */
     opacity: 0.08 !important; 
-    color: #999999 !important;
-    transform: rotate(-35deg) translateY(-20px) translateX(-20px) !important;
-    position: absolute !important; /* Ensure it's positioned correctly */
-    z-index: -1 !important; /* Behind content */
+    color: #999999 !important; /* Gris claro */
+    transform: rotate(-35deg) translateY(-20px) translateX(-20px) !important; /* Ajustar posición */
+    position: absolute !important;
+    z-index: -1 !important; /* Detrás del contenido */
+    /* Asegurar que el contenedor del watermark permite el posicionamiento absoluto */
   }
 
-  .receipt-font img[data-ai-hint~="company logo"] { /* Target within receipt-font */
-     max-height: 20mm !important; /* Slightly reduced for better spacing */
+  /* Logo de la Empresa */
+  .receipt-font img[data-ai-hint~="company logo"] {
+     max-height: 20mm !important; /* Altura máxima del logo */
      max-width: 100% !important; 
      width: auto !important; 
      object-fit: contain !important;
-     margin: 1mm auto 1mm auto !important; /* Consistent margins */
+     margin: 1mm auto 1mm auto !important; /* Márgenes consistentes, centrado */
      display: block !important;
   }
   
-  /* Space out sections clearly */
-  .receipt-font > div:not(:last-child) { /* Add some space between direct div children of receipt-font */
+  /* Espaciado general entre las secciones principales del recibo */
+  .receipt-font > div:not(:last-child) { /* Divs hijos directos de .receipt-font */
     margin-bottom: 1.5mm !important;
   }
-  .receipt-font .space-y-0\.5 > * + * { margin-top: 0.5mm !important; } /* For fine-grained spacing */
+  /* Clases de utilidad para espaciado fino si se usan dentro del recibo */
+  .receipt-font .space-y-0\.5 > * + * { margin-top: 0.5mm !important; }
   .receipt-font .space-y-1 > * + * { margin-top: 1mm !important; }
-}
 
-    
+  /* Contenedor de la previsualización en el editor (el div que es lg:col-span-1) */
+  /* Debe ser visible y ocupar el ancho para que el 'margin: 0 auto' de la factura funcione */
+  main > div.grid > div[data-invoice-preview-wrapper] {
+    display: block !important;
+    position: static !important; /* Quitar sticky para impresión */
+    width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background-color: white !important; /* Fondo blanco para este contenedor también */
+  }
+}
