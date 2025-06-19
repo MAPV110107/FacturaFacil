@@ -5,14 +5,10 @@
 body {
   font-family: 'PT Sans', sans-serif; /* Changed from Arial */
   @apply bg-background text-foreground;
-  /* Removed text-shadow for better readability with theme colors */
 }
 
 /* Ensure buttons with explicit foreground colors (like primary-foreground) render text clearly */
-/* This is mostly handled by the theme variables, but explicit text-shadow was removed above. */
-.btn-primary-text-contrast { /* Example if needed, but usually not with HSL variables */
-  /* color: hsl(var(--primary-foreground)); */
-}
+/* This is mostly handled by the theme variables. */
 
 
 @layer base {
@@ -160,15 +156,15 @@ body {
     width: 78mm !important; /* Fijar el ancho al del recibo térmico */
     min-width: 0 !important; 
     max-width: 78mm !important; /* Asegurar que no exceda 78mm */
-    height: auto !important;
+    height: auto !important; /* Clave para ajuste vertical según contenido */
     margin: 0 auto !important; /* Centrar el bloque de 78mm en la página (A4 o similar) */
     padding: 0 !important; 
-    box-shadow: none !important;
-    border: none !important;
-    border-radius: 0 !important;
+    box-shadow: none !important; /* Sin sombra */
+    border: none !important; /* Sin borde */
+    border-radius: 0 !important; /* Sin bordes redondeados */
     overflow: visible !important; 
-    background-color: white !important;
-    page-break-inside: avoid !important; 
+    background-color: white !important; /* Fondo blanco explícito */
+    page-break-inside: avoid !important; /* Evitar que la factura se corte */
   }
   
   /* Estilos para el contenido del recibo (CardContent con .receipt-font) */
