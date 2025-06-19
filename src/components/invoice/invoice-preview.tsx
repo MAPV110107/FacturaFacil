@@ -4,13 +4,13 @@
 import type { Invoice, InvoiceItem, CompanyDetails, CustomerDetails, PaymentDetails } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Printer, ShieldCheck } from "lucide-react"; 
+import { Printer, ShieldCheck } from "lucide-react";
 import { SENIAT_TEXT, CURRENCY_SYMBOL, FISCAL_PRINTER_LINE_WIDTH } from "@/lib/constants";
 import React from "react";
 import { cn } from "@/lib/utils";
 
 interface InvoicePreviewProps {
-  invoice: Partial<Invoice>; 
+  invoice: Partial<Invoice>;
   companyDetails: CompanyDetails | null;
   className?: string;
 }
@@ -31,7 +31,7 @@ const formatLine = (left: string, right: string, width: number = FISCAL_PRINTER_
 const DottedLine = () => <hr className="DottedLine my-1" />;
 
 export function InvoicePreview({ invoice, companyDetails, className }: InvoicePreviewProps) {
-  
+
   const handlePrint = () => {
     window.print();
   };
@@ -49,14 +49,14 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
   const totalAmount = invoice.totalAmount ?? 0;
   const taxRate = invoice.taxRate ?? 0;
   const amountPaid = invoice.amountPaid ?? 0;
-  
+
   const finalAmountDueForDisplay = invoice.amountDue ?? 0;
 
   const taxableBase = subTotal - discountValue;
   const isReturn = invoice.type === 'return';
   const isDebtPayment = invoice.isDebtPayment ?? false;
   const isCreditDeposit = invoice.isCreditDeposit ?? false;
-  
+
   let documentTitle = "FACTURA";
   let watermarkText = "";
 
@@ -88,13 +88,13 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
   const overpaymentRefunded = overpaymentWasMade && invoice.overpaymentHandling === 'refunded';
 
   return (
-    <Card 
-      className={cn("w-full relative", className)} // Removed shadow-xl
-      data-invoice-preview-container 
+    <Card
+      className={cn("w-full relative", className)} // Removed shadow-xl from here
+      data-invoice-preview-container
     >
       {watermarkText && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 watermark-container">
-          <span 
+          <span
             className="text-6xl sm:text-7xl md:text-8xl font-bold text-destructive/10 transform -rotate-45 opacity-70 select-none watermark-text"
             style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.05)' }}
           >
@@ -106,11 +106,12 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
         <div className="text-center mb-1">
           <p className="font-bold text-lg my-1">{SENIAT_TEXT}</p>
         </div>
-        
+
         <DottedLine />
 
         <div className="text-center my-2">
           {c?.logoUrl && c.logoUrl !== 'https://placehold.co/150x50.png' && (
+            // eslint-disable-next-line @next/next/no-img-element
             <img src={c.logoUrl} alt={`${c.name} logo`} className="mx-auto mb-2 object-contain" data-ai-hint="company logo" style={{maxHeight: '50px'}}/>
           )}
           <p className="font-bold text-sm">{c?.name || "Nombre de Empresa"}</p>
@@ -131,7 +132,7 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
             <p className="text-xs">{formatLine("REF. FACTURA:", originalInvoiceNumber)}</p>
           )}
         </div>
-        
+
         <DottedLine />
 
         <div className="mb-2">
@@ -143,7 +144,7 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
 
         <DottedLine />
 
-        {/* Item Table Header - No explicit borders here, rely on DottedLine */}
+        {/* Item Table Header */}
         <div className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-x-1 font-semibold">
           <div className="text-left">Descrip.</div>
           <div className="text-right">Cant.</div>
@@ -167,17 +168,17 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
           {discountValue > 0 && (
             <p>{formatLine(`DESCUENTO (${discountPercentage.toFixed(2)}%):`, `-${formatCurrency(discountValue)}`)}</p>
           )}
-           {(taxAmount > 0 || isDebtPayment || isCreditDeposit) && ( 
+           {(taxAmount > 0 || isDebtPayment || isCreditDeposit) && (
             <p>{formatLine(`BASE IMPONIBLE:`, formatCurrency(taxableBase))}</p>
           )}
-          {taxAmount > 0 && !isDebtPayment && !isCreditDeposit && ( 
+          {taxAmount > 0 && !isDebtPayment && !isCreditDeposit && (
             <p>{formatLine(`IVA (${(taxRate * 100).toFixed(0)}%):`, formatCurrency(taxAmount))}</p>
           )}
           <p className="font-bold text-sm">{formatLine(isReturn ? "TOTAL CRÉDITO:" : isDebtPayment ? "TOTAL ABONO:" : isCreditDeposit ? "TOTAL DEPÓSITO:" : "TOTAL A PAGAR:", formatCurrency(totalAmount))}</p>
         </div>
-        
+
         {(payments.length > 0) && <DottedLine />}
-        
+
         {payments.length > 0 && (
           <div className="mt-2 space-y-0.5">
             <p className="font-semibold">{isReturn ? "CRÉDITO EMITIDO VÍA:" : isCreditDeposit ? "DEPÓSITO REALIZADO VÍA:" : "FORMA DE PAGO:"}</p>
@@ -187,7 +188,7 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
           </div>
         )}
 
-        
+
         {!isReturn && !isCreditDeposit && (
             <div className="mt-1">
                 <DottedLine />
@@ -203,23 +204,23 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
                 {overpaymentCredited && (
                     <p className="font-semibold">{formatLine("ABONADO A SALDO CLIENTE:", formatCurrency(invoice.overpaymentAmount))}</p>
                 )}
-                {finalAmountDueForDisplay > 0 && !overpaymentWasMade && ( 
+                {finalAmountDueForDisplay > 0 && !overpaymentWasMade && (
                     <p className="font-semibold">{formatLine("MONTO PENDIENTE:", formatCurrency(finalAmountDueForDisplay))}</p>
                 )}
             </div>
         )}
-        
+
         <DottedLine />
 
         <div className="text-center mt-3">
           <p>{invoice.thankYouMessage || (isReturn ? "Devolución procesada." : isDebtPayment ? "Abono registrado." : isCreditDeposit ? "Depósito registrado." : "¡Gracias por su compra!")}</p>
           {invoice.notes && <p className="text-xs italic mt-1">{invoice.notes}</p>}
         </div>
-        
+
         {invoice.warrantyText && (
           <>
             <DottedLine />
-            <div className="text-center mt-2 pt-1"> 
+            <div className="text-center mt-2 pt-1">
               <p className="font-semibold">NOTA DE GARANTÍA:</p>
               <p>{invoice.warrantyText}</p>
             </div>

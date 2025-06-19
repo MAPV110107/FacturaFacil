@@ -41,7 +41,7 @@ body {
     --border: 0 0% 89.8%;
     --input: 0 0% 89.8%;
     --ring: hsl(var(--accent)); /* Anillo ahora usa el acento del tema */
-    
+
     --chart-1: 12 76% 61%;
     --chart-2: 173 58% 39%;
     --chart-3: 197 37% 24%;
@@ -55,7 +55,7 @@ body {
     --sidebar-primary: hsl(var(--primary)); /* Usar el primario del tema */
     --sidebar-primary-foreground: 0 0% 98%; /* Texto claro para elementos primarios del sidebar */
     --sidebar-accent: hsl(var(--accent)); /* Usar el acento del tema */
-    --sidebar-accent-foreground: 0 0% 98%; /* Texto claro para elementos de acento del sidebar */    
+    --sidebar-accent-foreground: 0 0% 98%; /* Texto claro para elementos de acento del sidebar */
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: hsl(var(--accent)); /* Anillo del sidebar usa el acento del tema */
   }
@@ -70,25 +70,25 @@ body {
     --popover: 0 0% 10%; /* Oscuro */
     --popover-foreground: 0 0% 98%; /* Texto claro en popovers */
 
-    --primary: 232 63% 30%; 
-    --primary-foreground: 0 0% 98%; 
+    --primary: 232 63% 30%;
+    --primary-foreground: 0 0% 98%;
 
-    --secondary: 0 0% 14.9%; 
-    --secondary-foreground: 0 0% 98%; 
+    --secondary: 0 0% 14.9%;
+    --secondary-foreground: 0 0% 98%;
 
     --muted: 0 0% 14.9%;
     --muted-foreground: 0 0% 60%; /* Gris más claro para texto atenuado */
 
-    --accent: 230 46% 48%; 
-    --accent-foreground: 0 0% 98%; 
+    --accent: 230 46% 48%;
+    --accent-foreground: 0 0% 98%;
 
-    --destructive: 0 62.8% 30.6%; 
-    --destructive-foreground: 0 0% 98%; 
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
 
     --border: 0 0% 14.9%;
     --input: 0 0% 14.9%;
     --ring: hsl(var(--accent)); /* Anillo ahora usa el acento del tema */
-    
+
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
@@ -121,14 +121,6 @@ body {
     size: auto; /* Important for thermal roll printers */
   }
 
-  /* Ocultar elementos específicos no deseados para la impresión */
-  .no-print,
-  header[class*="sticky"], /* SiteHeader */
-  body > div > footer /* Footer global del AppLayout */
-  {
-    display: none !important;
-  }
-
   /* Resetear html y body para la impresión */
   html, body {
     width: 100% !important;
@@ -144,7 +136,20 @@ body {
     box-shadow: none !important;
     border: none !important;
   }
-  
+
+  /* Ocultar elementos específicos no deseados para la impresión */
+  .no-print,
+  header[class*="sticky"], /* SiteHeader */
+  body > div > footer, /* Footer global del AppLayout */
+  div[data-invoice-preview-header] { /* Encabezado de la tarjeta de previsualización en pantalla */
+    display: none !important;
+  }
+  /* Ocultar el formulario de edición de facturas */
+  main > form[class*="lg:col-span-2"] {
+    display: none !important;
+  }
+
+
   /* Asegurar que el contenedor <main> y el wrapper de la factura se comporten bien */
   main {
     display: block !important;
@@ -154,19 +159,20 @@ body {
     max-width: none !important;
     height: auto !important;
     overflow: visible !important;
-    background-color: white !important;
+    background-color: white !important; /* Asegurar fondo blanco */
     border: none !important;
     box-shadow: none !important;
   }
 
-  /* Contenedor de la previsualización en el editor */
+  /* Contenedor de la previsualización en el editor (el div que es lg:col-span-1 o tiene data-invoice-preview-wrapper) */
+  /* Debe ser visible y ocupar el ancho para que el 'margin: 0 auto' de la factura funcione */
   div[data-invoice-preview-wrapper] {
     display: block !important;
     position: static !important; /* Quitar sticky para impresión */
     width: 100% !important;
     padding: 0 !important;
     margin: 0 !important;
-    background-color: white !important;
+    background-color: white !important; /* Asegurar fondo blanco */
     box-shadow: none !important;
     border: none !important;
   }
@@ -174,10 +180,10 @@ body {
   /* El contenedor de la factura (InvoicePreview Card) */
   div[data-invoice-preview-container].card {
     display: block !important;
-    width: 78mm !important; 
-    min-width: 78mm !important; 
-    max-width: 78mm !important; 
-    height: auto !important; 
+    width: 78mm !important;
+    min-width: 78mm !important;
+    max-width: 78mm !important;
+    height: auto !important;
     margin: 0 auto !important; /* Centrado horizontal en la hoja (ej. A4) */
     padding: 0 !important;
     border: none !important;
@@ -187,7 +193,7 @@ body {
     overflow: visible !important;
     page-break-inside: avoid !important;
   }
-  
+
   /* Contenido interno del recibo */
   div[data-invoice-preview-container].card > .receipt-font {
     padding: 3mm !important; /* Padding interno del recibo */
@@ -213,7 +219,7 @@ body {
     padding: 0 !important; /* Resetear paddings */
     border-radius: 0 !important;
   }
-  
+
   /* Re-aplicar márgenes/paddings mínimos para legibilidad dentro del recibo */
    .receipt-font p, .receipt-font div {
      margin-bottom: 0.5px !important; /* Espacio mínimo entre párrafos/divs */
@@ -225,10 +231,10 @@ body {
   .receipt-font .font-bold { font-weight: bold !important; }
   .receipt-font .font-semibold { font-weight: 600 !important; } /* Usar valor numérico para semibold */
   .receipt-font .italic { font-style: italic !important; }
-  .receipt-font .truncate { 
+  .receipt-font .truncate {
     overflow: visible !important; /* Mostrar todo el texto en impresión */
-    white-space: normal !important; 
-    word-break: break-word !important; 
+    white-space: normal !important;
+    word-break: break-word !important;
   }
   /* Márgenes específicos con unidades de impresión */
   .receipt-font .my-1 { margin-top: 1mm !important; margin-bottom: 1mm !important; }
@@ -241,7 +247,7 @@ body {
   .receipt-font .pt-1 { padding-top: 1mm !important; }
 
   /* Estilo específico para la línea punteada (<hr class="DottedLine">) */
-  .receipt-font .DottedLine { 
+  .receipt-font .DottedLine {
     border-style: dashed !important;
     border-width: 1px 0 0 0 !important; /* Solo borde superior */
     border-color: black !important;
@@ -260,7 +266,7 @@ body {
     padding: 0.5mm 0 !important; /* Padding vertical ligero para cada línea */
   }
   .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div {
-    padding: 0 !important; 
+    padding: 0 !important;
     word-break: break-word !important; /* Evitar que textos largos rompan el layout */
     text-align: left !important; /* Alineación por defecto para descripción */
   }
@@ -275,7 +281,7 @@ body {
   /* Watermark (si se usa, debe estar dentro de .receipt-font) */
   .receipt-font .watermark-text {
     font-size: 30pt !important; /* Ajustar según necesidad */
-    opacity: 0.08 !important; 
+    opacity: 0.08 !important;
     color: #999999 !important; /* Gris claro */
     transform: rotate(-35deg) translateY(-20px) translateX(-20px) !important; /* Ajustar posición */
     position: absolute !important;
@@ -286,13 +292,13 @@ body {
   /* Logo de la Empresa */
   .receipt-font img[data-ai-hint~="company logo"] {
      max-height: 20mm !important; /* Altura máxima del logo */
-     max-width: 100% !important; 
-     width: auto !important; 
+     max-width: 100% !important;
+     width: auto !important;
      object-fit: contain !important;
      margin: 1mm auto 1mm auto !important; /* Márgenes consistentes, centrado */
      display: block !important;
   }
-  
+
   /* Espaciado general entre las secciones principales del recibo */
   .receipt-font > div:not(:last-child) { /* Divs hijos directos de .receipt-font */
     margin-bottom: 1.5mm !important;
@@ -301,5 +307,3 @@ body {
   .receipt-font .space-y-0\.5 > * + * { margin-top: 0.5mm !important; }
   .receipt-font .space-y-1 > * + * { margin-top: 1mm !important; }
 }
-
-    
