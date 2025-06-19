@@ -114,7 +114,7 @@ body {
   /* body ya está configurado arriba */
 }
 
-/* PRINT STYLES - RESTRUCTURING V4 */
+/* PRINT STYLES - RESTRUCTURING V5 */
 @media print {
   @page {
     margin: 0mm !important; /* Elimina márgenes de la página de impresión del navegador */
@@ -129,7 +129,7 @@ body {
     background: white !important;
     color: black !important;
     font-family: 'PT Sans', sans-serif !important;
-    font-size: 10pt !important;
+    font-size: 10pt !important; /* Adjusted base font size for print */
     font-weight: bold !important;
     -webkit-font-smoothing: antialiased !important;
     -moz-osx-font-smoothing: grayscale !important;
@@ -158,9 +158,10 @@ body {
   header[class*="sticky"],
   body > div > footer,
   .no-print,
-  div[data-invoice-preview-header],
-  main > div.space-y-8 > div.bg-gradient-to-r.from-primary\/10.to-accent\/10, /* Título Nueva Factura */
-  main > div.space-y-8 > .card.shadow-lg.no-print /* Título Devoluciones */
+  div[data-invoice-preview-header], /* La card de "Previsualización" en el editor */
+  /* Ocultar la Card de título en la página de nueva factura */
+  main > div.space-y-8 > div.bg-gradient-to-r.from-primary\/10.to-accent\/10,
+  main > div.space-y-8 > .card.shadow-lg.no-print /* Título en página de devoluciones */
    {
     display: none !important;
   }
@@ -185,21 +186,21 @@ body {
     background-color: white !important;
     page-break-inside: avoid !important;
     margin: 0 auto !important; /* Centra el "recibo" si el papel es más ancho (ej. PDF A4) */
-    padding: 0 !important; /* El Card en sí no tiene padding */
+    padding: 5mm !important; /* GLOBAL PADDING FOR THE ENTIRE RECEIPT */
+    box-sizing: border-box !important;
   }
 
   /* Área de contenido real DENTRO del Card (nuestro "recibo") */
+  /* This div no longer needs its own direct padding, it inherits from the card */
   div[data-invoice-preview-container].card > .receipt-font {
-    position: relative !important; /* Para posicionar las DottedLine adecuadamente si es necesario, pero ahora están en flujo */
-    padding: 3mm !important;       /* Margen interno para el TEXTO */
-    width: 100% !important;         /* Ocupa el 100% del Card (78mm) */
+    width: 100% !important; /* Ocupa el 100% del content-box del Card (78mm - 2*5mm padding) */
     font-family: 'PT Sans', sans-serif !important;
     font-size: 10pt !important;
     font-weight: bold !important;
     color: black !important;
     line-height: 1.3 !important;
     word-break: break-word !important; /* Ajuste de texto largo */
-    box-sizing: border-box !important; /* padding se incluye en width:100% */
+    box-sizing: border-box !important;
   }
 
   /* Reaplicar márgenes/paddings mínimos para legibilidad DENTRO del .receipt-font */
@@ -240,28 +241,27 @@ body {
     line-height: 1.1 !important;
   }
 
-  /* Líneas Punteadas (.DottedLine) */
+  /* Líneas Punteadas (.DottedLine) - Now contained within the card's padding */
   .receipt-font .DottedLine {
-    display: block !important; /* Ensure it's a block element */
-    position: relative !important; /* Keep in normal document flow */
-    height: 0px !important; /* The HR element itself has no height */
-    border: none !important; /* Reset all borders first */
-    border-top: 1px dashed black !important; /* The visible line */
-    background: none !important; /* No background for HR */
-    padding: 0 !important; /* No padding for HR */
-    margin-top: 2mm !important;    /* Space above the line, overrides global reset for HR */
-    margin-bottom: 2mm !important; /* Space below the line, overrides global reset for HR */
-    margin-left: -3mm !important;  /* Extend to the left into .receipt-font's 3mm padding */
-    margin-right: -3mm !important; /* Extend to the right into .receipt-font's 3mm padding */
-    /* width: auto; by default, a block element takes 100% of parent's content-box.
-       The negative margins then visually extend the border. */
+    display: block !important;
+    position: relative !important; /* Kept in flow */
+    height: 0px !important;
+    border: none !important;
+    border-top: 1px dashed black !important;
+    background: none !important;
+    padding: 0 !important;
+    margin-top: 2mm !important;
+    margin-bottom: 2mm !important;
+    margin-left: 0 !important; /* No negative margins needed */
+    margin-right: 0 !important;
+    width: 100% !important; /* Will span the width of .receipt-font */
   }
 
   /* Estilos para la tabla de ítems */
   .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] {
     display: grid !important;
     grid-template-columns: 2fr 0.8fr 1.1fr 1.1fr !important;
-    width: 100% !important; /* Ocupa el ancho del .receipt-font (que ya tiene padding) */
+    width: 100% !important;
     gap: 0.5mm 1mm !important;
     padding: 0.5mm 0 !important;
     align-items: baseline;
@@ -302,5 +302,4 @@ body {
   }
 }
     
-
     
