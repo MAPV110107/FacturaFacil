@@ -204,7 +204,8 @@ body {
 
   /* Estilo para el área de contenido real dentro de la factura */
   div[data-invoice-preview-container].card > .receipt-font {
-    padding: 5mm !important; /* Padding interno para el contenido de la factura (margen del texto) */
+    position: relative !important; /* Para posicionamiento absoluto de DottedLine */
+    padding: 15px !important;     /* Padding interno para el contenido de la factura (margen del texto) */
     width: 100% !important;
     box-sizing: border-box !important;
     font-family: 'PT Sans', sans-serif !important;
@@ -224,7 +225,7 @@ body {
   .receipt-font tr,
   .receipt-font td,
   .receipt-font th,
-  .receipt-font hr,
+  /* hr is handled separately by .DottedLine */
   .receipt-font img {
     font-family: inherit !important;
     font-size: inherit !important;
@@ -282,15 +283,21 @@ body {
   }
 
   .receipt-font .DottedLine {
+    position: absolute !important;
+    left: -15px !important; /* Coincide con el padding de .receipt-font */
+    right: -15px !important;/* Coincide con el padding de .receipt-font */
+    width: auto !important; /* Ancho automático con left/right */
+    height: 0px !important;
     border-style: dashed !important;
     border-width: 1px 0 0 0 !important; /* Solo borde superior */
     border-color: black !important;
-    height: 0px !important;
-    padding: 0 !important;
     background-color: transparent !important;
-    width: calc(100% + 10mm) !important; /* 5mm padding a cada lado, total 10mm */
-    margin: 1.5mm -5mm !important; /* Margen vertical y margen horizontal negativo de 5mm */
-    box-sizing: content-box !important;
+    margin-top: 1.5mm !important; /* Solo margen vertical */
+    margin-bottom: 1.5mm !important;
+    margin-left: 0 !important; /* Eliminado por posicionamiento absoluto */
+    margin-right: 0 !important;/* Eliminado por posicionamiento absoluto */
+    padding: 0 !important;
+    box-sizing: content-box !important; /* O border-box, verificar consistencia */
   }
 
 
