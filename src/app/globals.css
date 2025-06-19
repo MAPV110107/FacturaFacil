@@ -113,22 +113,19 @@ body {
   /* body ya está configurado arriba */
 }
 
+/* PRINT STYLES */
 @media print {
-  body {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-    font-size: 10pt !important;
-    background-color: white !important;
+  html, body {
+    background-color: white !important; /* Ensure html also has white bg */
     color: black !important;
+    font-size: 10pt !important;
     margin: 0 !important;
     padding: 0 !important;
-    width: auto !important; 
-    height: auto !important;
-    text-shadow: none !important; 
-  }
-
-  html {
-    background-color: white !important; 
+    width: 100% !important; /* Ensure body and html take full printable width */
+    height: auto !important; /* Height should be auto to allow content flow */
+    text-shadow: none !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   .no-print {
@@ -139,125 +136,144 @@ body {
     display: block !important;
   }
   
-  body > div:first-child > main.flex-1.container,
-  body > div:first-child > div.lg\:col-span-1 {
+  /* Reset padding/margin for main layout elements to avoid interference */
+  body > div:first-child, /* This is typically the root div from Next.js */
+  body > div:first-child > main,
+  body > div:first-child > header,
+  body > div:first-child > footer,
+  body > div:first-child > div[class*="SheetContent"], /* Hide sidebars/sheets */
+  body > div:first-child > div.lg\:col-span-1 { /* For invoice editor preview column */
     padding: 0 !important;
     margin: 0 !important;
     width: auto !important;
     max-width: none !important;
     height: auto !important;
     overflow: visible !important;
-    background-color: white !important;
+    background-color: white !important; /* Ensure these are also white */
+    border: none !important; /* Remove any borders from layout elements */
+    box-shadow: none !important; /* Remove any shadows */
   }
   
-  /* Contenedor principal de la factura (la Card) */
+  /* Target the specific invoice preview card container */
   div[data-invoice-preview-container].card {
     display: block !important;
-    width: 78mm !important; /* Fijar el ancho al del recibo térmico */
-    min-width: 0 !important; 
-    max-width: 78mm !important; /* Asegurar que no exceda 78mm */
-    height: auto !important; /* Clave para ajuste vertical según contenido */
-    margin: 0 auto !important; /* Centrar el bloque de 78mm en la página (A4 o similar) */
-    padding: 0 !important; 
-    box-shadow: none !important; /* Sin sombra */
-    border: none !important; /* Sin borde */
-    border-radius: 0 !important; /* Sin bordes redondeados */
+    width: 78mm !important;
+    min-width: 78mm !important; /* Explicit min-width */
+    max-width: 78mm !important; /* Explicit max-width */
+    height: auto !important;
+    margin: 0 auto !important; /* Center on the page */
+    padding: 0 !important;
+    border: none !important;
+    border-width: 0 !important; /* Double ensure no border width */
+    box-shadow: none !important;
+    border-radius: 0 !important;
     overflow: visible !important; 
-    background-color: white !important; /* Fondo blanco explícito */
-    page-break-inside: avoid !important; /* Evitar que la factura se corte */
+    background-color: white !important;
+    page-break-inside: avoid !important;
   }
   
-  /* Estilos para el contenido del recibo (CardContent con .receipt-font) */
-  .receipt-font { /* Esta clase está en CardContent */
+  /* Content within the receipt */
+  div[data-invoice-preview-container].card .receipt-font {
     font-family: 'Courier New', Courier, monospace !important; 
     font-size: 9pt !important;
     line-height: 1.2 !important;
     color: black !important;
-    width: 100% !important; /* Ocupa el 100% de su padre (que es 78mm) */
-    max-width: none !important; /* El padre ya limita el ancho */
+    width: 100% !important; /* Full width of its 78mm parent */
+    max-width: 100% !important; /* Ensure it doesn't try to exceed parent */
     box-sizing: border-box !important;
     text-shadow: none !important;
-    padding: 5mm !important; /* Padding interno del recibo */
-    margin: 0 !important; /* Sin márgenes externos, el padre centra */
+    padding: 4mm !important; /* Slightly reduced padding to maximize content area within 78mm */
+    margin: 0 !important;
+    background-color: white !important; /* Ensure content area is white */
   }
 
-  /* Si hay una regla más específica para .receipt-font dentro de data-invoice-preview-container, ajustar: */
-  div[data-invoice-preview-container] .receipt-font {
-    padding: 5mm !important; 
-    margin: 0 !important; /* El padre (Card) ya está centrado y con ancho fijo */
-    /* No se necesita max-width aquí si el padre lo tiene */
-  }
-
-  div[data-invoice-preview-container] .no-print {
-     display: none !important;
-  }
-
-
+  /* Specific text elements within the receipt */
   .receipt-font p, 
   .receipt-font div,
-  .receipt-font span {
-    font-size: 9pt !important;
-    line-height: 1.2 !important;
+  .receipt-font span,
+  .receipt-font hr,
+  .receipt-font table, .receipt-font tbody, .receipt-font tr, .receipt-font td, .receipt-font th {
+    font-size: inherit !important; /* Inherit from .receipt-font */
+    line-height: inherit !important; /* Inherit from .receipt-font */
     color: black !important;
     margin-bottom: 0.5px !important; 
     text-shadow: none !important; 
+    background-color: transparent !important; /* Ensure no accidental backgrounds */
   }
+
   .receipt-font .text-lg { font-size: 11pt !important; }
   .receipt-font .text-sm { font-size: 9pt !important; }
   .receipt-font .text-xs { font-size: 8pt !important; }
   .receipt-font .font-bold { font-weight: bold !important; }
+  
   .receipt-font .truncate { 
     overflow: visible !important; 
     white-space: normal !important; 
     word-break: break-word !important; 
   }
 
-  .receipt-font .grid { display: block !important; } 
-  .receipt-font .grid > div { display: block !important; width: 100% !important; }
-
+  /* Grid for item lines - using table display for better width control in print */
   .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] {
-     display: block !important; 
+    display: table !important;
+    width: 100% !important;
+    table-layout: fixed !important; /* Distribute space according to col widths below */
   }
   .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div {
-    display: inline-block !important; 
-    padding-right: 2mm !important; 
+    display: table-cell !important;
+    padding-right: 1mm !important; 
     vertical-align: top !important;
-    box-sizing: border-box !important;
+    word-break: break-all; /* Allow breaking long words if necessary */
   }
+  /* Define relative widths for table-cell behavior */
   .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div:nth-child(1) { width: 45% !important; } 
-  .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div:nth-child(2) { width: 15% !important; text-align: right !important; } 
-  .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div:nth-child(3) { width: 20% !important; text-align: right !important; } 
+  .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div:nth-child(2) { width: 17% !important; text-align: right !important; } 
+  .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div:nth-child(3) { width: 18% !important; text-align: right !important; } 
   .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div:nth-child(4) { width: 20% !important; text-align: right !important; padding-right: 0 !important; } 
   
-  .receipt-font .border-dashed { border-style: none !important; }
-  .receipt-font .my-1, .receipt-font .my-2, .receipt-font .mb-1, .receipt-font .mb-2, .receipt-font .mt-1, .receipt-font .mt-2, .receipt-font .mt-3 {
+  .receipt-font .border-dashed, .receipt-font .DottedLine { 
+    border-style: dashed !important; /* Ensure it's dashed */
+    border-width: 1px 0 0 0 !important; /* Only top border */
+    border-color: black !important;
+    height: 0px !important;
     margin-top: 2px !important;
     margin-bottom: 2px !important;
   }
-  .receipt-font hr, .receipt-font .DottedLine { 
-    border-top: 1px dashed black !important;
+  .receipt-font .my-1, .receipt-font .my-2, .receipt-font .mb-1, .receipt-font .mb-2, .receipt-font .mt-1, .receipt-font .mt-2, .receipt-font .mt-3 {
     margin-top: 2px !important;
     margin-bottom: 2px !important;
   }
 
   .print-receipt .watermark-text {
-    font-size: 40pt !important; 
-    opacity: 0.1 !important; 
-    color: #888888 !important;
-    transform: rotate(-30deg) !important;
+    font-size: 30pt !important; /* Slightly smaller for better fit */
+    opacity: 0.08 !important; /* More subtle */
+    color: #999999 !important;
+    transform: rotate(-35deg) translateY(-20px) translateX(-20px) !important;
     text-shadow: none !important; 
   }
 
   .print-receipt img[data-ai-hint~="company logo"] {
-     max-height: 30px !important; 
+     max-height: 25mm !important; /* Max height for logo */
+     max-width: 68mm !important; /* Max width for logo, within padding */
+     object-fit: contain; /* Ensure logo scales nicely */
      margin-bottom: 2mm !important;
+     display: block !important;
+     margin-left: auto !important;
+     margin-right: auto !important;
   }
-}
-
-@media print {
-  .lg\:col-span-1.space-y-4.sticky.top-20 { /* Esto es para la columna de previsualización en el editor */
+  
+  /* Hide specific UI elements not relevant for the final receipt */
+  div[data-invoice-preview-header] { /* Hides the "Previsualización..." header card */
+    display: none !important;
+  }
+  /* Ensure the print button inside the preview card is hidden */
+  div[data-invoice-preview-container].card .no-print {
+     display: none !important;
+  }
+  /* Special case for sticky preview column wrapper in editor */
+  .lg\:col-span-1.space-y-4.sticky.top-20 { 
     position: static !important; 
     height: auto !important;
     overflow: visible !important;
   }
 }
+
