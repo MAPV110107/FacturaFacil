@@ -1,4 +1,8 @@
+
 import FacturaPrintControls from "@/components/FacturaPrintControls";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
 
 // Placeholder invoice data - replace with your actual data source
 const invoiceData = {
@@ -30,7 +34,16 @@ const invoiceData = {
 export default function Page() {
   return (
     <div className="p-4">
-      <h1 className="text-2xl font-bold mb-4 text-primary">Factura de Muestra</h1>
+      <div className="mb-6 flex justify-start">
+        <Button asChild variant="outline">
+          <Link href="/dashboard">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Volver al Dashboard
+          </Link>
+        </Button>
+      </div>
+
+      <h1 className="text-2xl font-bold mb-4 text-primary text-center">Factura de Muestra</h1>
       <div id="factura" className="border shadow-lg p-6 bg-white max-w-4xl mx-auto">
         {/* Encabezado de la Factura */}
         <div className="flex justify-between items-start mb-6">
@@ -105,7 +118,7 @@ export default function Page() {
         </div>
       </div>
 
-      <div className="mt-8 flex justify-center">
+      <div className="mt-8 flex justify-center print-controls-container">
         <FacturaPrintControls />
       </div>
     </div>
