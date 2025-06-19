@@ -10,9 +10,10 @@ import React from "react";
 import { cn } from "@/lib/utils";
 
 interface InvoicePreviewProps {
-  invoice: Partial<Invoice>;
+  invoice: Partial<Invoice>; // Partial allows for live preview updates
   companyDetails: CompanyDetails | null;
   className?: string;
+  id?: string; // Added id prop
 }
 
 const formatCurrency = (amount: number | undefined | null) => {
@@ -30,7 +31,7 @@ const formatLine = (left: string, right: string, width: number = FISCAL_PRINTER_
 // DottedLine component is now critical for all horizontal lines in print.
 const DottedLine = () => <hr className="DottedLine my-1" />;
 
-export function InvoicePreview({ invoice, companyDetails, className }: InvoicePreviewProps) {
+export function InvoicePreview({ invoice, companyDetails, className, id }: InvoicePreviewProps) {
 
   const handlePrint = () => {
     window.print();
@@ -98,6 +99,7 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
 
   return (
     <Card
+      id={id} // Apply the id here
       className={cn("w-full relative shadow-xl", className)}
       data-invoice-preview-container
     >
@@ -184,7 +186,7 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
           {discountValue > 0 && (
             <p>{formatLine(`DESCUENTO (${discountPercentage.toFixed(2)}%):`, `-${formatCurrency(discountValue)}`)}</p>
           )}
-           {(taxAmount > 0 || isDebtPayment || isCreditDeposit) && (
+           {(taxAmount > 0 || isDebtPayment || isCreditDeposit) && ( // Show taxable base if there's tax or if it's a special doc type
             <p>{formatLine(`BASE IMPONIBLE:`, formatCurrency(taxableBase))}</p>
           )}
           {taxAmount > 0 && !isDebtPayment && !isCreditDeposit && (
@@ -205,7 +207,7 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
         )}
 
 
-        {!isReturn && !isCreditDeposit && (
+        {!isReturn && !isCreditDeposit && ( // Only show this section for regular sales invoices
             <div className="mt-1">
                 <DottedLine />
                 <p className="font-semibold">{formatLine("TOTAL PAGADO:", formatCurrency(amountPaid))}</p>
@@ -220,7 +222,7 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
                 {overpaymentCredited && (
                     <p className="font-semibold">{formatLine("ABONADO A SALDO CLIENTE:", formatCurrency(invoice.overpaymentAmount))}</p>
                 )}
-                {finalAmountDueForDisplay > 0 && !overpaymentWasMade && (
+                {finalAmountDueForDisplay > 0 && !overpaymentWasMade && ( // Only show if there's actual debt on this invoice
                     <p className="font-semibold">{formatLine("MONTO PENDIENTE:", formatCurrency(finalAmountDueForDisplay))}</p>
                 )}
             </div>

@@ -1,40 +1,109 @@
 
-import FacturaPrintControls from "@/components/FacturaPrintControls";
+"use client";
+
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
+import { InvoicePreview } from "@/components/invoice/invoice-preview";
+import FacturaPrintControls from "@/components/FacturaPrintControls";
+import type { Invoice, CompanyDetails } from "@/lib/types";
+import { DEFAULT_COMPANY_ID, TAX_RATE } from "@/lib/types";
+import useLocalStorage from "@/hooks/use-local-storage";
+import { useEffect, useState } from "react";
 
-// Placeholder invoice data - replace with your actual data source
-const invoiceData = {
-  invoiceNumber: "INV-2024-001",
-  date: new Date().toLocaleDateString('es-VE'),
-  customer: {
-    name: "Juan Pérez",
-    rif: "V-12345678-9",
-    address: "Calle Falsa 123, Ciudad, Estado",
-    phone: "0412-555-5555"
-  },
-  company: {
-    name: "Mi Empresa C.A.",
-    rif: "J-98765432-1",
-    address: "Av. Principal, Edif. Torre, Piso 10, Caracas",
-    phone: "0212-999-9999"
+const defaultCompany: CompanyDetails = {
+  id: DEFAULT_COMPANY_ID,
+  name: "Su Empresa Aquí C.A.",
+  rif: "J-00000000-0",
+  address: "Av. Ejemplo, Edif. Modelo, Piso 1, Ciudad",
+  phone: "0212-123-4567",
+  logoUrl: "https://placehold.co/200x100.png",
+  logoAlignment: "center",
+};
+
+const sampleInvoiceData: Partial<Invoice> = {
+  id: "sample-inv-123",
+  invoiceNumber: "FACT-MUESTRA-001",
+  date: new Date().toISOString(),
+  type: 'sale',
+  customerDetails: {
+    id: "cust-sample-456",
+    name: "Cliente de Muestra S.A.",
+    rif: "J-01234567-8",
+    address: "Av. Ficticia 123, Edif. Prueba, Apto. 1, Ciudad Ejemplo",
+    phone: "0212-555-1234",
+    email: "cliente.muestra@example.com",
+    outstandingBalance: 0,
+    creditBalance: 0,
   },
   items: [
-    { id: "1", description: "Producto A", quantity: 2, unitPrice: 100, totalPrice: 200 },
-    { id: "2", description: "Servicio B", quantity: 1, unitPrice: 150, totalPrice: 150 },
-    { id: "3", description: "Producto C con descripción muy larga para probar el ajuste de texto", quantity: 5, unitPrice: 20, totalPrice: 100 },
+    { id: "item-1", description: "Producto de Ejemplo Alfa", quantity: 2, unitPrice: 75.50, totalPrice: 151.00 },
+    { id: "item-2", description: "Servicio de Muestra Beta con Texto Más Largo para Probar Ajuste", quantity: 1, unitPrice: 120.00, totalPrice: 120.00 },
+    { id: "item-3", description: "Otro Artículo Gamma", quantity: 3, unitPrice: 25.00, totalPrice: 75.00 },
   ],
-  subtotal: 450,
-  taxRate: 0.16,
-  tax: 72,
-  total: 522,
+  paymentMethods: [
+    { method: "Efectivo", amount: 200.00, reference: "" },
+    { method: "Tarjeta de Débito", amount: 146.00 + ( (346.00 * TAX_RATE) - ( (346.00 * TAX_RATE) % 0.01 ) ) , reference: "Ref 456789" }, // Adjusted to match calculated total
+  ],
+  subTotal: 346.00,
+  discountValue: 0,
+  discountPercentage: 0,
+  taxRate: TAX_RATE,
+  taxAmount: 346.00 * TAX_RATE,
+  totalAmount: 346.00 * (1 + TAX_RATE),
+  amountPaid: (346.00 * (1 + TAX_RATE)) - ((346.00 * (1 + TAX_RATE)) % 0.01), // Ensure amountPaid matches totalAmount or slightly less due to rounding
+  amountDue: 0,
+  thankYouMessage: "Gracias por revisar esta factura de muestra.",
+  notes: "Esta es una factura de demostración para pruebas de impresión.",
 };
 
 export default function Page() {
+  const [companyData, setCompanyData] = useLocalStorage<CompanyDetails>("companyDetails", defaultCompany);
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+    if (!companyData?.name) { // If no company data in local storage, use default
+        setCompanyData(defaultCompany);
+    }
+  }, [companyData, setCompanyData]);
+
+  if (!isClient) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        Cargando página de muestra...
+      </div>
+    );
+  }
+  
+  // Recalculate totals for the preview based on items and taxRate from sampleInvoiceData
+  const itemsSubtotal = sampleInvoiceData.items?.reduce((acc, item) => acc + item.totalPrice, 0) || 0;
+  const tax = itemsSubtotal * (sampleInvoiceData.taxRate || 0);
+  const total = itemsSubtotal + tax;
+
+  const previewableInvoice: Invoice = {
+    ...sampleInvoiceData,
+    id: sampleInvoiceData.id || "sample-id",
+    invoiceNumber: sampleInvoiceData.invoiceNumber || "SAMPLE-001",
+    date: sampleInvoiceData.date || new Date().toISOString(),
+    type: sampleInvoiceData.type || 'sale',
+    companyDetails: companyData || defaultCompany,
+    customerDetails: sampleInvoiceData.customerDetails || {id: "default-cust", name: "Cliente", rif: "J-000", address:"Direccion", outstandingBalance:0, creditBalance:0},
+    items: sampleInvoiceData.items || [],
+    paymentMethods: sampleInvoiceData.paymentMethods || [],
+    subTotal: itemsSubtotal,
+    taxRate: sampleInvoiceData.taxRate || 0,
+    taxAmount: tax,
+    totalAmount: total,
+    amountPaid: total, 
+    amountDue: 0,
+    thankYouMessage: sampleInvoiceData.thankYouMessage || "Gracias",
+  };
+
+
   return (
-    <div className="p-4">
-      <div className="mb-6 flex justify-start">
+    <div className="p-4 flex flex-col items-center">
+      <div className="w-full max-w-4xl mb-6 flex justify-start">
         <Button asChild variant="outline">
           <Link href="/dashboard">
             <ArrowLeft className="mr-2 h-4 w-4" />
@@ -43,80 +112,14 @@ export default function Page() {
         </Button>
       </div>
 
-      <h1 className="text-2xl font-bold mb-4 text-primary text-center">Factura de Muestra</h1>
-      <div id="factura" className="border shadow-lg p-6 bg-white max-w-4xl mx-auto">
-        {/* Encabezado de la Factura */}
-        <div className="flex justify-between items-start mb-6">
-          <div>
-            <h2 className="text-3xl font-bold text-gray-800">{invoiceData.company.name}</h2>
-            <p className="text-sm text-gray-600">{invoiceData.company.address}</p>
-            <p className="text-sm text-gray-600">RIF: {invoiceData.company.rif}</p>
-            <p className="text-sm text-gray-600">Teléfono: {invoiceData.company.phone}</p>
-          </div>
-          <div className="text-right">
-            <h3 className="text-xl font-semibold text-gray-700">FACTURA</h3>
-            <p className="text-sm text-gray-600">Nº: <span className="font-medium">{invoiceData.invoiceNumber}</span></p>
-            <p className="text-sm text-gray-600">Fecha: <span className="font-medium">{invoiceData.date}</span></p>
-          </div>
-        </div>
-
-        {/* Detalles del Cliente */}
-        <div className="mb-6 p-4 bg-slate-50 rounded-md">
-          <h4 className="text-md font-semibold text-gray-700 mb-1">Cliente:</h4>
-          <p className="text-sm text-gray-600 font-medium">{invoiceData.customer.name}</p>
-          <p className="text-sm text-gray-600">RIF: {invoiceData.customer.rif}</p>
-          <p className="text-sm text-gray-600">{invoiceData.customer.address}</p>
-          <p className="text-sm text-gray-600">Teléfono: {invoiceData.customer.phone}</p>
-        </div>
-
-        {/* Tabla de Ítems */}
-        <div className="mb-6">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="p-2 text-left font-semibold text-gray-700">Descripción</th>
-                <th className="p-2 text-right font-semibold text-gray-700">Cantidad</th>
-                <th className="p-2 text-right font-semibold text-gray-700">Precio Unit.</th>
-                <th className="p-2 text-right font-semibold text-gray-700">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {invoiceData.items.map((item) => (
-                <tr key={item.id} className="border-b border-gray-200">
-                  <td className="p-2 text-gray-700">{item.description}</td>
-                  <td className="p-2 text-right text-gray-700">{item.quantity}</td>
-                  <td className="p-2 text-right text-gray-700">{item.unitPrice.toFixed(2)}</td>
-                  <td className="p-2 text-right text-gray-700">{item.totalPrice.toFixed(2)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Totales */}
-        <div className="flex justify-end mb-6">
-          <div className="w-full max-w-xs text-sm">
-            <div className="flex justify-between py-1">
-              <span className="text-gray-600">Subtotal:</span>
-              <span className="text-gray-800 font-medium">{invoiceData.subtotal.toFixed(2)} Bs.</span>
-            </div>
-            <div className="flex justify-between py-1">
-              <span className="text-gray-600">IVA ({invoiceData.taxRate * 100}%):</span>
-              <span className="text-gray-800 font-medium">{invoiceData.tax.toFixed(2)} Bs.</span>
-            </div>
-            <div className="flex justify-between py-2 border-t-2 border-gray-300 mt-1">
-              <span className="text-lg font-bold text-gray-800">TOTAL:</span>
-              <span className="text-lg font-bold text-gray-800">{invoiceData.total.toFixed(2)} Bs.</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Pie de página de la factura */}
-        <div className="text-center text-xs text-gray-500 mt-8">
-          <p>Gracias por su compra.</p>
-          <p>{invoiceData.company.name} - RIF: {invoiceData.company.rif}</p>
-        </div>
-      </div>
+      <h1 className="text-2xl font-bold mb-4 text-primary text-center">Factura de Muestra (Para Prueba de Impresión)</h1>
+      
+      {/* The InvoicePreview component itself will be the target for html2pdf */}
+      <InvoicePreview 
+        id="factura" 
+        invoice={previewableInvoice} 
+        companyDetails={companyData || defaultCompany} 
+      />
 
       <div className="mt-8 flex justify-center print-controls-container">
         <FacturaPrintControls />
