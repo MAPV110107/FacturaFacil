@@ -1,10 +1,12 @@
-// This file (src/app/invoice/new/page.tsx) is a duplicate and was causing a build error
-// due to "two parallel pages that resolve to the same path".
-// Its content has been modified by the AI assistant to remove any default export,
-// which should prevent Next.js from treating it as a page and resolve the error.
-// The correct page component for this route is located at: src/app/(app)/invoice/new/page.tsx.
+// THIS FILE IS A DUPLICATE AND CAUSES A BUILD ERROR.
+// Next.js Error: "You cannot have two parallel pages that resolve to the same path."
 //
-// IT IS STRONGLY RECOMMENDED TO MANUALLY DELETE THIS FILE (src/app/invoice/new/page.tsx)
-// FROM YOUR PROJECT to keep the codebase clean.
+// The correct page component for the '/invoice/new' route is located at:
+//   src/app/(app)/invoice/new/page.tsx
+//
+// This file (src/app/invoice/new/page.tsx) should be MANUALLY DELETED from your project.
+//
+// The content below is intentionally minimal and does NOT export a default React component
+// to prevent Next.js from treating this file as a page.
 
-// Intentionally no default export to prevent Next.js from treating this as a page.
+// To fix the error, please delete this file.
