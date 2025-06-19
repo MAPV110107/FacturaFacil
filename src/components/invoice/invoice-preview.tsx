@@ -89,7 +89,7 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
 
   return (
     <Card
-      className={cn("w-full relative", className)}
+      className={cn("w-full relative shadow-xl", className)} // shadow-xl was removed earlier, re-added if you want it on screen, print CSS will remove it.
       data-invoice-preview-container
     >
       {watermarkText && (
@@ -109,7 +109,7 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
 
         <DottedLine />
 
-        <div className="my-2"> {/* Removed text-center from this div */}
+        <div className="my-2" data-company-details-block>
           {c?.logoUrl && c.logoUrl !== 'https://placehold.co/150x50.png' && (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={c.logoUrl} alt={`${c.name} logo`} className="mx-auto mb-2 object-contain" data-ai-hint="company logo" style={{maxHeight: '50px'}}/>
@@ -211,21 +211,21 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
         )}
 
         <DottedLine />
+        
+        {invoice.warrantyText && (
+          <>
+            <div className="text-center mt-2 pt-1">
+              <p className="font-semibold">NOTA DE GARANTÍA:</p>
+              <p>{invoice.warrantyText}</p>
+            </div>
+            <DottedLine />
+          </>
+        )}
 
         <div className="text-center mt-3">
           <p>{invoice.thankYouMessage || (isReturn ? "Devolución procesada." : isDebtPayment ? "Abono registrado." : isCreditDeposit ? "Depósito registrado." : "¡Gracias por su compra!")}</p>
           {invoice.notes && <p className="text-xs italic mt-1">{invoice.notes}</p>}
         </div>
-
-        {invoice.warrantyText && (
-          <>
-            <DottedLine />
-            <div className="text-center mt-2 pt-1">
-              <p className="font-semibold">NOTA DE GARANTÍA:</p>
-              <p>{invoice.warrantyText}</p>
-            </div>
-          </>
-        )}
 
       </CardContent>
       <div className="p-4 border-t no-print flex justify-end">
@@ -237,3 +237,5 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
     </Card>
   );
 }
+
+    

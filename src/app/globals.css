@@ -141,16 +141,13 @@ body {
   .no-print,
   header[class*="sticky"], /* SiteHeader */
   body > div > footer, /* Footer global del AppLayout */
-  div[data-invoice-preview-header] { /* Encabezado de la tarjeta de previsualización en pantalla */
-    display: none !important;
-  }
-  /* Ocultar el formulario de edición de facturas */
-  main > form[class*="lg:col-span-2"] {
+  div[data-invoice-preview-header], /* Encabezado de la tarjeta de previsualización en pantalla */
+  main > form[class*="lg:col-span-2"] /* Formulario de edición de factura */ {
     display: none !important;
   }
 
 
-  /* Asegurar que el contenedor <main> y el wrapper de la factura se comporten bien */
+  /* Asegurar que el contenedor <main> se comporte bien */
   main {
     display: block !important;
     padding: 0 !important;
@@ -164,7 +161,7 @@ body {
     box-shadow: none !important;
   }
 
-  /* Contenedor de la previsualización en el editor (el div que es lg:col-span-1 o tiene data-invoice-preview-wrapper) */
+  /* Contenedor de la previsualización en el editor (el div con data-invoice-preview-wrapper) */
   /* Debe ser visible y ocupar el ancho para que el 'margin: 0 auto' de la factura funcione */
   div[data-invoice-preview-wrapper] {
     display: block !important;
@@ -288,22 +285,42 @@ body {
     z-index: -1 !important; /* Detrás del contenido */
     /* Asegurar que el contenedor del watermark permite el posicionamiento absoluto */
   }
-
-  /* Logo de la Empresa */
-  .receipt-font img[data-ai-hint~="company logo"] {
-     max-height: 20mm !important; /* Altura máxima del logo */
-     max-width: 100% !important;
-     width: auto !important;
-     object-fit: contain !important;
-     margin: 1mm auto 1mm auto !important; /* Márgenes consistentes, centrado */
-     display: block !important;
+  
+  /* Centering for Company Details Block and its children */
+  .receipt-font [data-company-details-block] {
+    text-align: center !important; /* Helps center inline-block children like the image if it were inline-block */
+    width: 100% !important; /* Ensure the block takes full width to allow centering of its children */
+    margin-bottom: 1mm !important; /* Keep consistent spacing */
   }
 
+  .receipt-font [data-company-details-block] > img[data-ai-hint~="company logo"] {
+     display: block !important; /* Essential for margin: auto to work */
+     margin-left: auto !important;
+     margin-right: auto !important;
+     margin-top: 1mm !important;
+     margin-bottom: 2mm !important; /* More space after logo */
+     max-height: 20mm !important;
+     max-width: 90% !important; /* Allow some breathing room within the 78mm */
+     width: auto !important;
+     object-fit: contain !important;
+  }
+
+  .receipt-font [data-company-details-block] > p {
+    text-align: center !important;
+    margin-left: 0 !important; /* Remove any side margins */
+    margin-right: 0 !important;
+    margin-bottom: 0.5mm !important; /* Minimal spacing between text lines */
+  }
+
+
   /* Espaciado general entre las secciones principales del recibo */
-  .receipt-font > div:not(:last-child) { /* Divs hijos directos de .receipt-font */
+  .receipt-font > div:not(:last-child):not([data-company-details-block]) { /* Divs hijos directos de .receipt-font, excluding company details block handled above */
     margin-bottom: 1.5mm !important;
   }
   /* Clases de utilidad para espaciado fino si se usan dentro del recibo */
   .receipt-font .space-y-0\.5 > * + * { margin-top: 0.5mm !important; }
   .receipt-font .space-y-1 > * + * { margin-top: 1mm !important; }
 }
+
+
+    
