@@ -89,7 +89,7 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
 
   return (
     <Card 
-      className={cn("w-full shadow-xl relative", className)}
+      className={cn("w-full relative", className)} // Removed shadow-xl
       data-invoice-preview-container 
     >
       {watermarkText && (
@@ -143,24 +143,22 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
 
         <DottedLine />
 
-        <div className="mb-1">
-          {/* Item Table Header - Removed Tailwind borders */}
-          <div className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-x-1 font-semibold">
-            <div className="text-left">Descrip.</div>
-            <div className="text-right">Cant.</div>
-            <div className="text-right">P.Unit</div>
-            <div className="text-right">Total</div>
-          </div>
-          {/* Item Rows */}
-          {items.map((item) => (
-            <div key={item.id} className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-x-1 leading-tight">
-              <div className="text-left truncate">{item.description}</div>
-              <div className="text-right">{item.quantity.toFixed(2)}</div>
-              <div className="text-right">{item.unitPrice.toFixed(2)}</div>
-              <div className="text-right">{(item.quantity * item.unitPrice).toFixed(2)}</div>
-            </div>
-          ))}
+        {/* Item Table Header - No explicit borders here, rely on DottedLine */}
+        <div className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-x-1 font-semibold">
+          <div className="text-left">Descrip.</div>
+          <div className="text-right">Cant.</div>
+          <div className="text-right">P.Unit</div>
+          <div className="text-right">Total</div>
         </div>
+        {/* Item Rows */}
+        {items.map((item) => (
+          <div key={item.id} className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-x-1 leading-tight">
+            <div className="text-left truncate">{item.description}</div>
+            <div className="text-right">{item.quantity.toFixed(2)}</div>
+            <div className="text-right">{item.unitPrice.toFixed(2)}</div>
+            <div className="text-right">{(item.quantity * item.unitPrice).toFixed(2)}</div>
+          </div>
+        ))}
 
         <DottedLine />
 
@@ -238,5 +236,3 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
     </Card>
   );
 }
-
-    

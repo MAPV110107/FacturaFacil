@@ -170,6 +170,8 @@ body {
     padding: 0 !important;
     margin: 0 !important;
     background-color: white !important; /* Fondo blanco para este contenedor también */
+    box-shadow: none !important;
+    border: none !important;
   }
 
   /* El contenedor de la factura (InvoicePreview Card) es el único que debe "existir" visualmente */
