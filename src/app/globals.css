@@ -114,7 +114,7 @@ body {
   /* body ya está configurado arriba */
 }
 
-/* PRINT STYLES - RADICAL RESTRUCTURING */
+/* PRINT STYLES - RADICAL RESTRUCTURING V2 */
 @media print {
   @page {
     margin: 0 !important; /* Elimina márgenes de la página de impresión */
@@ -156,27 +156,36 @@ body {
   body > *:not(div:first-child) { /* Oculta hermanos del div raíz de Next.js si los hay */
     display: none !important;
   }
-  body > div:first-child > header, /* SiteHeader */
-  body > div:first-child > footer, /* AppLayout Footer */
-  .no-print /* Clase genérica para elementos no imprimibles (como el formulario de edición) */ {
+  header[class*="sticky"], /* SiteHeader */
+  body > div > footer, /* AppLayout Footer */
+  .no-print, /* Clase genérica para elementos no imprimibles (como el formulario de edición y títulos) */
+  div[data-invoice-preview-header] /* La card de "Previsualización" */ {
     display: none !important;
   }
 
   /* Forzar visibilidad y layout básico para la ruta hacia la factura */
   body > div:first-child, /* Div raíz de Next.js */
   body > div:first-child > main,
-  body > div:first-child > main > div, /* div.space-y-8 en NewInvoicePage */
-  body > div:first-child > main > div > div, /* div.grid en InvoiceEditor */
-  body > div:first-child > main > div > div > div[data-invoice-preview-wrapper],
-  body > div:first-child > main > div > div > div[data-invoice-preview-wrapper] > div[data-invoice-preview-container].card {
+  body > div:first-child > main > div, /* div.space-y-8 en NewInvoicePage y ReturnsPage */
+  div[data-invoice-preview-wrapper], /* div que envuelve InvoicePreview en InvoiceEditor y ReturnsManager */
+  div[data-invoice-preview-container].card {
     display: block !important;
-    width: 100% !important; /* Contenedores padre ocupan todo el ancho */
+    width: 100% !important; /* Contenedores padre ocupan todo el ancho del papel */
     margin: 0 !important;
     padding: 0 !important;
     border: none !important;
     box-shadow: none !important;
     background: transparent !important; /* Fondos transparentes para contenedores padre */
+    position: static !important;
+    top: auto !important;
   }
+  
+  /* Contenedor específico en InvoiceEditor / ReturnsManager */
+  main > div > div[data-invoice-preview-wrapper] {
+      position: static !important;
+      top: auto !important;
+  }
+
 
   /* Estilo específico para el contenedor de la factura (el Card de InvoicePreview) */
   div[data-invoice-preview-container].card {
@@ -230,9 +239,10 @@ body {
   .receipt-font > p:not(:empty) {
     margin-bottom: 1.5mm !important;
   }
+  
   .receipt-font [data-company-details-block] {
-    margin-bottom: 2mm !important;
-    text-align: center !important;
+    margin-bottom: 2mm !important; /* Espacio después del bloque de compañía */
+    text-align: center !important; /* Centra el texto de los párrafos si no tienen su propio text-align */
   }
 
   .receipt-font [data-company-details-block] > img[data-ai-hint~="company logo"] {
@@ -246,9 +256,11 @@ body {
     object-fit: contain !important;
   }
 
+  /* Reducir interlineado en detalles de la empresa */
   .receipt-font [data-company-details-block] > p {
     text-align: center !important;
     margin-bottom: 0.5mm !important; /* Pequeño espacio entre líneas de dirección */
+    line-height: 1.1 !important; /* Interlineado más apretado */
   }
 
   .receipt-font .DottedLine {
@@ -256,11 +268,14 @@ body {
     border-width: 1px 0 0 0 !important; /* Solo borde superior */
     border-color: black !important;
     height: 0px !important;
-    margin: 1.5mm 0 !important; /* Espacio vertical alrededor de la línea */
     padding: 0 !important;
-    width: 100% !important;
     background-color: transparent !important;
+    /* Para que la línea toque los bordes del papel, ajustando al padding de .receipt-font */
+    width: calc(100% + 6mm) !important; /* 3mm padding a cada lado */
+    margin: 1.5mm -3mm !important; /* Margen vertical y margen horizontal negativo */
+    box-sizing: content-box !important;
   }
+
 
   /* Estilos para la tabla de ítems */
   .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] {
