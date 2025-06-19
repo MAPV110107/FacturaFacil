@@ -303,4 +303,103 @@ body {
   }
 }
     
-    
+/* Estilos base para pantalla */
+#factura {
+  background: white; /* Esto se aplica en pantalla */
+  /* margin: auto; Ya gestionado por la clase max-w-4xl mx-auto en page.tsx */
+  /* padding: 20px; Ya gestionado por la clase p-6 en page.tsx */
+  font-family: 'PT Sans', sans-serif; /* Usar la fuente del tema */
+}
+
+/* Estilos A4 para impresión (usados por html2pdf) */
+@media print {
+  /* @page se define mejor en las opciones de html2pdf.js,
+     pero lo dejamos aquí por si se usa impresión directa del navegador. */
+  @page a4-page {
+    size: A4;
+    margin: 10mm;
+  }
+
+  html.printing-a4, body.printing-a4 {
+    width: 210mm; /* Ancho A4 */
+    height: 297mm; /* Alto A4 */
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    color: black !important;
+    font-size: 10pt !important;
+  }
+
+  body.printing-a4 #factura {
+    width: 190mm !important; /* 210mm - 2*10mm de margen */
+    min-height: 277mm !important; /* 297mm - 2*10mm de margen */
+    margin: 0 !important; /* El margen lo controla @page o la opción de html2pdf */
+    padding: 0 !important; /* El padding interno del contenido de la factura ya está en sus elementos hijos */
+    box-shadow: none !important;
+    border: none !important;
+  }
+}
+
+/* Estilos 80mm para impresión (usados por html2pdf) */
+@media print {
+   /* @page se define mejor en las opciones de html2pdf.js */
+  @page thermal-page {
+    size: 80mm auto; /* El alto puede ser automático para papel térmico */
+    margin: 0mm; /* Usualmente sin márgenes o mínimos */
+  }
+
+  html.printing-80mm, body.printing-80mm {
+    width: 80mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    color: black !important;
+    font-size: 9pt !important; /* Ligeramente más pequeño para papel térmico */
+    line-height: 1.2 !important;
+  }
+
+  body.printing-80mm #factura {
+    width: 72mm !important; /* 80mm - (ej. 2*4mm de margen interno para el contenido) o el que defina html2pdf */
+    margin: 0 auto !important; /* Centrar si hay un pequeño margen global en jsPDF */
+    padding: 0 !important; /* El padding interno del contenido de la factura ya está en sus elementos hijos */
+    box-shadow: none !important;
+    border: none !important;
+  }
+  
+  /* Ajustes finos para 80mm si son necesarios, ej: reducir tamaños de fuente específicos */
+  body.printing-80mm #factura h2 {
+    font-size: 1.2em !important;
+  }
+  body.printing-80mm #factura h3 {
+    font-size: 1.1em !important;
+  }
+  body.printing-80mm #factura p, body.printing-80mm #factura td, body.printing-80mm #factura th {
+    font-size: 0.95em !important;
+    line-height: 1.1 !important;
+  }
+  body.printing-80mm #factura .text-xs {
+      font-size: 0.85em !important;
+  }
+
+}
+
+/* Para ocultar los controles de impresión cuando html2pdf está activo */
+.html2pdf__container {
+  /* Los controles de impresión de la página no deben aparecer en el PDF */
+}
+.html2pdf__container .print-controls-container {
+  display: none !important;
+}
+
+/* Ocultar elementos no deseados de la app en cualquier impresión (sea directa o vía html2pdf) */
+@media print {
+  header, footer, .no-print-global {
+    display: none !important;
+  }
+  /* Si los controles de impresión están fuera de #factura, deben ocultarse */
+  body > div > div.p-4 > div.mt-8.flex.justify-center { /* Selector de los print controls */
+      display: none !important;
+  }
+}
+
+```
