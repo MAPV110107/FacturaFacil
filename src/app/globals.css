@@ -190,7 +190,7 @@ body {
 
   /* Área de contenido real DENTRO del Card (nuestro "recibo") */
   div[data-invoice-preview-container].card > .receipt-font {
-    position: relative !important; /* Para posicionar las DottedLine absolutamente */
+    position: relative !important; /* Para posicionar las DottedLine adecuadamente si es necesario, pero ahora están en flujo */
     padding: 3mm !important;       /* Margen interno para el TEXTO */
     width: 100% !important;         /* Ocupa el 100% del Card (78mm) */
     font-family: 'PT Sans', sans-serif !important;
@@ -199,6 +199,7 @@ body {
     color: black !important;
     line-height: 1.3 !important;
     word-break: break-word !important; /* Ajuste de texto largo */
+    box-sizing: border-box !important; /* padding se incluye en width:100% */
   }
 
   /* Reaplicar márgenes/paddings mínimos para legibilidad DENTRO del .receipt-font */
@@ -241,18 +242,19 @@ body {
 
   /* Líneas Punteadas (.DottedLine) */
   .receipt-font .DottedLine {
-    position: absolute !important;
-    left: -3mm !important; /* Compensa el padding de .receipt-font para llegar al borde del Card */
-    right: -3mm !important;/* Compensa el padding de .receipt-font para llegar al borde del Card */
-    width: auto !important; /* El ancho se define por left/right */
-    height: 0px !important;
-    border-style: dashed !important;
-    border-width: 1px 0 0 0 !important; /* Solo borde superior */
-    border-color: black !important;
-    margin-top: 1.5mm !important; /* Solo margen vertical */
-    margin-bottom: 1.5mm !important;
-    margin-left: 0 !important; /* No necesarios con left/right */
-    margin-right: 0 !important;/* No necesarios con left/right */
+    display: block !important; /* Ensure it's a block element */
+    position: relative !important; /* Keep in normal document flow */
+    height: 0px !important; /* The HR element itself has no height */
+    border: none !important; /* Reset all borders first */
+    border-top: 1px dashed black !important; /* The visible line */
+    background: none !important; /* No background for HR */
+    padding: 0 !important; /* No padding for HR */
+    margin-top: 2mm !important;    /* Space above the line, overrides global reset for HR */
+    margin-bottom: 2mm !important; /* Space below the line, overrides global reset for HR */
+    margin-left: -3mm !important;  /* Extend to the left into .receipt-font's 3mm padding */
+    margin-right: -3mm !important; /* Extend to the right into .receipt-font's 3mm padding */
+    /* width: auto; by default, a block element takes 100% of parent's content-box.
+       The negative margins then visually extend the border. */
   }
 
   /* Estilos para la tabla de ítems */
@@ -299,4 +301,6 @@ body {
       margin-top: 0 !important;
   }
 }
+    
+
     
