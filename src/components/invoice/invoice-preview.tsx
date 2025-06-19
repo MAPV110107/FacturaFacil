@@ -109,6 +109,7 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
 
         <div className="text-center my-2">
           {c?.logoUrl && c.logoUrl !== 'https://placehold.co/150x50.png' && (
+            // eslint-disable-next-line @next/next/no-img-element
             <img src={c.logoUrl} alt={`${c.name} logo`} className="max-h-12 mx-auto mb-2 object-contain print-only" data-ai-hint="company logo"/>
           )}
           <p className="font-bold text-sm">{c?.name || "Nombre de Empresa"}</p>
@@ -142,7 +143,7 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
         <DottedLine />
 
         <div className="mb-1">
-          <div className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-x-1 font-semibold border-b border-dashed pb-0.5 mb-0.5">
+          <div className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-x-1 font-semibold pb-0.5 mb-0.5"> {/* Removed border-b border-dashed */}
             <div className="text-left">Descrip.</div>
             <div className="text-right">Cant.</div>
             <div className="text-right">P.Unit</div>
@@ -212,13 +213,14 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
         <div className="text-center mt-3">
           <p>{invoice.thankYouMessage || (isReturn ? "Devolución procesada." : isDebtPayment ? "Abono registrado." : isCreditDeposit ? "Depósito registrado." : "¡Gracias por su compra!")}</p>
           {invoice.notes && <p className="text-xs italic mt-1">{invoice.notes}</p>}
-          {invoice.warrantyText && (
-            <div className="mt-2 text-xs italic border-t border-dashed pt-1">
-              <p className="font-semibold">NOTA DE GARANTÍA:</p>
-              <p>{invoice.warrantyText}</p>
-            </div>
-          )}
         </div>
+        
+        {invoice.warrantyText && (
+          <div className="text-center mt-2 text-xs italic border-t border-dashed pt-1">
+            <p className="font-semibold">NOTA DE GARANTÍA:</p>
+            <p>{invoice.warrantyText}</p>
+          </div>
+        )}
 
       </CardContent>
       <div className="p-4 border-t no-print flex justify-end">
