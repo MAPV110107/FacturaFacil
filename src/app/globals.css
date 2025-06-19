@@ -116,6 +116,11 @@ body {
 
 /* PRINT STYLES - AGGRESSIVE RESET AND REBUILD */
 @media print {
+  @page {
+    margin: 0mm !important;
+    size: auto; /* Important for thermal roll printers */
+  }
+
   /* Ocultar elementos específicos no deseados para la impresión */
   .no-print,
   header[class*="sticky"], /* SiteHeader */
@@ -154,6 +159,17 @@ body {
     background-color: white !important;
     border: none !important;
     box-shadow: none !important;
+  }
+
+  /* Contenedor de la previsualización en el editor (el div que es lg:col-span-1) */
+  /* Debe ser visible y ocupar el ancho para que el 'margin: 0 auto' de la factura funcione */
+  main > div.grid > div[data-invoice-preview-wrapper] {
+    display: block !important;
+    position: static !important; /* Quitar sticky para impresión */
+    width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background-color: white !important; /* Fondo blanco para este contenedor también */
   }
 
   /* El contenedor de la factura (InvoicePreview Card) es el único que debe "existir" visualmente */
@@ -286,15 +302,6 @@ body {
   /* Clases de utilidad para espaciado fino si se usan dentro del recibo */
   .receipt-font .space-y-0\.5 > * + * { margin-top: 0.5mm !important; }
   .receipt-font .space-y-1 > * + * { margin-top: 1mm !important; }
-
-  /* Contenedor de la previsualización en el editor (el div que es lg:col-span-1) */
-  /* Debe ser visible y ocupar el ancho para que el 'margin: 0 auto' de la factura funcione */
-  main > div.grid > div[data-invoice-preview-wrapper] {
-    display: block !important;
-    position: static !important; /* Quitar sticky para impresión */
-    width: 100% !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    background-color: white !important; /* Fondo blanco para este contenedor también */
-  }
 }
+
+    
