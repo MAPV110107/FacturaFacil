@@ -7,6 +7,7 @@ export interface CompanyDetails {
   phone?: string;
   email?: string;
   logoUrl?: string; // Optional
+  logoAlignment?: 'left' | 'center' | 'right'; // New field for logo alignment
 }
 
 export interface CustomerDetails {
@@ -74,4 +75,3 @@ export interface Invoice {
 }
 
 export const DEFAULT_COMPANY_ID = "main_company_details";
-

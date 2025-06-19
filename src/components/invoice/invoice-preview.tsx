@@ -87,9 +87,18 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
   const overpaymentCredited = overpaymentWasMade && invoice.overpaymentHandling === 'creditedToAccount';
   const overpaymentRefunded = overpaymentWasMade && invoice.overpaymentHandling === 'refunded';
 
+  const logoAlignmentClass = () => {
+    switch (c?.logoAlignment) {
+      case 'left': return 'mr-auto';
+      case 'right': return 'ml-auto';
+      default: return 'mx-auto'; // center
+    }
+  };
+
+
   return (
     <Card
-      className={cn("w-full relative shadow-xl", className)} // shadow-xl was removed earlier, re-added if you want it on screen, print CSS will remove it.
+      className={cn("w-full relative shadow-xl", className)}
       data-invoice-preview-container
     >
       {watermarkText && (
@@ -102,7 +111,7 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
           </span>
         </div>
       )}
-      <CardContent className={cn("text-xs relative z-10", "receipt-font")}> {/* p-4 REMOVED HERE */}
+      <CardContent className={cn("text-xs relative z-10", "receipt-font")}>
         <div className="text-center mb-1">
           <p className="font-bold text-lg my-1">{SENIAT_TEXT}</p>
         </div>
@@ -110,9 +119,16 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
         <DottedLine />
 
         <div className="my-2" data-company-details-block>
-          {c?.logoUrl && c.logoUrl !== 'https://placehold.co/150x50.png' && (
+          {c?.logoUrl && c.logoUrl.trim() !== '' && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={c.logoUrl} alt={`${c.name} logo`} className="mx-auto mb-2 object-contain" data-ai-hint="company logo" style={{maxHeight: '50px'}}/>
+            <img 
+              src={c.logoUrl} 
+              alt={`${c.name || 'Empresa'} logo`} 
+              className={cn("object-contain mb-2", logoAlignmentClass())}
+              data-ai-hint="company logo" 
+              data-logo-align={c.logoAlignment || 'center'}
+              style={{maxHeight: '50px'}}
+            />
           )}
           <p className="font-bold text-sm text-center">{c?.name || "Nombre de Empresa"}</p>
           <p className="text-center">RIF: {c?.rif || "J-00000000-0"}</p>

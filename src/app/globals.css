@@ -248,16 +248,29 @@ body {
     text-align: center !important; /* Centra el texto de los párrafos si no tienen su propio text-align */
   }
 
+  /* Styles for Company Logo Alignment in Print */
   .receipt-font [data-company-details-block] > img[data-ai-hint~="company logo"] {
     display: block !important;
-    margin-left: auto !important;
-    margin-right: auto !important;
-    margin-top: 0 !important;
-    margin-bottom: 2mm !important; /* Espacio después del logo */
     max-height: 20mm !important;
-    max-width: 60% !important;
+    max-width: 60% !important; /* Can be adjusted based on preference */
     object-fit: contain !important;
+    margin-top: 0 !important;
+    margin-bottom: 2mm !important; /* Space after logo */
   }
+  .receipt-font [data-company-details-block] > img[data-ai-hint~="company logo"][data-logo-align="left"] {
+    margin-left: 0 !important; margin-right: auto !important;
+  }
+  .receipt-font [data-company-details-block] > img[data-ai-hint~="company logo"][data-logo-align="center"] {
+    margin-left: auto !important; margin-right: auto !important;
+  }
+  .receipt-font [data-company-details-block] > img[data-ai-hint~="company logo"][data-logo-align="right"] {
+    margin-left: auto !important; margin-right: 0 !important;
+  }
+  /* Fallback if data-logo-align is not present (shouldn't happen with default in schema) */
+  .receipt-font [data-company-details-block] > img[data-ai-hint~="company logo"]:not([data-logo-align]) {
+     margin-left: auto !important; margin-right: auto !important;
+  }
+
 
   /* Reducir interlineado en detalles de la empresa */
   .receipt-font [data-company-details-block] > p {
@@ -305,7 +318,7 @@ body {
   .receipt-font .text-lg { font-size: 1.2em !important; } /* Relativo al 10pt base */
   .receipt-font .text-sm { font-size: 1em !important; }   /* Tamaño base (10pt) */
   .receipt-font .text-xs { font-size: 0.9em !important; }
-  .receipt-font .font-semibold { font-weight: bold !important; } /* Ya es global, pero para asegurar */
+  .receipt-font .font-semibold { font-weight: bold !important; } /* Ya es global, para asegurar */
   .receipt-font .italic { font-style: italic !important; }
   .receipt-font .truncate { /* Anular truncado para impresión */
     overflow: visible !important;
@@ -326,4 +339,3 @@ body {
       margin-top: 0 !important;
   }
 }
-

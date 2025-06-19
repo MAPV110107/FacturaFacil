@@ -21,8 +21,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Save, XCircle, Upload } from "lucide-react";
+import { Save, XCircle, Upload, Trash2 } from "lucide-react";
 import React, { useRef } from "react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const defaultCompanyDetails: CompanyDetails = {
   id: DEFAULT_COMPANY_ID,
@@ -31,7 +32,8 @@ const defaultCompanyDetails: CompanyDetails = {
   address: "",
   phone: "",
   email: "",
-  logoUrl: "https://placehold.co/150x50.png",
+  logoUrl: "",
+  logoAlignment: "center",
 };
 
 export function CompanySettingsForm() {
@@ -48,7 +50,14 @@ export function CompanySettingsForm() {
   });
 
   React.useEffect(() => {
-    form.reset(companyDetails || defaultCompanyDetails);
+    // Ensure that default values from schema (like logoAlignment) are applied if not present in localStorage
+    const currentStoredDetails = companyDetails || {};
+    const effectiveDefaults = {
+      ...defaultCompanyDetails, // Global defaults
+      ...currentStoredDetails,  // Stored values (may override some defaults)
+      logoAlignment: currentStoredDetails.logoAlignment || defaultCompanyDetails.logoAlignment, // Explicitly ensure alignment default
+    };
+    form.reset(effectiveDefaults);
   }, [companyDetails, form]);
 
 
@@ -61,7 +70,14 @@ export function CompanySettingsForm() {
   }
 
   function handleCancel() {
-    form.reset(companyDetails || defaultCompanyDetails);
+    // Re-apply defaults similar to useEffect logic on cancel
+    const currentStoredDetails = companyDetails || {};
+    const effectiveDefaults = {
+      ...defaultCompanyDetails,
+      ...currentStoredDetails,
+      logoAlignment: currentStoredDetails.logoAlignment || defaultCompanyDetails.logoAlignment,
+    };
+    form.reset(effectiveDefaults);
     toast({
       title: "Cancelado",
       description: "Los cambios no guardados han sido descartados.",
@@ -103,6 +119,14 @@ export function CompanySettingsForm() {
         logoFileInputRef.current.value = ""; // Reset file input
       }
     }
+  };
+
+  const handleRemoveLogo = () => {
+    form.setValue("logoUrl", "", { shouldValidate: true, shouldDirty: true });
+    toast({
+      title: "Logo Eliminado",
+      description: "El logo ha sido eliminado de la configuración. Guarde los cambios para aplicarlo.",
+    });
   };
 
   return (
@@ -194,7 +218,7 @@ export function CompanySettingsForm() {
                   <FormLabel>Logo de la Empresa</FormLabel>
                   <div className="flex flex-col sm:flex-row gap-2 items-start">
                     <FormControl className="flex-grow">
-                      <Input placeholder="https://ejemplo.com/logo.png o suba un archivo" {...field} />
+                      <Input placeholder="URL del logo o suba un archivo" {...field} value={field.value || ""} />
                     </FormControl>
                     <Button 
                       type="button" 
@@ -202,7 +226,16 @@ export function CompanySettingsForm() {
                       onClick={() => logoFileInputRef.current?.click()}
                       className="w-full sm:w-auto"
                     >
-                      <Upload className="mr-2 h-4 w-4" /> Subir Logo desde Archivo
+                      <Upload className="mr-2 h-4 w-4" /> Subir Logo
+                    </Button>
+                     <Button 
+                      type="button" 
+                      variant="destructive" 
+                      onClick={handleRemoveLogo}
+                      className="w-full sm:w-auto"
+                      disabled={!field.value || field.value.trim() === ''}
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" /> Eliminar Logo
                     </Button>
                     <input 
                       type="file"
@@ -212,12 +245,36 @@ export function CompanySettingsForm() {
                       className="hidden"
                     />
                   </div>
-                  {field.value && (
+                  {field.value && field.value.trim() !== '' ? (
                       <div className="mt-2 p-2 border rounded-md bg-muted aspect-video max-w-[200px] flex items-center justify-center">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={field.value} alt="Previsualización del logo" className="max-h-full max-w-full object-contain" data-ai-hint="company logo" />
                       </div>
+                  ) : (
+                    <p className="mt-2 text-sm text-muted-foreground">No hay logo configurado.</p>
                   )}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="logoAlignment"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Alineación del Logo en Factura</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccione alineación" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="left">Izquierda</SelectItem>
+                      <SelectItem value="center">Centro</SelectItem>
+                      <SelectItem value="right">Derecha</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}

@@ -7,7 +7,8 @@ export const companyDetailsSchema = z.object({
   address: z.string().min(5, { message: "La dirección debe tener al menos 5 caracteres." }),
   phone: z.string().optional(),
   email: z.string().email({ message: "Debe ser un correo electrónico válido." }).optional().or(z.literal('')),
-  logoUrl: z.string().url({ message: "Debe ser una URL válida."}).optional().or(z.literal('')),
+  logoUrl: z.string().url({ message: "Debe ser una URL válida o estar vacío."}).optional().or(z.literal('')),
+  logoAlignment: z.enum(['left', 'center', 'right']).optional().default('center'),
 });
 
 export const customerDetailsSchema = z.object({
@@ -91,4 +92,3 @@ export const invoiceFormSchema = z.object({
   message: "El texto de la garantía es requerido si se aplica una garantía y la duración no es 'No aplica'.",
   path: ["warrantyText"],
 });
-
