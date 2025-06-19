@@ -124,9 +124,7 @@ body {
   /* Ocultar elementos específicos no deseados para la impresión */
   .no-print,
   header[class*="sticky"], /* SiteHeader */
-  body > div > footer, /* Footer global del AppLayout */
-  div[data-invoice-preview-header], /* El CardHeader de la previsualización en pantalla */
-  main > form[class*="lg:col-span-2"] /* El formulario de edición de factura */
+  body > div > footer /* Footer global del AppLayout */
   {
     display: none !important;
   }
@@ -147,12 +145,12 @@ body {
     border: none !important;
   }
   
-  /* Asegurar que el contenedor <main> se comporte bien */
+  /* Asegurar que el contenedor <main> y el wrapper de la factura se comporten bien */
   main {
-    display: block !important; /* Asegurar que es un bloque */
+    display: block !important;
     padding: 0 !important;
     margin: 0 !important;
-    width: 100% !important; /* Que ocupe el ancho para el centrado del hijo */
+    width: 100% !important;
     max-width: none !important;
     height: auto !important;
     overflow: visible !important;
@@ -161,21 +159,19 @@ body {
     box-shadow: none !important;
   }
 
-  /* Contenedor de la previsualización en el editor (el div que es lg:col-span-1) */
-  /* Debe ser visible y ocupar el ancho para que el 'margin: 0 auto' de la factura funcione */
-  main > div.grid > div[data-invoice-preview-wrapper] {
+  /* Contenedor de la previsualización en el editor */
+  div[data-invoice-preview-wrapper] {
     display: block !important;
     position: static !important; /* Quitar sticky para impresión */
     width: 100% !important;
     padding: 0 !important;
     margin: 0 !important;
-    background-color: white !important; /* Fondo blanco para este contenedor también */
+    background-color: white !important;
     box-shadow: none !important;
     border: none !important;
   }
 
-  /* El contenedor de la factura (InvoicePreview Card) es el único que debe "existir" visualmente */
-  /* y debe estar centrado si el papel es más ancho que 78mm */
+  /* El contenedor de la factura (InvoicePreview Card) */
   div[data-invoice-preview-container].card {
     display: block !important;
     width: 78mm !important; 
