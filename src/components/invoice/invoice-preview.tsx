@@ -102,7 +102,7 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
           </span>
         </div>
       )}
-      <CardContent className={cn("p-4 text-xs relative z-10", "receipt-font")}>
+      <CardContent className={cn("text-xs relative z-10", "receipt-font")}> {/* p-4 REMOVED HERE */}
         <div className="text-center mb-1">
           <p className="font-bold text-lg my-1">{SENIAT_TEXT}</p>
         </div>
@@ -237,5 +237,4 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
     </Card>
   );
 }
-
     

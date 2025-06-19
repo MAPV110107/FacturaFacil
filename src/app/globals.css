@@ -114,7 +114,7 @@ body {
   /* body ya está configurado arriba */
 }
 
-/* PRINT STYLES - RADICAL RESTRUCTURING V2 */
+/* PRINT STYLES - RADICAL RESTRUCTURING V3 */
 @media print {
   @page {
     margin: 0 !important; /* Elimina márgenes de la página de impresión */
@@ -158,8 +158,12 @@ body {
   }
   header[class*="sticky"], /* SiteHeader */
   body > div > footer, /* AppLayout Footer */
-  .no-print, /* Clase genérica para elementos no imprimibles (como el formulario de edición y títulos) */
-  div[data-invoice-preview-header] /* La card de "Previsualización" */ {
+  .no-print, /* Clase genérica para elementos no imprimibles (como el formulario de edición y títulos de página) */
+  div[data-invoice-preview-header], /* La card de "Previsualización" en el editor */
+  /* Ocultar la Card de título en la página de nueva factura */
+  main > div.space-y-8 > div.bg-gradient-to-r.from-primary\/10.to-accent\/10,
+  main > div.space-y-8 > .card.shadow-lg.no-print /* Título en página de devoluciones */
+   {
     display: none !important;
   }
 
@@ -186,7 +190,6 @@ body {
       top: auto !important;
   }
 
-
   /* Estilo específico para el contenedor de la factura (el Card de InvoicePreview) */
   div[data-invoice-preview-container].card {
     width: 100% !important; /* La factura ocupa todo el ancho del papel */
@@ -196,19 +199,19 @@ body {
     background-color: white !important; /* Fondo de la factura es blanco */
     page-break-inside: avoid !important;
     box-sizing: border-box !important;
-    padding: 0 !important; /* El padding estará en .receipt-font */
+    padding: 0 !important; /* El Card no tiene padding, el padding estará en .receipt-font */
   }
 
   /* Estilo para el área de contenido real dentro de la factura */
   div[data-invoice-preview-container].card > .receipt-font {
-    padding: 3mm !important; /* Padding interno para el contenido de la factura */
+    padding: 5mm !important; /* Padding interno para el contenido de la factura (margen del texto) */
     width: 100% !important;
     box-sizing: border-box !important;
-    font-family: 'PT Sans', sans-serif !important; /* Hereda de html,body pero reforzamos */
-    font-size: 10pt !important; /* Hereda de html,body */
-    font-weight: bold !important; /* Hereda de html,body */
-    color: black !important; /* Hereda de html,body */
-    line-height: 1.3 !important; /* Hereda de html,body */
+    font-family: 'PT Sans', sans-serif !important;
+    font-size: 10pt !important;
+    font-weight: bold !important;
+    color: black !important;
+    line-height: 1.3 !important;
   }
 
   /* Reset de elementos específicos dentro de .receipt-font, la mayoría cubiertos por '*' */
@@ -249,10 +252,10 @@ body {
     display: block !important;
     margin-left: auto !important;
     margin-right: auto !important;
-    margin-top: 0 !important; /* Pegado al tope de su bloque */
+    margin-top: 0 !important;
     margin-bottom: 2mm !important; /* Espacio después del logo */
     max-height: 20mm !important;
-    max-width: 60% !important; /* Para que no sea demasiado ancho en papeles anchos */
+    max-width: 60% !important;
     object-fit: contain !important;
   }
 
@@ -270,9 +273,8 @@ body {
     height: 0px !important;
     padding: 0 !important;
     background-color: transparent !important;
-    /* Para que la línea toque los bordes del papel, ajustando al padding de .receipt-font */
-    width: calc(100% + 6mm) !important; /* 3mm padding a cada lado */
-    margin: 1.5mm -3mm !important; /* Margen vertical y margen horizontal negativo */
+    width: calc(100% + 10mm) !important; /* 5mm padding a cada lado, total 10mm */
+    margin: 1.5mm -5mm !important; /* Margen vertical y margen horizontal negativo de 5mm */
     box-sizing: content-box !important;
   }
 
@@ -324,3 +326,4 @@ body {
       margin-top: 0 !important;
   }
 }
+
