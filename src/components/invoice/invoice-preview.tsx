@@ -89,7 +89,7 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
 
   return (
     <Card
-      className={cn("w-full relative", className)} // Removed shadow-xl from here
+      className={cn("w-full relative", className)}
       data-invoice-preview-container
     >
       {watermarkText && (
@@ -109,15 +109,15 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
 
         <DottedLine />
 
-        <div className="text-center my-2">
+        <div className="my-2"> {/* Removed text-center from this div */}
           {c?.logoUrl && c.logoUrl !== 'https://placehold.co/150x50.png' && (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={c.logoUrl} alt={`${c.name} logo`} className="mx-auto mb-2 object-contain" data-ai-hint="company logo" style={{maxHeight: '50px'}}/>
           )}
-          <p className="font-bold text-sm">{c?.name || "Nombre de Empresa"}</p>
-          <p>RIF: {c?.rif || "J-00000000-0"}</p>
-          <p className="truncate" title={c?.address}>{c?.address || "Dirección de la Empresa"}</p>
-          {c?.phone && <p>Telf: {c.phone}</p>}
+          <p className="font-bold text-sm text-center">{c?.name || "Nombre de Empresa"}</p>
+          <p className="text-center">RIF: {c?.rif || "J-00000000-0"}</p>
+          <p className="truncate text-center" title={c?.address}>{c?.address || "Dirección de la Empresa"}</p>
+          {c?.phone && <p className="text-center">Telf: {c.phone}</p>}
         </div>
 
         <DottedLine />
