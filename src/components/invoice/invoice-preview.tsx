@@ -4,7 +4,7 @@
 import type { Invoice, InvoiceItem, CompanyDetails, CustomerDetails, PaymentDetails } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Printer, ShieldCheck } from "lucide-react"; // Added ShieldCheck
+import { Printer, ShieldCheck } from "lucide-react"; 
 import { SENIAT_TEXT, CURRENCY_SYMBOL, FISCAL_PRINTER_LINE_WIDTH } from "@/lib/constants";
 import React from "react";
 import { cn } from "@/lib/utils";
@@ -27,7 +27,8 @@ const formatLine = (left: string, right: string, width: number = FISCAL_PRINTER_
   return `${sanitizedLeft}${' '.repeat(spaces)}${sanitizedRight}`;
 };
 
-const DottedLine = () => <hr className="DottedLine my-1" />; // Removed border classes, will be styled in CSS
+// DottedLine component is now critical for all horizontal lines in print.
+const DottedLine = () => <hr className="DottedLine my-1" />;
 
 export function InvoicePreview({ invoice, companyDetails, className }: InvoicePreviewProps) {
   
@@ -110,7 +111,6 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
 
         <div className="text-center my-2">
           {c?.logoUrl && c.logoUrl !== 'https://placehold.co/150x50.png' && (
-            // eslint-disable-next-line @next/next/no-img-element
             <img src={c.logoUrl} alt={`${c.name} logo`} className="mx-auto mb-2 object-contain" data-ai-hint="company logo" style={{maxHeight: '50px'}}/>
           )}
           <p className="font-bold text-sm">{c?.name || "Nombre de Empresa"}</p>
@@ -144,8 +144,8 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
         <DottedLine />
 
         <div className="mb-1">
-          {/* Item Table Header */}
-          <div className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-x-1 font-semibold pb-0.5 mb-0.5">
+          {/* Item Table Header - Removed Tailwind borders */}
+          <div className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-x-1 font-semibold">
             <div className="text-left">Descrip.</div>
             <div className="text-right">Cant.</div>
             <div className="text-right">P.Unit</div>
@@ -219,11 +219,13 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
         </div>
         
         {invoice.warrantyText && (
-          <div className="text-center mt-2 pt-1"> {/* Removed border, rely on DottedLine if needed before this */}
+          <>
             <DottedLine />
-            <p className="font-semibold">NOTA DE GARANTÍA:</p>
-            <p>{invoice.warrantyText}</p>
-          </div>
+            <div className="text-center mt-2 pt-1"> 
+              <p className="font-semibold">NOTA DE GARANTÍA:</p>
+              <p>{invoice.warrantyText}</p>
+            </div>
+          </>
         )}
 
       </CardContent>
@@ -236,3 +238,5 @@ export function InvoicePreview({ invoice, companyDetails, className }: InvoicePr
     </Card>
   );
 }
+
+    
