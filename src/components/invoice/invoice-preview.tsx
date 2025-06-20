@@ -13,7 +13,7 @@ interface InvoicePreviewProps {
   invoice: Partial<Invoice>;
   companyDetails: CompanyDetails | null;
   className?: string;
-  id?: string; 
+  id?: string;
   isSavedInvoice?: boolean;
   invoiceStatus?: Invoice['status'];
 }
@@ -38,7 +38,7 @@ export function InvoicePreview({
   invoice,
   companyDetails,
   className,
-  id = "factura-preview-card", 
+  id = "factura-preview-card",
   isSavedInvoice = false,
   invoiceStatus = 'active',
 }: InvoicePreviewProps) {
@@ -103,14 +103,14 @@ export function InvoicePreview({
       default: return 'mx-auto';
     }
   };
-  
+
   const showPrintAndCompareControls = isSavedInvoice && invoiceStatus !== 'cancelled' && invoiceStatus !== 'return_processed';
 
   return (
-    <div id={id} className={cn("invoice-preview-wrapper", className)}> 
+    <div id={id} className={cn("invoice-preview-wrapper", className)}>
         <Card
           className={cn("w-full relative shadow-xl", className)}
-          data-invoice-preview-container 
+          data-invoice-preview-container
         >
           {watermarkTextContent && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 watermark-container">
@@ -122,7 +122,7 @@ export function InvoicePreview({
               </span>
             </div>
           )}
-          <CardContent className={cn("text-xs relative z-10 p-4 sm:p-6", "receipt-font")}> 
+          <CardContent className={cn("text-xs relative z-10 p-4 sm:p-6", "receipt-font")}>
             <div className="text-center mb-1">
               <p className="font-bold text-lg my-1">{SENIAT_TEXT}</p>
             </div>
@@ -137,7 +137,7 @@ export function InvoicePreview({
                   className={cn("object-contain mb-2", logoAlignmentClass())}
                   data-ai-hint="company logo"
                   data-logo-align={c.logoAlignment || 'center'}
-                  style={{maxHeight: '50px'}} 
+                  style={{maxHeight: '50px'}}
                 />
               )}
               <p className="font-bold text-sm text-center">{c?.name || "Nombre de Empresa"}</p>
@@ -193,13 +193,13 @@ export function InvoicePreview({
               {discountValue > 0 && (
                 <p>{formatLine(`DESCUENTO (${Number(discountPercentage).toFixed(2)}%):`, `-${formatCurrency(discountValue)}`)}</p>
               )}
-              {(taxAmount > 0 || isDebtPayment || isCreditDeposit || (taxRate === 0 && taxableBase > 0)) && ( 
+              {(taxAmount > 0 || isDebtPayment || isCreditDeposit || (taxRate === 0 && taxableBase > 0)) && (
                 <p>{formatLine(`BASE IMPONIBLE:`, formatCurrency(taxableBase))}</p>
               )}
               {taxAmount > 0 && !isDebtPayment && !isCreditDeposit && (
                 <p>{formatLine(`IVA (${(taxRate * 100).toFixed(0)}%):`, formatCurrency(taxAmount))}</p>
               )}
-               {taxAmount === 0 && taxRate > 0 && !isDebtPayment && !isCreditDeposit && ( 
+               {taxAmount === 0 && taxRate > 0 && !isDebtPayment && !isCreditDeposit && (
                 <p>{formatLine(`IVA (${(taxRate * 100).toFixed(0)}%):`, formatCurrency(0))}</p>
               )}
               <p className="font-bold text-sm">{formatLine(isReturn ? "TOTAL CRÉDITO:" : isDebtPayment ? "TOTAL ABONO:" : isCreditDeposit ? "TOTAL DEPÓSITO:" : "TOTAL A PAGAR:", formatCurrency(totalAmount))}</p>
@@ -232,7 +232,7 @@ export function InvoicePreview({
                     {overpaymentCredited && (
                         <p className="font-semibold">{formatLine("ABONADO A SALDO CLIENTE:", formatCurrency(invoice.overpaymentAmount))}</p>
                     )}
-                    {finalAmountDueForDisplay > 0.001 && !overpaymentWasMade && ( 
+                    {finalAmountDueForDisplay > 0.001 && !overpaymentWasMade && (
                         <p className="font-semibold">{formatLine("MONTO PENDIENTE:", formatCurrency(finalAmountDueForDisplay))}</p>
                     )}
                 </div>
@@ -256,30 +256,37 @@ export function InvoicePreview({
             </div>
 
           </CardContent>
+
+          {showPrintAndCompareControls && (
+              <CardFooter className="p-4 border-t no-print flex flex-col items-stretch gap-2">
+                  <FacturaPrintControls invoiceData={invoice} />
+              </CardFooter>
+          )}
+          {isSavedInvoice && invoiceStatus === 'cancelled' && (
+              <CardFooter className="p-4 border-t no-print flex flex-col items-stretch gap-2">
+                  <p className="text-sm text-center text-destructive font-semibold">Esta factura está ANULADA.</p>
+                   <FacturaPrintControls invoiceData={invoice} />
+              </CardFooter>
+          )}
+          {isSavedInvoice && invoiceStatus === 'return_processed' && (
+              <CardFooter className="p-4 border-t no-print flex flex-col items-stretch gap-2">
+                  <p className="text-sm text-center text-amber-600 font-semibold">Esta factura ya tiene una Nota de Crédito asociada.</p>
+                   <FacturaPrintControls invoiceData={invoice} />
+              </CardFooter>
+          )}
+          {/*
+            The block below was causing print controls to show for non-saved invoices.
+            It's removed because the primary `showPrintAndCompareControls` handles the saved invoice case.
+            The print-preview-formats page does not need print controls *within* its previews.
+          */}
+          {/*
+          {!isSavedInvoice && invoice && Object.keys(invoice).length > 0 && (
+              <CardFooter className="p-4 border-t no-print flex flex-col items-stretch gap-2">
+                  <FacturaPrintControls invoiceData={invoice} />
+              </CardFooter>
+          )}
+          */}
         </Card>
-        
-        {showPrintAndCompareControls && (
-            <CardFooter className="p-4 border-t no-print flex flex-col items-stretch gap-2">
-                <FacturaPrintControls invoiceData={invoice} />
-            </CardFooter>
-        )}
-        {isSavedInvoice && invoiceStatus === 'cancelled' && (
-            <CardFooter className="p-4 border-t no-print flex flex-col items-stretch gap-2">
-                <p className="text-sm text-center text-destructive font-semibold">Esta factura está ANULADA.</p>
-                 <FacturaPrintControls invoiceData={invoice} />
-            </CardFooter>
-        )}
-        {isSavedInvoice && invoiceStatus === 'return_processed' && (
-            <CardFooter className="p-4 border-t no-print flex flex-col items-stretch gap-2">
-                <p className="text-sm text-center text-amber-600 font-semibold">Esta factura ya tiene una Nota de Crédito asociada.</p>
-                 <FacturaPrintControls invoiceData={invoice} />
-            </CardFooter>
-        )}
-        {!isSavedInvoice && invoice && Object.keys(invoice).length > 0 && (
-            <CardFooter className="p-4 border-t no-print flex flex-col items-stretch gap-2">
-                <FacturaPrintControls invoiceData={invoice} />
-            </CardFooter>
-        )}
     </div>
   );
 }
