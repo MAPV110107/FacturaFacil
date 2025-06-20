@@ -9,7 +9,7 @@ export default function DashboardPage() {
     {
       title: "Nueva Factura",
       description: "Crear y emitir una nueva factura fiscal.",
-      href: "/invoice/new?new=true", // Explicitly start a new invoice, clearing any draft
+      href: "/invoice/new?new=true", 
       icon: FilePlus2,
       cta: "Crear Factura",
     },
@@ -57,25 +57,28 @@ export default function DashboardPage() {
         <p className="text-muted-foreground mt-2">Su solución sencilla para la facturación fiscal.</p>
       </div>
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {features.map((feature) => (
-          <Card key={feature.title} className="flex flex-col shadow-lg hover:shadow-xl transition-shadow duration-300">
-            <CardHeader className="pb-4">
-              <div className="flex items-center space-x-3 mb-2">
-                <feature.icon className="h-8 w-8 text-primary" />
-                <CardTitle className="text-xl text-primary">{feature.title}</CardTitle>
-              </div>
-              <CardDescription>{feature.description}</CardDescription>
-            </CardHeader>
-            <CardContent className="flex-grow flex items-end">
-              <Button asChild className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
-                <Link href={feature.href}>
-                  {feature.cta}
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
-        ))}
+        {features.map((feature) => {
+          const IconComponent = feature.icon;
+          return (
+            <Card key={feature.title} className="flex flex-col shadow-lg hover:shadow-xl transition-shadow duration-300">
+              <CardHeader className="pb-4">
+                <div className="flex items-center space-x-3 mb-2">
+                  <IconComponent className="h-8 w-8 text-primary" />
+                  <CardTitle className="text-xl text-primary">{feature.title}</CardTitle>
+                </div>
+                <CardDescription>{feature.description}</CardDescription>
+              </CardHeader>
+              <CardContent className="flex-grow flex items-end">
+                <Button asChild className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+                  <Link href={feature.href}>
+                    {feature.cta}
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );

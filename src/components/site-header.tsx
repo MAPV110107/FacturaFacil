@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/invoice/new", label: "Nueva Factura", icon: FilePlus2 },
+  { href: "/invoice/new?new=true", label: "Nueva Factura", icon: FilePlus2 },
   { href: "/customers", label: "Clientes", icon: Users },
   { href: "/invoices", label: "Historial", icon: History },
   { href: "/returns", label: "Devoluciones", icon: Undo2 },
@@ -23,22 +23,25 @@ export function SiteHeader() {
   const pathname = usePathname();
 
   const renderNavLinks = (isMobile = false) =>
-    navItems.map((item) => (
-      <Button
-        key={item.href}
-        variant={pathname === item.href ? "secondary" : "ghost"}
-        asChild
-        className={cn(
-          "w-full justify-start",
-          isMobile ? "text-lg py-3" : ""
-        )}
-      >
-        <Link href={item.href}>
-          <item.icon className="mr-2 h-5 w-5" />
-          {item.label}
-        </Link>
-      </Button>
-    ));
+    navItems.map((item) => {
+      const IconComponent = item.icon;
+      return (
+        <Button
+          key={item.href}
+          variant={pathname === item.href ? "secondary" : "ghost"}
+          asChild
+          className={cn(
+            "w-full justify-start",
+            isMobile ? "text-lg py-3" : ""
+          )}
+        >
+          <Link href={item.href}>
+            <IconComponent className="mr-2 h-5 w-5" />
+            {item.label}
+          </Link>
+        </Button>
+      );
+    });
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 no-print">
