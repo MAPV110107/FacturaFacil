@@ -3,11 +3,10 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, LayoutDashboard } from "lucide-react";
+import { ArrowLeft, LayoutDashboard, Printer as PrinterIcon, FileText as FileTextIcon } from "lucide-react";
 import { InvoicePreview } from "@/components/invoice/invoice-preview";
 import type { Invoice, CompanyDetails, CustomerDetails } from "@/lib/types";
-import { DEFAULT_COMPANY_ID, TAX_RATE } from "@/lib/types"; // TAX_RATE now from types if it was moved, else constants
-// If TAX_RATE is still in constants: import { TAX_RATE } from "@/lib/constants";
+import { DEFAULT_COMPANY_ID, TAX_RATE } from "@/lib/types";
 import useLocalStorage from "@/hooks/use-local-storage";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -63,6 +62,7 @@ export default function GeneralPrintPreviewPage() {
   const [companyData, setCompanyData] = useLocalStorage<CompanyDetails>("companyDetails", defaultCompany);
   const [invoiceToPreview, setInvoiceToPreview] = useState<Partial<Invoice>>(sampleInvoiceData);
   const [isClient, setIsClient] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -72,15 +72,14 @@ export default function GeneralPrintPreviewPage() {
       if (storedInvoiceData) {
         try {
           const parsedData = JSON.parse(storedInvoiceData);
-          // Ensure essential fields are present, fallback if not
           const itemsSubtotal = parsedData.items?.reduce((acc:number, item:any) => acc + (item.totalPrice || (item.quantity * item.unitPrice)), 0) || 0;
           const currentTaxRate = parsedData.taxRate !== undefined ? parsedData.taxRate : TAX_RATE;
           const tax = itemsSubtotal * currentTaxRate;
           const total = itemsSubtotal + tax - (parsedData.discountValue || 0);
 
           setInvoiceToPreview({
-            ...sampleInvoiceData, // Use sample as base to ensure all fields exist
-            ...parsedData, // Override with parsed data
+            ...sampleInvoiceData,
+            ...parsedData,
             date: parsedData.date || new Date().toISOString(),
             customerDetails: parsedData.customerDetails || sampleInvoiceData.customerDetails,
             items: parsedData.items || sampleInvoiceData.items,
@@ -92,23 +91,36 @@ export default function GeneralPrintPreviewPage() {
             amountPaid: parsedData.amountPaid !== undefined ? parsedData.amountPaid : total,
             amountDue: parsedData.amountDue !== undefined ? parsedData.amountDue : 0,
           });
-          // Do not remove 'invoiceComparisonData' from localStorage here,
-          // it will be overwritten when "Comparar Formatos" is clicked again.
         } catch (error) {
           console.error("Error parsing invoice data from localStorage:", error);
-          // Fallback to sample data if parsing fails
-           setInvoiceToPreview(prev => ({...prev, ...sampleInvoiceData})); // Keep potentially loaded company details
+           setInvoiceToPreview(prev => ({...prev, ...sampleInvoiceData}));
         }
       } else {
-        // Fallback to sample data if nothing in localStorage
         setInvoiceToPreview(prev => ({...prev, ...sampleInvoiceData}));
       }
     }
     if (isClient && !companyData?.name) { 
         setCompanyData(defaultCompany);
     }
-  }, [isClient, companyData, setCompanyData]); // Added dependencies
+  }, [isClient, companyData, setCompanyData]);
 
+
+  const printSpecificFormat = async (printFormato: "a4" | "80mm") => {
+    if (typeof window === 'undefined') return;
+    setIsPrinting(true);
+
+    const printClassName = printFormato === "80mm" ? "printing-80mm" : "printing-a4";
+    document.documentElement.classList.add(printClassName);
+
+    await new Promise(resolve => setTimeout(resolve, 150));
+
+    window.print();
+
+    setTimeout(() => {
+      document.documentElement.classList.remove(printClassName);
+      setIsPrinting(false);
+    }, 500);
+  };
 
   if (!isClient || !invoiceToPreview.customerDetails) { 
     return (
@@ -170,31 +182,48 @@ export default function GeneralPrintPreviewPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-7xl">
         <div>
           <h2 className="text-xl font-semibold mb-2 text-center text-muted-foreground print:hidden">Formato A4 (Referencia en Pantalla)</h2>
-          <div className="preview-a4-wrapper"> {/* This class applies A4-like styling for screen */}
+          <div className="preview-a4-wrapper"> 
             <InvoicePreview 
               invoice={finalInvoiceForPreview} 
               companyDetails={companyData || defaultCompany}
-              isSavedInvoice={false} // This is for comparison, not direct printing from here
+              isSavedInvoice={false} 
               invoiceStatus={finalInvoiceForPreview.status}
               id="invoice-comparison-a4" 
-              className="a4-preview-styling" // Additional class if needed
+              className="a4-preview-styling" 
             />
           </div>
+          <Button
+            onClick={() => printSpecificFormat("a4")}
+            disabled={isPrinting}
+            className="w-full mt-4 bg-primary hover:bg-primary/90 text-primary-foreground no-print"
+          >
+            <FileTextIcon className="mr-2 h-4 w-4" />
+            {isPrinting ? "Imprimiendo A4..." : "Imprimir en A4"}
+          </Button>
         </div>
         <div>
           <h2 className="text-xl font-semibold mb-2 text-center text-muted-foreground print:hidden">Formato Rollo (Referencia en Pantalla)</h2>
-          <div className="preview-80mm-wrapper"> {/* This class applies 80mm-like styling for screen */}
+          <div className="preview-80mm-wrapper"> 
             <InvoicePreview 
               invoice={finalInvoiceForPreview} 
               companyDetails={companyData || defaultCompany} 
-              isSavedInvoice={false} // This is for comparison, not direct printing from here
+              isSavedInvoice={false} 
               invoiceStatus={finalInvoiceForPreview.status}
               id="invoice-comparison-80mm" 
-              className="thermal-preview-styling" // Additional class if needed
+              className="thermal-preview-styling" 
             />
           </div>
+          <Button
+            onClick={() => printSpecificFormat("80mm")}
+            disabled={isPrinting}
+            className="w-full mt-4 bg-primary hover:bg-primary/90 text-primary-foreground no-print"
+          >
+            <PrinterIcon className="mr-2 h-4 w-4" />
+            {isPrinting ? "Imprimiendo Rollo..." : "Imprimir en Rollo"}
+          </Button>
         </div>
       </div>
     </div>
   );
 }
+
