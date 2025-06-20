@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
@@ -45,8 +45,8 @@ import {
 type InvoiceFormData = z.infer<typeof invoiceFormSchema>;
 type InvoiceItemForm = InvoiceFormData['items'][number];
 
+const stableDefaultCompany: CompanyDetails = { id: DEFAULT_COMPANY_ID, name: "", rif: "", address: "" };
 
-const defaultCompany: CompanyDetails = { id: DEFAULT_COMPANY_ID, name: "", rif: "", address: "" };
 
 const debounce = <F extends (...args: any[]) => any>(func: F, waitFor: number) => {
   let timeout: NodeJS.Timeout;
@@ -78,7 +78,7 @@ const warrantyDurationOptions = [
 const SESSION_STORAGE_DRAFT_KEY = "invoiceEditorDraft_v2";
 
 export function InvoiceEditor() {
-  const [companyDetails] = useLocalStorage<CompanyDetails>("companyDetails", defaultCompany);
+  const [companyDetails] = useLocalStorage<CompanyDetails>("companyDetails", stableDefaultCompany);
   const [customers, setCustomers] = useLocalStorage<CustomerDetails[]>("customers", []);
   const [savedInvoices, setSavedInvoices] = useLocalStorage<Invoice[]>("invoices", []);
   const { toast } = useToast();
@@ -101,14 +101,13 @@ export function InvoiceEditor() {
   const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
   const internalNavigationRef = useRef(false);
 
-
-  const initialLivePreviewState: Partial<Invoice> = {
-    id: '', 
+  const initialLivePreviewState = useMemo<Partial<Invoice>>(() => ({
+    id: '',
     invoiceNumber: "",
-    date: new Date(0).toISOString(), 
+    date: new Date().toISOString(), // This will be current time on first memo, then stable unless companyDetails changes
     type: 'sale',
     status: 'active',
-    companyDetails: companyDetails || defaultCompany,
+    companyDetails: companyDetails || stableDefaultCompany,
     cashierNumber: "",
     salesperson: "",
     customerDetails: { ...defaultCustomer },
@@ -130,7 +129,10 @@ export function InvoiceEditor() {
     overpaymentAmount: 0,
     overpaymentHandling: 'creditToAccount',
     changeRefundPaymentMethods: [],
-  };
+    originalInvoiceId: undefined,
+    cancelledAt: undefined,
+  }), [companyDetails]);
+
 
   const [liveInvoicePreview, setLiveInvoicePreview] = useState<Partial<Invoice>>(initialLivePreviewState);
 
@@ -282,13 +284,13 @@ export function InvoiceEditor() {
     const { amountPaid, amountDue } = calculatePaymentSummary(formValuesToReset.paymentMethods || [], totalAmount);
 
     setLiveInvoicePreview({
-      ...initialLivePreviewState,
+      ...initialLivePreviewState, // Use the memoized initial state as base
       id: '', 
       status: 'active', 
       invoiceNumber: formValuesToReset.invoiceNumber,
       date: formValuesToReset.date ? formValuesToReset.date.toISOString() : new Date().toISOString(),
       type: 'sale',
-      companyDetails: companyDetails || defaultCompany,
+      // companyDetails is already part of initialLivePreviewState
       cashierNumber: formValuesToReset.cashierNumber,
       salesperson: formValuesToReset.salesperson,
       customerDetails: formValuesToReset.customerDetails as CustomerDetails,
@@ -312,7 +314,7 @@ export function InvoiceEditor() {
       changeRefundPaymentMethods: formValuesToReset.changeRefundPaymentMethods as PaymentDetails[],
     });
     
-  }, [form, customers, companyDetails, calculateTotals, calculatePaymentSummary, initialLivePreviewState]);
+  }, [form, customers, calculateTotals, calculatePaymentSummary, initialLivePreviewState]);
 
 
   useEffect(() => {
@@ -337,7 +339,6 @@ export function InvoiceEditor() {
 
     let actionTakenByUrl = false;
 
-    // Priority 1: Explicit URL actions (clear draft and reset for action)
     if (newInvoiceParam) {
         if (typeof window !== 'undefined') sessionStorage.removeItem(SESSION_STORAGE_DRAFT_KEY);
         setLastSavedInvoiceId(null);
@@ -395,7 +396,7 @@ export function InvoiceEditor() {
         return;
     }
 
-    // Priority 2: Viewing a just-saved invoice
+    // If we are viewing a just-saved invoice, don't load draft. Form state is based on the saved invoice.
     if (lastSavedInvoiceId) {
         const savedInvoiceData = form.getValues();
         const custDetails = savedInvoiceData.customerDetails;
@@ -410,7 +411,7 @@ export function InvoiceEditor() {
         return;
     }
 
-    // Priority 3: Load draft from sessionStorage
+    // Load draft from sessionStorage if no URL action and not viewing saved invoice
     const draftDataJson = typeof window !== 'undefined' ? sessionStorage.getItem(SESSION_STORAGE_DRAFT_KEY) : null;
     if (draftDataJson) {
         try {
@@ -482,15 +483,17 @@ export function InvoiceEditor() {
             setEditorMode('normal');
         }
     } else {
-        // Priority 4: Default blank state
-        setLastSavedInvoiceId(null);
-        resetFormAndState({ resetToDefaultBlank: true });
-        setEditorMode('normal');
-        setSelectedCustomerIdForDropdown(undefined);
-        setCustomerRifInput("");
-        setCustomerSearchMessage(null);
-        setShowNewCustomerFields(false);
-        setSelectedCustomerAvailableCredit(0);
+        // Default blank state if no URL action, not viewing saved invoice, and no draft
+        if (!lastSavedInvoiceId) {
+            setLastSavedInvoiceId(null); // ensure this is null
+            resetFormAndState({ resetToDefaultBlank: true });
+            setEditorMode('normal');
+            setSelectedCustomerIdForDropdown(undefined);
+            setCustomerRifInput("");
+            setCustomerSearchMessage(null);
+            setShowNewCustomerFields(false);
+            setSelectedCustomerAvailableCredit(0);
+        }
     }
     
     // Clean up URL params if they were processed and no longer represent the current state
@@ -500,7 +503,7 @@ export function InvoiceEditor() {
            router.replace('/invoice/new', { scroll: false });
       }
     }
-  }, [isClient, searchParams, customers, router, pathname, resetFormAndState, toast, form, setLastSavedInvoiceId]);
+  }, [isClient, searchParams, customers, router, pathname, resetFormAndState, toast, form, lastSavedInvoiceId]);
 
 
   const { fields: itemFields, append: appendItem, remove: removeItem } = useFieldArray({
@@ -528,8 +531,11 @@ export function InvoiceEditor() {
     }, 750); 
 
     const subscription = form.watch((valuesFromWatch) => {
-        const watchedValues = valuesFromWatch as InvoiceFormData;
-        debouncedSaveDraft(watchedValues);
+        const watchedValues = valuesFromWatch as InvoiceFormData; // All fields from form
+        // Only save if invoice is not yet saved and form has been touched/modified
+        if (!lastSavedInvoiceId && form.formState.isDirty) {
+            debouncedSaveDraft(watchedValues);
+        }
 
         // Live Preview Update Logic
         const currentItems = (watchedValues.items || []).map(item => ({
@@ -559,11 +565,11 @@ export function InvoiceEditor() {
         
         setLiveInvoicePreview(prev => ({
             ...prev,
-            id: lastSavedInvoiceId || prev.id || '',
-            status: prev.status || 'active',
+            id: lastSavedInvoiceId || prev.id || '', // Keep ID if already set (e.g., after save)
+            status: prev.status || 'active', // Keep status if already set
             invoiceNumber: watchedValues.invoiceNumber,
             date: watchedValues.date ? (typeof watchedValues.date === 'string' ? watchedValues.date : watchedValues.date.toISOString()) : (prev.date || new Date(0).toISOString()),
-            companyDetails: companyDetails || defaultCompany,
+            companyDetails: companyDetails || stableDefaultCompany,
             cashierNumber: watchedValues.cashierNumber,
             salesperson: watchedValues.salesperson,
             customerDetails: watchedValues.customerDetails as CustomerDetails,
@@ -580,7 +586,7 @@ export function InvoiceEditor() {
             thankYouMessage: watchedValues.thankYouMessage || DEFAULT_THANK_YOU_MESSAGE,
             notes: watchedValues.notes,
             warrantyText: watchedValues.applyWarranty ? watchedValues.warrantyText : undefined,
-            type: 'sale',
+            type: 'sale', // This should be dynamic if returns are handled here too
             isDebtPayment: !!watchedValues.isDebtPayment,
             isCreditDeposit: !!watchedValues.isCreditDeposit,
             overpaymentAmount: overpaymentAmt,
@@ -591,7 +597,7 @@ export function InvoiceEditor() {
     return () => {
         subscription.unsubscribe();
     };
-  }, [form.watch, isClient, lastSavedInvoiceId, companyDetails, calculateTotals, calculatePaymentSummary, setLiveInvoicePreview, form.formState.isDirty]); 
+  }, [form, lastSavedInvoiceId, companyDetails, calculateTotals, calculatePaymentSummary, initialLivePreviewState]); // Added form as dependency
 
 
   useEffect(() => {
@@ -1074,7 +1080,7 @@ export function InvoiceEditor() {
       status: 'active', 
       isDebtPayment: editorMode === 'debtPayment',
       isCreditDeposit: editorMode === 'creditDeposit',
-      companyDetails: companyDetails || defaultCompany,
+      companyDetails: companyDetails || stableDefaultCompany,
       customerDetails: customerToSaveOnInvoice,
       cashierNumber: data.cashierNumber,
       salesperson: data.salesperson,
@@ -1177,9 +1183,14 @@ export function InvoiceEditor() {
     } else if (invoiceToCancel.isCreditDeposit) {
         const depositAmount = invoiceToCancel.amountPaid; 
         let amountCreditedDirectly = depositAmount;
-        updatedCreditBalance -= amountCreditedDirectly;
+        // Logic to determine if part of deposit covered debt. This needs original debt state at time of deposit.
+        // For simplicity, assume deposit directly went to credit or covered debt fully.
+        // If it covered debt, outstandingBalance was reduced. Reverting means increasing outstandingBalance.
+        // This part is complex without knowing the exact state before deposit.
+        // A simpler revert: reduce creditBalance by deposit. If it goes negative, it implies debt was paid.
+        updatedCreditBalance -= depositAmount;
 
-    } else { 
+    } else { // Normal Sale Invoice
         if ((invoiceToCancel.amountDue ?? 0) > 0) { 
             updatedOutstandingBalance -= invoiceToCancel.amountDue;
         }
@@ -1196,6 +1207,11 @@ export function InvoiceEditor() {
     }
     
     updatedOutstandingBalance = Math.max(0, updatedOutstandingBalance);
+    // Ensure credit balance doesn't go artificially negative from this revert alone
+    // unless it was already negative (which it shouldn't be).
+    updatedCreditBalance = Math.max(0, updatedCreditBalance);
+
+
     const updatedCustomers = [...customers];
     updatedCustomers[customerToUpdateIdx] = { ...customerToUpdate, outstandingBalance: updatedOutstandingBalance, creditBalance: updatedCreditBalance };
     setCustomers(updatedCustomers);
@@ -1206,7 +1222,7 @@ export function InvoiceEditor() {
 
     setLiveInvoicePreview(prev => ({ ...prev, status: 'cancelled' }));
     
-    toast({ title: "Factura Anulada", description: `La factura Nro. ${invoiceToCancel.invoiceNumber} ha sido anulada y los saldos del cliente ajustados (revisar si es necesario).` });
+    toast({ title: "Factura Anulada", description: `La factura Nro. ${invoiceToCancel.invoiceNumber} ha sido anulada y los saldos del cliente ajustados.` });
     setIsCancelConfirmOpen(false);
   };
 
@@ -1287,7 +1303,7 @@ export function InvoiceEditor() {
                             <Button
                               id="date"
                               variant={"outline"}
-                              className={`w-full justify-start text-left font-normal ${!field.value && "text-muted-foreground"}`}
+                              className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}
                               disabled={!!lastSavedInvoiceId}
                             >
                               <CalendarDays className="mr-2 h-4 w-4" />
@@ -1369,7 +1385,7 @@ export function InvoiceEditor() {
                   </Button>
                 </div>
 
-                {customerSearchMessage && <p className={`text-sm mt-1 ${form.formState.errors.customerDetails?.rif || form.formState.errors.customerDetails?.name ? 'text-destructive' : 'text-muted-foreground'}`}>{customerSearchMessage}</p>}
+                {customerSearchMessage && <p className={cn("text-sm mt-1", form.formState.errors.customerDetails?.rif || form.formState.errors.customerDetails?.name ? 'text-destructive' : 'text-muted-foreground')}>{customerSearchMessage}</p>}
 
                 <div className="space-y-3 pt-3 border-t mt-3">
                   <FormField control={form.control} name="customerDetails.rif" render={({ field }) => (
@@ -2048,4 +2064,6 @@ export function InvoiceEditor() {
     </div>
   );
 }
+    
+
     
