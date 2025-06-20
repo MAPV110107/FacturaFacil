@@ -27,7 +27,7 @@ import { PlusCircle, Trash2, Users, FileText, DollarSign, Settings, Receipt, Cal
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Form, FormField, FormItem, FormControl, FormLabel, FormMessage } from "@/components/ui/form";
-import { format, addDays, addMonths, addYears, parseISO } from "date-fns";
+import { format, addDays, addMonths, addYears, parseISO, isValid } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import {
@@ -99,43 +99,25 @@ export function InvoiceEditor() {
 
   const [lastSavedInvoiceId, setLastSavedInvoiceId] = useState<string | null>(null);
   const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
-  const internalNavigationRef = useRef(false); // To prevent effect loops on programmatic navigation
+  const internalNavigationRef = useRef(false);
 
   const initialLivePreviewState = useMemo<Partial<Invoice>>(() => ({
-    id: '',
-    invoiceNumber: "",
-    date: new Date().toISOString(),
-    type: 'sale',
-    status: 'active',
-    companyDetails: companyDetails || stableDefaultCompany,
-    cashierNumber: "",
-    salesperson: "",
+    id: '', invoiceNumber: "", date: new Date().toISOString(), type: 'sale', status: 'active',
+    companyDetails: companyDetails || stableDefaultCompany, cashierNumber: "", salesperson: "",
     customerDetails: { ...defaultCustomer },
     items: [{ id: uuidv4(), description: "", quantity: 1, unitPrice: 0, totalPrice: 0}],
     paymentMethods: [{ method: "Efectivo", amount: 0, reference: "" }],
-    subTotal: 0,
-    discountPercentage: 0,
-    discountValue: 0,
-    taxRate: TAX_RATE,
-    taxAmount: 0,
-    totalAmount: 0,
-    amountPaid: 0,
-    amountDue: 0,
-    thankYouMessage: DEFAULT_THANK_YOU_MESSAGE,
-    notes: "",
-    warrantyText: "",
-    isDebtPayment: false,
-    isCreditDeposit: false,
-    overpaymentAmount: 0,
-    overpaymentHandling: 'creditToAccount',
-    changeRefundPaymentMethods: [],
-    originalInvoiceId: undefined,
+    subTotal: 0, discountPercentage: 0, discountValue: 0, taxRate: TAX_RATE, taxAmount: 0, totalAmount: 0,
+    amountPaid: 0, amountDue: 0, thankYouMessage: DEFAULT_THANK_YOU_MESSAGE, notes: "",
+    warrantyText: "", isDebtPayment: false, isCreditDeposit: false, overpaymentAmount: 0,
+    overpaymentHandling: 'creditToAccount', changeRefundPaymentMethods: [], originalInvoiceId: undefined,
     cancelledAt: undefined,
   }), [companyDetails]);
+  
+  const [liveInvoicePreview, setLiveInvoicePreview] = useState<Partial<Invoice>>(initialLivePreviewState);
 
   const form = useForm<InvoiceFormData>({
     resolver: zodResolver(invoiceFormSchema),
-    // Default values will be set by resetFormAndState or draft loading
   });
 
   const { fields: itemFields, append: appendItem, remove: removeItem, replace: replaceItems } = useFieldArray({
@@ -222,12 +204,11 @@ export function InvoiceEditor() {
       overpaymentHandlingChoice: 'creditToAccount', changeRefundPaymentMethods: [],
     };
     form.reset(defaultFormValues);
-
+    
     if (resetToDefaultBlank && typeof window !== 'undefined') {
         sessionStorage.removeItem(SESSION_STORAGE_DRAFT_KEY);
     }
     
-    // Update live preview based on these defaults
     const currentItems = (defaultFormValues.items || []).map(item => ({
         ...item, quantity: item.quantity || 0, unitPrice: item.unitPrice || 0,
         totalPrice: (item.quantity || 0) * (item.unitPrice || 0),
@@ -252,144 +233,122 @@ export function InvoiceEditor() {
       changeRefundPaymentMethods: defaultFormValues.changeRefundPaymentMethods as PaymentDetails[],
     });
     
-  }, [form, customers, calculateTotals, calculatePaymentSummary, initialLivePreviewState]);
+  }, [form, customers, calculateTotals, calculatePaymentSummary, initialLivePreviewState, setLiveInvoicePreview]);
 
 
   useEffect(() => {
     setIsClient(true);
   }, []);
 
-  // Main effect for handling URL params and draft loading/initialization
   useEffect(() => {
     if (!isClient) return;
-
-    if (internalNavigationRef.current) {
-        internalNavigationRef.current = false;
-        return;
-    }
+    if (internalNavigationRef.current) { internalNavigationRef.current = false; return; }
 
     const customerIdParam = searchParams.get('customerId');
     const debtPaymentParam = searchParams.get('debtPayment') === 'true';
     const creditDepositParam = searchParams.get('creditDeposit') === 'true';
-    const amountStrParam = searchParams.get('amount'); 
     const newInvoiceParam = searchParams.get('new') === 'true';
 
-    let actionTakenByUrl = false;
+    let draftHandled = false;
 
-    if (newInvoiceParam) {
-        if (typeof window !== 'undefined') sessionStorage.removeItem(SESSION_STORAGE_DRAFT_KEY);
-        setLastSavedInvoiceId(null);
+    if (newInvoiceParam || debtPaymentParam || creditDepositParam) {
+      if (typeof window !== 'undefined') sessionStorage.removeItem(SESSION_STORAGE_DRAFT_KEY);
+      setLastSavedInvoiceId(null);
+      if (newInvoiceParam) {
         resetFormAndState({ mode: 'normal', resetToDefaultBlank: true });
         setEditorMode('normal'); setSelectedCustomerIdForDropdown(undefined); setCustomerRifInput("");
         setCustomerSearchMessage(null); setShowNewCustomerFields(false); setSelectedCustomerAvailableCredit(0);
         setCurrentDebtOrCreditAmount(0);
-        internalNavigationRef.current = true; router.replace('/invoice/new', { scroll: false });
-        actionTakenByUrl = true;
-    } else if (debtPaymentParam && customerIdParam) {
+      } else if (debtPaymentParam && customerIdParam) {
         const targetCustomer = customers.find(c => c.id === customerIdParam);
         if (targetCustomer && (targetCustomer.outstandingBalance || 0) > 0) {
-            if (typeof window !== 'undefined') sessionStorage.removeItem(SESSION_STORAGE_DRAFT_KEY);
-            setLastSavedInvoiceId(null);
             const currentDebt = targetCustomer.outstandingBalance || 0;
             resetFormAndState({ mode: 'debtPayment', customerId: customerIdParam, amount: currentDebt, resetToDefaultBlank: true });
             setEditorMode('debtPayment'); setCurrentDebtOrCreditAmount(currentDebt); setSelectedCustomerIdForDropdown(customerIdParam);
             setCustomerRifInput(targetCustomer.rif); setCustomerSearchMessage(`Pagando deuda de: ${targetCustomer.name}`);
             setShowNewCustomerFields(false); setSelectedCustomerAvailableCredit(targetCustomer.creditBalance || 0);
-            internalNavigationRef.current = true; router.replace('/invoice/new', { scroll: false });
-            actionTakenByUrl = true;
         } else {
             toast({ variant: "destructive", title: "Acción no válida", description: "Cliente no encontrado o sin deuda pendiente." });
-            if (pathname === '/invoice/new' && searchParams.toString()) {
-                internalNavigationRef.current = true; router.replace('/invoice/new', { scroll: false });
-            }
+            resetFormAndState({ mode: 'normal', resetToDefaultBlank: true }); setEditorMode('normal');
         }
-    } else if (creditDepositParam && customerIdParam) {
+      } else if (creditDepositParam && customerIdParam) {
         const targetCustomer = customers.find(c => c.id === customerIdParam);
         if (targetCustomer) {
-            if (typeof window !== 'undefined') sessionStorage.removeItem(SESSION_STORAGE_DRAFT_KEY);
-            setLastSavedInvoiceId(null);
             resetFormAndState({ mode: 'creditDeposit', customerId: customerIdParam, resetToDefaultBlank: true });
             setEditorMode('creditDeposit'); setCurrentDebtOrCreditAmount(0); setSelectedCustomerIdForDropdown(customerIdParam);
             setCustomerRifInput(targetCustomer.rif); setCustomerSearchMessage(`Registrando depósito para: ${targetCustomer.name}`);
             setShowNewCustomerFields(false); setSelectedCustomerAvailableCredit(targetCustomer.creditBalance || 0);
-            internalNavigationRef.current = true; router.replace('/invoice/new', { scroll: false });
-            actionTakenByUrl = true;
         } else {
-             toast({ variant: "destructive", title: "Cliente no encontrado." });
-             if (pathname === '/invoice/new' && searchParams.toString()) {
-                internalNavigationRef.current = true; router.replace('/invoice/new', { scroll: false });
-            }
+            toast({ variant: "destructive", title: "Cliente no encontrado." });
+            resetFormAndState({ mode: 'normal', resetToDefaultBlank: true }); setEditorMode('normal');
         }
+      }
+      internalNavigationRef.current = true; router.replace('/invoice/new', { scroll: false });
+      draftHandled = true; // URL params take precedence, draft is cleared
+      return; // Exit early as URL params dictate state
     }
 
-    if (actionTakenByUrl) return;
-
+    // If there's a lastSavedInvoiceId, form is showing a saved invoice, don't load draft
     if (lastSavedInvoiceId) {
         const savedFormData = form.getValues();
-        if (savedFormData.customerDetails) {
-            setCustomerRifInput(savedFormData.customerDetails.rif || "");
-            setSelectedCustomerIdForDropdown(savedFormData.customerDetails.id);
-            const foundCust = customers.find(c => c.id === savedFormData.customerDetails.id);
-            setSelectedCustomerAvailableCredit(foundCust?.creditBalance || 0);
-            setCustomerSearchMessage(savedFormData.customerDetails.name ? `Cliente: ${savedFormData.customerDetails.name}` : "Cliente no especificado");
-            setShowNewCustomerFields(!savedFormData.customerDetails.id && !!savedFormData.customerDetails.rif);
-        }
         setEditorMode(savedFormData.isDebtPayment ? 'debtPayment' : savedFormData.isCreditDeposit ? 'creditDeposit' : 'normal');
+        if(savedFormData.customerDetails){
+             setCustomerRifInput(savedFormData.customerDetails.rif || "");
+             setSelectedCustomerIdForDropdown(savedFormData.customerDetails.id);
+             const foundCust = customers.find(c => c.id === savedFormData.customerDetails.id);
+             setSelectedCustomerAvailableCredit(foundCust?.creditBalance || 0);
+        }
+        draftHandled = true;
         return;
     }
+    
+    // Attempt to load draft if no overriding URL params and not viewing a saved invoice
+    if (!draftHandled) {
+        const draftDataJson = typeof window !== 'undefined' ? sessionStorage.getItem(SESSION_STORAGE_DRAFT_KEY) : null;
+        if (draftDataJson) {
+            try {
+                const draftData: InvoiceFormData = JSON.parse(draftDataJson);
+                const draftDate = draftData.date && typeof draftData.date === 'string' ? parseISO(draftData.date) : draftData.date;
+                if (!isValid(draftDate)) throw new Error("Invalid date in draft");
+                
+                form.reset({ ...draftData, date: draftDate as Date });
 
-    const draftDataJson = typeof window !== 'undefined' ? sessionStorage.getItem(SESSION_STORAGE_DRAFT_KEY) : null;
-    if (draftDataJson) {
-        try {
-            const draftData: InvoiceFormData = JSON.parse(draftDataJson);
-            if (draftData.date && typeof draftData.date === 'string') draftData.date = parseISO(draftData.date);
-            
-            form.reset({}, { keepValues: false }); 
-            
-            Object.keys(draftData).forEach(key => {
-                const K = key as keyof InvoiceFormData;
-                if (K === 'customerDetails') {
-                    const cd = draftData[K] as CustomerDetails; 
-                    form.setValue('customerDetails.id', cd.id || "");
-                    form.setValue('customerDetails.name', cd.name || "");
-                    form.setValue('customerDetails.rif', cd.rif || "");
-                    form.setValue('customerDetails.address', cd.address || "");
-                    form.setValue('customerDetails.phone', cd.phone || "");
-                    form.setValue('customerDetails.email', cd.email || "");
-                } else if (K === 'items') {
-                    replaceItems(draftData.items || [{ id: uuidv4(), description: "", quantity: 1, unitPrice: 0 }]);
-                } else if (K === 'paymentMethods') {
-                    replacePayments(draftData.paymentMethods || [{ method: "Efectivo", amount: 0, reference: "" }]);
-                } else if (K === 'changeRefundPaymentMethods') {
-                    replaceChangePayments(draftData.changeRefundPaymentMethods || []);
-                } else if (draftData[K] !== undefined) {
-                     form.setValue(K, draftData[K] as any);
+                // Explicitly set values for nested and complex fields from draft
+                if (draftData.customerDetails) {
+                    Object.keys(draftData.customerDetails).forEach(key => {
+                        const K = key as keyof CustomerDetails;
+                        form.setValue(`customerDetails.${K}`, draftData.customerDetails[K] as any);
+                    });
+                    setCustomerRifInput(draftData.customerDetails.rif || "");
+                    setSelectedCustomerIdForDropdown(draftData.customerDetails.id);
+                    const foundCust = customers.find(c => c.id === draftData.customerDetails.id);
+                    setSelectedCustomerAvailableCredit(foundCust?.creditBalance || 0);
+                    setCustomerSearchMessage(foundCust ? `Borrador: ${foundCust.name}` : (draftData.customerDetails.name ? `Borrador: ${draftData.customerDetails.name} (nuevo)` : "Borrador cargado"));
+                    setShowNewCustomerFields(!foundCust && !!draftData.customerDetails.rif);
+                } else {
+                    form.setValue("customerDetails", { ...defaultCustomer });
+                    setCustomerRifInput(""); setSelectedCustomerIdForDropdown(undefined); setShowNewCustomerFields(false); setCustomerSearchMessage(null); setSelectedCustomerAvailableCredit(0);
                 }
-            });
 
-            const loadedCust = draftData.customerDetails;
-            if (loadedCust) {
-                setCustomerRifInput(loadedCust.rif || "");
-                setSelectedCustomerIdForDropdown(loadedCust.id);
-                const foundCust = customers.find(c => c.id === loadedCust.id);
-                setSelectedCustomerAvailableCredit(foundCust?.creditBalance || 0);
-                setCustomerSearchMessage(foundCust ? `Borrador: ${foundCust.name}` : (loadedCust.name ? `Borrador: ${loadedCust.name} (nuevo)`: "Borrador cargado"));
-                setShowNewCustomerFields(!foundCust && !!loadedCust.rif); 
-            } else {
-                setCustomerRifInput(""); setSelectedCustomerIdForDropdown(undefined);
-                setShowNewCustomerFields(false); setCustomerSearchMessage(null); setSelectedCustomerAvailableCredit(0);
+                replaceItems(draftData.items || [{ id: uuidv4(), description: "", quantity: 1, unitPrice: 0 }]);
+                replacePayments(draftData.paymentMethods || [{ method: "Efectivo", amount: 0, reference: "" }]);
+                replaceChangePayments(draftData.changeRefundPaymentMethods || []);
+                
+                form.setValue('applyWarranty', draftData.applyWarranty || false);
+                form.setValue('warrantyDuration', draftData.warrantyDuration || "no_aplica");
+                form.setValue('warrantyText', draftData.warrantyText || "");
+
+                setEditorMode(draftData.isDebtPayment ? 'debtPayment' : draftData.isCreditDeposit ? 'creditDeposit' : 'normal');
+                setCurrentDebtOrCreditAmount(draftData.isDebtPayment && draftData.items.length > 0 ? draftData.items[0].unitPrice : 0);
+                
+                toast({ title: "Borrador Cargado", description: "Se restauró la información de la factura no guardada." });
+            } catch (error) {
+                console.error("Error parsing/restoring draft from sessionStorage:", error);
+                if (typeof window !== 'undefined') sessionStorage.removeItem(SESSION_STORAGE_DRAFT_KEY);
+                resetFormAndState({ resetToDefaultBlank: true }); 
             }
-            setEditorMode(draftData.isDebtPayment ? 'debtPayment' : draftData.isCreditDeposit ? 'creditDeposit' : 'normal');
-            setCurrentDebtOrCreditAmount(draftData.isDebtPayment && draftData.items.length > 0 ? draftData.items[0].unitPrice : 0);
-
-            toast({ title: "Borrador Cargado", description: "Se restauró la información de la factura no guardada."});
-        } catch (error) {
-            console.error("Error parsing/restoring draft from sessionStorage:", error);
-            if (typeof window !== 'undefined') sessionStorage.removeItem(SESSION_STORAGE_DRAFT_KEY);
-            resetFormAndState({ resetToDefaultBlank: true }); 
-        }
-    } else {
-        if (!lastSavedInvoiceId) { 
+        } else {
+             // No URL params, not viewing saved invoice, no draft found -> reset to blank
             resetFormAndState({ resetToDefaultBlank: true });
             setEditorMode('normal'); setSelectedCustomerIdForDropdown(undefined); setCustomerRifInput("");
             setCustomerSearchMessage(null); setShowNewCustomerFields(false); setSelectedCustomerAvailableCredit(0);
@@ -399,18 +358,15 @@ export function InvoiceEditor() {
   }, [isClient, searchParams, customers, router, pathname, resetFormAndState, toast, form, lastSavedInvoiceId, replaceItems, replacePayments, replaceChangePayments]);
 
 
-  // Save draft to sessionStorage on form change
   useEffect(() => {
     const debouncedSaveDraft = debounce((values: Partial<InvoiceFormData>) => {
-        if (isClient && !lastSavedInvoiceId ) { // Removed form.formState.isDirty check here to always save if not viewing saved invoice
+        if (isClient && !lastSavedInvoiceId && form.formState.isDirty) {
             sessionStorage.setItem(SESSION_STORAGE_DRAFT_KEY, JSON.stringify(values));
         }
     }, 750);
 
     const subscription = form.watch((valuesFromWatch) => {
-      if (!lastSavedInvoiceId) {
-        debouncedSaveDraft(valuesFromWatch as InvoiceFormData);
-      }
+      debouncedSaveDraft(valuesFromWatch as InvoiceFormData);
       
       const watchedValues = valuesFromWatch as InvoiceFormData;
       const currentItems = (watchedValues.items || []).map(item => ({
@@ -433,7 +389,7 @@ export function InvoiceEditor() {
       setLiveInvoicePreview(prev => ({
           ...prev, id: lastSavedInvoiceId || prev.id || '', status: prev.status || 'active',
           invoiceNumber: watchedValues.invoiceNumber,
-          date: watchedValues.date ? (typeof watchedValues.date === 'string' ? watchedValues.date : watchedValues.date.toISOString()) : (prev.date || new Date(0).toISOString()),
+          date: watchedValues.date ? (typeof watchedValues.date === 'string' ? watchedValues.date : (isValid(watchedValues.date) ? watchedValues.date.toISOString() : new Date(0).toISOString())) : (prev.date || new Date(0).toISOString()),
           companyDetails: companyDetails || stableDefaultCompany, cashierNumber: watchedValues.cashierNumber, salesperson: watchedValues.salesperson,
           customerDetails: watchedValues.customerDetails as CustomerDetails, items: currentItems, paymentMethods: watchedValues.paymentMethods as PaymentDetails[],
           subTotal, discountPercentage: currentDiscountPercentage, discountValue: discountAmount,
@@ -447,14 +403,15 @@ export function InvoiceEditor() {
       }));
     });
     return () => subscription.unsubscribe();
-  }, [form, lastSavedInvoiceId, isClient, companyDetails, calculateTotals, calculatePaymentSummary, initialLivePreviewState]);
+  }, [form, lastSavedInvoiceId, isClient, companyDetails, calculateTotals, calculatePaymentSummary, setLiveInvoicePreview]);
 
+
+  const overpaymentHandlingChoiceValue = form.watch("overpaymentHandlingChoice");
 
   useEffect(() => {
-    const watchedOverpaymentHandlingChoice = form.watch("overpaymentHandlingChoice");
-    const actualOverpaymentAmount = liveInvoicePreview.overpaymentAmount || 0;
+    const actualOverpaymentAmount = liveInvoicePreview?.overpaymentAmount || 0;
 
-    if (watchedOverpaymentHandlingChoice === 'refundNow' && actualOverpaymentAmount > 0) {
+    if (overpaymentHandlingChoiceValue === 'refundNow' && actualOverpaymentAmount > 0) {
         if (changePaymentFields.length === 0) {
             replaceChangePayments([{ method: "Efectivo", amount: actualOverpaymentAmount, reference: "" }]);
         } else if (changePaymentFields.length === 1) {
@@ -467,10 +424,17 @@ export function InvoiceEditor() {
                 });
             }
         }
-    } else if (watchedOverpaymentHandlingChoice === 'creditToAccount') {
+    } else if (overpaymentHandlingChoiceValue === 'creditToAccount') {
         if (changePaymentFields.length > 0) replaceChangePayments([]);
     }
-  }, [form.watch("overpaymentHandlingChoice"), liveInvoicePreview.overpaymentAmount, changePaymentFields, replaceChangePayments, updateChangePayment]);
+  }, [
+      overpaymentHandlingChoiceValue, 
+      liveInvoicePreview, // Keep liveInvoicePreview as a whole object dependency
+      changePaymentFields, 
+      replaceChangePayments, 
+      updateChangePayment
+  ]);
+
 
   useEffect(() => {
     const applyTaxValue = form.watch('applyTax');
@@ -515,10 +479,8 @@ export function InvoiceEditor() {
   useEffect(() => {
     if (!watchedApplyDiscount || editorMode !== 'normal') {
         const currentPercentage = form.getValues('discountPercentage'); const currentValue = form.getValues('discountValue');
-        let changed = false;
-        if (currentPercentage !== 0) { form.setValue('discountPercentage', 0, { shouldValidate: true, shouldDirty: false }); changed = true; }
-        if (currentValue !== 0) { form.setValue('discountValue', 0, { shouldValidate: true, shouldDirty: false }); changed = true; }
-        // if (changed && form.formState.dirtyFields.applyDiscount) form.setValue('applyDiscount', form.getValues('applyDiscount'), {shouldDirty: true});
+        if (currentPercentage !== 0) { form.setValue('discountPercentage', 0, { shouldValidate: true, shouldDirty: false }); }
+        if (currentValue !== 0) { form.setValue('discountValue', 0, { shouldValidate: true, shouldDirty: false }); }
     }
   }, [watchedApplyDiscount, editorMode, form]); 
 
@@ -546,7 +508,7 @@ export function InvoiceEditor() {
           form.setValue('warrantyText', userText, { shouldValidate: true });
         }
       } else { 
-        let endDate = new Date(watchedInvoiceDate || Date.now());
+        let endDate = isValid(watchedInvoiceDate) ? new Date(watchedInvoiceDate) : new Date();
         const [value, unit] = watchedWarrantyDuration.split("_"); const numValue = parseInt(value);
         if (unit === "dias") endDate = addDays(endDate, numValue);
         else if (unit === "mes") endDate = addMonths(endDate, numValue);
@@ -614,7 +576,7 @@ export function InvoiceEditor() {
     const paymentMethods = form.getValues("paymentMethods"); const currentPayment = paymentMethods[index];
     updatePayment(index, { ...currentPayment, method: newMethod, amount: currentPayment.amount });
     if (newMethod === "Saldo a Favor" && editorMode === 'normal' && selectedCustomerAvailableCredit > 0) {
-        const invoiceTotal = liveInvoicePreview.totalAmount || 0; let otherPaymentsTotal = 0;
+        const invoiceTotal = liveInvoicePreview?.totalAmount || 0; let otherPaymentsTotal = 0;
         paymentMethods.forEach((pm, i) => { if (i !== index && pm.method !== "Saldo a Favor") otherPaymentsTotal += pm.amount || 0; });
         const amountDueOnInvoice = Math.max(0, invoiceTotal - otherPaymentsTotal);
         const amountToApplyFromCredit = Math.min(selectedCustomerAvailableCredit, amountDueOnInvoice);
@@ -758,10 +720,9 @@ export function InvoiceEditor() {
 
     setSavedInvoices(prevInvoices => [...prevInvoices, fullInvoiceData]);
     setLastSavedInvoiceId(newInvoiceId); 
-    setLiveInvoicePreview(prev => ({...prev, ...fullInvoiceData, status: 'active'})); 
+    if(setLiveInvoicePreview) setLiveInvoicePreview(prev => ({...prev, ...fullInvoiceData, status: 'active'})); 
     if (typeof window !== 'undefined') sessionStorage.removeItem(SESSION_STORAGE_DRAFT_KEY);
-    // form.formState.isDirty = false; // Mark form as not dirty after save
-
+    
     let toastTitle = "Factura Guardada";
     if (editorMode === 'debtPayment') toastTitle = "Abono a Deuda Registrado";
     if (editorMode === 'creditDeposit') toastTitle = "Depósito a Cuenta Registrado";
@@ -811,7 +772,7 @@ export function InvoiceEditor() {
     const updatedInvoices = [...savedInvoices];
     updatedInvoices[invoiceToCancelIdx] = { ...invoiceToCancel, status: 'cancelled', cancelledAt: new Date().toISOString() };
     setSavedInvoices(updatedInvoices);
-    setLiveInvoicePreview(prev => ({ ...prev, status: 'cancelled' }));
+    if(setLiveInvoicePreview) setLiveInvoicePreview(prev => ({ ...prev, status: 'cancelled' }));
     toast({ title: "Factura Anulada", description: `Factura Nro. ${invoiceToCancel.invoiceNumber} anulada.` });
     setIsCancelConfirmOpen(false);
   };
@@ -820,7 +781,7 @@ export function InvoiceEditor() {
   const getEditorTitle = () => {
     if (editorMode === 'debtPayment') return "Registrar Abono a Deuda";
     if (editorMode === 'creditDeposit') return "Registrar Depósito a Cuenta Cliente";
-    if (lastSavedInvoiceId && liveInvoicePreview.status === 'cancelled') return "Factura Anulada";
+    if (lastSavedInvoiceId && liveInvoicePreview?.status === 'cancelled') return "Factura Anulada";
     if (lastSavedInvoiceId) return "Factura Guardada - Previsualización";
     return "Crear Nueva Factura";
   };
@@ -828,8 +789,8 @@ export function InvoiceEditor() {
   if (!isClient) return (<div className="flex flex-col items-center justify-center min-h-[60vh] text-muted-foreground"><FileText className="h-16 w-16 mb-4 animate-pulse text-primary" /><p className="text-xl font-semibold">Cargando editor...</p></div>);
 
   const currentCustomerForActions = form.getValues("customerDetails");
-  const showOverpaymentSection = liveInvoicePreview.overpaymentAmount && liveInvoicePreview.overpaymentAmount > 0.001 && editorMode === 'normal';
-  const canCancelThisInvoice = lastSavedInvoiceId && liveInvoicePreview.id === lastSavedInvoiceId && liveInvoicePreview.type === 'sale' && liveInvoicePreview.status === 'active';
+  const showOverpaymentSection = liveInvoicePreview?.overpaymentAmount && liveInvoicePreview.overpaymentAmount > 0.001 && editorMode === 'normal';
+  const canCancelThisInvoice = lastSavedInvoiceId && liveInvoicePreview?.id === lastSavedInvoiceId && liveInvoicePreview.type === 'sale' && liveInvoicePreview.status === 'active';
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
@@ -838,8 +799,8 @@ export function InvoiceEditor() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-xl flex items-center text-primary"> <FileText className="mr-2 h-5 w-5" /> {getEditorTitle()} </CardTitle>
-                 {lastSavedInvoiceId && liveInvoicePreview.status !== 'cancelled' && (<CardDescription> Factura guardada con Nro: <span className="font-semibold text-primary">{liveInvoicePreview.invoiceNumber}</span>. {liveInvoicePreview.status === 'active' ? "Ahora puede imprimirla o anularla." : ""} </CardDescription>)}
-                {lastSavedInvoiceId && liveInvoicePreview.status === 'cancelled' && (<CardDescription className="text-destructive font-semibold"> Esta factura (Nro: {liveInvoicePreview.invoiceNumber}) ha sido ANULADA. </CardDescription>)}
+                 {lastSavedInvoiceId && liveInvoicePreview?.status !== 'cancelled' && (<CardDescription> Factura guardada con Nro: <span className="font-semibold text-primary">{liveInvoicePreview?.invoiceNumber}</span>. {liveInvoicePreview?.status === 'active' ? "Ahora puede imprimirla o anularla." : ""} </CardDescription>)}
+                {lastSavedInvoiceId && liveInvoicePreview?.status === 'cancelled' && (<CardDescription className="text-destructive font-semibold"> Esta factura (Nro: {liveInvoicePreview?.invoiceNumber}) ha sido ANULADA. </CardDescription>)}
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:items-start">
@@ -848,7 +809,7 @@ export function InvoiceEditor() {
                       <FormItem><FormLabel htmlFor="date">Fecha</FormLabel>
                         <Popover><PopoverTrigger asChild><FormControl>
                             <Button id="date" variant={"outline"} className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")} disabled={!!lastSavedInvoiceId}>
-                              <CalendarDays className="mr-2 h-4 w-4" />{field.value ? format(field.value, "PPP", { locale: es }) : <span>Seleccione fecha</span>}
+                              <CalendarDays className="mr-2 h-4 w-4" />{field.value && isValid(field.value) ? format(field.value, "PPP", { locale: es }) : <span>Seleccione fecha</span>}
                             </Button></FormControl></PopoverTrigger>
                           <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={(date) => { if (date) field.onChange(date);}} initialFocus locale={es} disabled={(date) => date > new Date() || date < new Date("1900-01-01") || !!lastSavedInvoiceId} /></PopoverContent>
                         </Popover><FormMessage />
@@ -936,7 +897,7 @@ export function InvoiceEditor() {
                                           </SelectContent></Select><FormMessage /></FormItem>)}/>
                           <FormField control={form.control} name={`paymentMethods.${index}.amount`} render={({ field: f }) => (
                                   <FormItem><FormLabel>Monto ({CURRENCY_SYMBOL})</FormLabel><FormControl>
-                                        <Input {...f} value={f.value === 0 ? '' : f.value} onChange={e => f.onChange(parseFloat(e.target.value) || 0)} type="number" step="0.01" placeholder="0.00" readOnly={(form.getValues(`paymentMethods.${index}.method`) === 'Saldo a Favor' && editorMode === 'normal' && (liveInvoicePreview.totalAmount || 0) <= selectedCustomerAvailableCredit && (liveInvoicePreview.totalAmount || 0) > 0) || !!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)}/>
+                                        <Input {...f} value={f.value === 0 ? '' : f.value} onChange={e => f.onChange(parseFloat(e.target.value) || 0)} type="number" step="0.01" placeholder="0.00" readOnly={(form.getValues(`paymentMethods.${index}.method`) === 'Saldo a Favor' && editorMode === 'normal' && (liveInvoicePreview?.totalAmount || 0) <= selectedCustomerAvailableCredit && (liveInvoicePreview?.totalAmount || 0) > 0) || !!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)}/>
                           <FormField control={form.control} name={`paymentMethods.${index}.reference`} render={({ field: f }) => (<FormItem><FormLabel>Referencia (Opc.)</FormLabel><FormControl><Input {...f} placeholder="Nro. confirmación" readOnly={!!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)}/>
                           <Button type="button" variant="ghost" size="icon" onClick={() => removePayment(index)} className="text-destructive hover:text-destructive/80" disabled={paymentFields.length <=1 || !!lastSavedInvoiceId}><Trash2 className="h-5 w-5" /></Button>
                       </div>))}
@@ -947,10 +908,10 @@ export function InvoiceEditor() {
 
             {showOverpaymentSection && !lastSavedInvoiceId && (
                  <Card>
-                    <CardHeader><CardTitle className="text-xl flex items-center text-primary"><WalletCards className="mr-2 h-5 w-5" />Manejo Sobrepago ({formatCurrency(liveInvoicePreview.overpaymentAmount)})</CardTitle><CardDescription>Cliente pagó de más. Seleccione cómo proceder.</CardDescription></CardHeader>
+                    <CardHeader><CardTitle className="text-xl flex items-center text-primary"><WalletCards className="mr-2 h-5 w-5" />Manejo Sobrepago ({formatCurrency(liveInvoicePreview?.overpaymentAmount)})</CardTitle><CardDescription>Cliente pagó de más. Seleccione cómo proceder.</CardDescription></CardHeader>
                     <CardContent className="space-y-4">
                         <FormField control={form.control} name="overpaymentHandlingChoice" render={({ field }) => (
-                                <FormItem className="space-y-3"><FormLabel>¿Qué hacer con {formatCurrency(liveInvoicePreview.overpaymentAmount)}?</FormLabel><FormControl>
+                                <FormItem className="space-y-3"><FormLabel>¿Qué hacer con {formatCurrency(liveInvoicePreview?.overpaymentAmount)}?</FormLabel><FormControl>
                                     <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col space-y-1" disabled={!!lastSavedInvoiceId}>
                                     <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="creditToAccount" /></FormControl><FormLabel className="font-normal">Abonar a Saldo Favor Cliente</FormLabel></FormItem>
                                     <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="refundNow" /></FormControl><FormLabel className="font-normal">Procesar Vuelto Ahora</FormLabel></FormItem>
@@ -999,7 +960,7 @@ export function InvoiceEditor() {
               <CardFooter className="flex-col sm:flex-row items-stretch gap-3">
                   {!lastSavedInvoiceId && (<Button type="submit" className="w-full sm:flex-1 bg-primary hover:bg-primary/90 text-primary-foreground"><Save className="mr-2 h-4 w-4" />{editorMode === 'debtPayment' && "Guardar Abono"}{editorMode === 'creditDeposit' && "Guardar Depósito"}{editorMode === 'normal' && "Guardar Factura"}</Button>)}
                   {canCancelThisInvoice ? (<Button type="button" variant="destructive" onClick={() => setIsCancelConfirmOpen(true)} className="w-full sm:w-auto"><XCircle className="mr-2 h-4 w-4" /> Anular Factura</Button>
-                  ) : liveInvoicePreview.status === 'cancelled' ? (<Button type="button" variant="outline" disabled className="w-full sm:w-auto"><ShieldCheck className="mr-2 h-4 w-4 text-destructive" /> Factura Anulada</Button>
+                  ) : liveInvoicePreview?.status === 'cancelled' ? (<Button type="button" variant="outline" disabled className="w-full sm:w-auto"><ShieldCheck className="mr-2 h-4 w-4 text-destructive" /> Factura Anulada</Button>
                   ) : (<Button type="button" variant="outline" onClick={handleCleanAndExit} className="w-full sm:w-auto"><XCircle className="mr-2 h-4 w-4" /> {lastSavedInvoiceId ? "Nueva Factura / Salir" : "Limpiar y Salir"}</Button>)}
               </CardFooter>
             </Card>
@@ -1007,16 +968,18 @@ export function InvoiceEditor() {
       </form>
       <div className="lg:col-span-1 space-y-4 sticky top-20" data-invoice-preview-wrapper>
         <Card className="shadow-md no-print" data-invoice-preview-header>
-          <CardHeader><CardTitle className="text-xl flex items-center text-primary"><Info className="mr-2 h-5 w-5" />Previsualización {editorMode === 'debtPayment' ? "Abono" : editorMode === 'creditDeposit' ? "Depósito" : (liveInvoicePreview.status === 'cancelled' ? "Factura Anulada" : "Factura")}</CardTitle><CardDescription>Así se verá su documento.</CardDescription></CardHeader>
+          <CardHeader><CardTitle className="text-xl flex items-center text-primary"><Info className="mr-2 h-5 w-5" />Previsualización {editorMode === 'debtPayment' ? "Abono" : editorMode === 'creditDeposit' ? "Depósito" : (liveInvoicePreview?.status === 'cancelled' ? "Factura Anulada" : "Factura")}</CardTitle><CardDescription>Así se verá su documento.</CardDescription></CardHeader>
         </Card>
-        <InvoicePreview invoice={liveInvoicePreview} companyDetails={previewCompanyDetails} className="print-receipt" isSavedInvoice={!!lastSavedInvoiceId} invoiceStatus={liveInvoicePreview.status || 'active'} id="invoice-editor-preview-card" />
+        <InvoicePreview invoice={liveInvoicePreview || initialLivePreviewState} companyDetails={previewCompanyDetails} className="print-receipt" isSavedInvoice={!!lastSavedInvoiceId} invoiceStatus={liveInvoicePreview?.status || 'active'} id="invoice-editor-preview-card" />
       </div>
        <AlertDialog open={isCancelConfirmOpen} onOpenChange={setIsCancelConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader><AlertDialogTitle>¿Anular esta factura?</AlertDialogTitle>
-            <AlertDialogDescription>Factura Nro. <span className="font-semibold">{liveInvoicePreview.invoiceNumber}</span>. Los saldos del cliente serán revertidos. Esta acción no se puede deshacer.</AlertDialogDescription>
+            <AlertDialogDescription>Factura Nro. <span className="font-semibold">{liveInvoicePreview?.invoiceNumber}</span>. Los saldos del cliente serán revertidos. Esta acción no se puede deshacer.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter><AlertDialogCancel>No</AlertDialogCancel><AlertDialogAction onClick={handleCancelCreatedInvoice} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">Sí, anular</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent></AlertDialog>
     </div>);
 }
+
+    
