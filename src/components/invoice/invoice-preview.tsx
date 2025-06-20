@@ -3,7 +3,7 @@
 
 import type { Invoice, CompanyDetails } from "@/lib/types";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
-import { SENIAT_TEXT, CURRENCY_SYMBOL, FISCAL_PRINTER_LINE_WIDTH, CANCELLED_WATERMARK_TEXT } from "@/lib/constants";
+import { SENIAT_TEXT, CURRENCY_SYMBOL, FISCAL_PRINTER_LINE_WIDTH, CANCELLED_WATERMARK_TEXT, CREDIT_NOTE_WATERMARK_TEXT } from "@/lib/constants";
 import React from "react";
 import { cn } from "@/lib/utils";
 import FacturaPrintControls from "@/components/FacturaPrintControls";
@@ -70,8 +70,9 @@ export function InvoicePreview({
   if (invoiceStatus === 'cancelled') {
     documentTitle = `FACTURA (ANULADA)`;
     watermarkTextContent = CANCELLED_WATERMARK_TEXT;
-  } else if (isReturn) {
+  } else if (isReturn) { // This is a credit note
     documentTitle = "NOTA DE CRÉDITO";
+    watermarkTextContent = CREDIT_NOTE_WATERMARK_TEXT;
   } else if (isDebtPayment) {
     documentTitle = "RECIBO DE PAGO DE DEUDA";
   } else if (isCreditDeposit) {
@@ -255,6 +256,16 @@ export function InvoicePreview({
               {invoice.notes && <p className="text-xs italic mt-1">{invoice.notes}</p>}
             </div>
 
+            {invoice.reasonForStatusChange && (invoiceStatus === 'cancelled' || isReturn) && (
+              <>
+                <DottedLine />
+                <div className="text-center mt-2 pt-1">
+                  <p className="font-semibold">MOTIVO {invoiceStatus === 'cancelled' ? 'DE ANULACIÓN' : 'DE NOTA DE CRÉDITO'}:</p>
+                  <p className="text-xs">{invoice.reasonForStatusChange}</p>
+                </div>
+              </>
+            )}
+
           </CardContent>
 
           {showPrintAndCompareControls && (
@@ -274,18 +285,6 @@ export function InvoicePreview({
                    <FacturaPrintControls invoiceData={invoice} />
               </CardFooter>
           )}
-          {/*
-            The block below was causing print controls to show for non-saved invoices.
-            It's removed because the primary `showPrintAndCompareControls` handles the saved invoice case.
-            The print-preview-formats page does not need print controls *within* its previews.
-          */}
-          {/*
-          {!isSavedInvoice && invoice && Object.keys(invoice).length > 0 && (
-              <CardFooter className="p-4 border-t no-print flex flex-col items-stretch gap-2">
-                  <FacturaPrintControls invoiceData={invoice} />
-              </CardFooter>
-          )}
-          */}
         </Card>
     </div>
   );

@@ -22,6 +22,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Textarea } from "@/components/ui/textarea"; // Import Textarea
+import { Label } from "@/components/ui/label"; // Import Label
 
 
 export default function ViewInvoicePage() {
@@ -40,6 +42,7 @@ export default function ViewInvoicePage() {
   const [invoice, setInvoice] = useState<Invoice | null | undefined>(undefined);
   const [isClient, setIsClient] = useState(false);
   const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
+  const [cancellationReasonInput, setCancellationReasonInput] = useState(""); // State for cancellation reason
 
   useEffect(() => {
     setIsClient(true);
@@ -47,18 +50,18 @@ export default function ViewInvoicePage() {
 
   useEffect(() => {
     if (isClient && invoiceId) {
-      // Always read from localStorage directly when component mounts or invoiceId/allInvoices changes
-      // to ensure the freshest data is displayed, especially if localStorage was updated in another tab/component.
       const currentInvoices = JSON.parse(localStorage.getItem("invoices") || "[]") as Invoice[];
       const foundInvoice = currentInvoices.find((inv) => inv.id === invoiceId);
       setInvoice(foundInvoice || null);
     }
-  }, [invoiceId, isClient, allInvoices]); // Depend on allInvoices to re-fetch if it changes externally
+  }, [invoiceId, isClient, allInvoices]);
 
   const canCancelThisInvoice = () => {
     if (!invoice) return false;
+    // Standard sales invoices that are active and not special types (debt/credit payments) can be cancelled.
+    // Also, returns (credit notes) cannot be cancelled themselves.
     return invoice.type === 'sale' &&
-           invoice.status === 'active' && // Only active invoices
+           invoice.status === 'active' &&
            !invoice.isDebtPayment &&
            !invoice.isCreditDeposit;
   };
@@ -68,6 +71,10 @@ export default function ViewInvoicePage() {
       toast({ variant: "destructive", title: "Error", description: "Esta factura no se puede anular." });
       setIsCancelConfirmOpen(false);
       return;
+    }
+    if (!cancellationReasonInput.trim()) {
+      toast({ variant: "destructive", title: "Motivo Requerido", description: "Por favor, ingrese el motivo de la anulación." });
+      return; // Do not proceed if reason is empty
     }
 
     const customerToUpdateIdx = customers.findIndex(c => c.id === invoice.customerDetails.id);
@@ -81,32 +88,22 @@ export default function ViewInvoicePage() {
     let updatedOutstandingBalance = customerToUpdate.outstandingBalance || 0;
     let updatedCreditBalance = customerToUpdate.creditBalance || 0;
 
-    // Revert financial impact
-    if (invoice.isDebtPayment) { // Should not happen due to canCancelThisInvoice, but good for completeness
-        updatedOutstandingBalance += invoice.amountPaid;
-        if ((invoice.totalAmount ?? 0) < invoice.amountPaid) { // Overpayment during debt payment went to credit
-            updatedCreditBalance -= (invoice.amountPaid - (invoice.totalAmount ?? 0));
+    // Revert financial impact - This logic should be accurate as it handles standard sales invoices
+    if ((invoice.amountDue ?? 0) > 0) { // If there was an amount due (customer owed money)
+        updatedOutstandingBalance -= invoice.amountDue;
+    }
+    // Revert any credit used from customer's account for this invoice
+    (invoice.paymentMethods || []).forEach(pm => {
+        if (pm.method === "Saldo a Favor" || pm.method === "Saldo a Favor (Auto)") {
+            updatedCreditBalance += pm.amount;
         }
-    } else if (invoice.isCreditDeposit) { // Should not happen
-        const depositAmount = invoice.amountPaid;
-        // This is tricky: if deposit covered debt first, that part of debt needs to be "re-instated".
-        // For simplicity now, assume direct deposit to credit. A more robust solution would track debt payment portion of a deposit.
-        updatedCreditBalance -= depositAmount;
-    } else { // Standard sale invoice
-        if ((invoice.amountDue ?? 0) > 0) {
-            updatedOutstandingBalance -= invoice.amountDue;
-        }
-        (invoice.paymentMethods || []).forEach(pm => {
-            if (pm.method === "Saldo a Favor" || pm.method === "Saldo a Favor (Auto)") {
-                updatedCreditBalance += pm.amount;
-            }
-        });
-        if (invoice.overpaymentAmount && invoice.overpaymentAmount > 0 && invoice.overpaymentHandling === 'creditedToAccount') {
-            updatedCreditBalance -= invoice.overpaymentAmount;
-        }
+    });
+    // If overpayment was credited to account, revert that credit
+    if (invoice.overpaymentAmount && invoice.overpaymentAmount > 0 && invoice.overpaymentHandling === 'creditedToAccount') {
+        updatedCreditBalance -= invoice.overpaymentAmount;
     }
     
-    // Ensure balances are not negative
+    // Ensure balances are not negative after adjustments
     customerToUpdate.outstandingBalance = Math.max(0, updatedOutstandingBalance);
     customerToUpdate.creditBalance = Math.max(0, updatedCreditBalance);
 
@@ -115,20 +112,25 @@ export default function ViewInvoicePage() {
     setCustomers(updatedCustomers);
 
     const invoiceToCancelIdx = allInvoices.findIndex(inv => inv.id === invoice.id);
-    const updatedInvoice = { ...invoice, status: 'cancelled' as const, cancelledAt: new Date().toISOString() };
+    const updatedInvoice = { 
+      ...invoice, 
+      status: 'cancelled' as const, 
+      cancelledAt: new Date().toISOString(),
+      reasonForStatusChange: cancellationReasonInput.trim(), // Save the reason
+    };
     
     const updatedInvoices = [...allInvoices];
     if (invoiceToCancelIdx !== -1) {
         updatedInvoices[invoiceToCancelIdx] = updatedInvoice;
     } else {
-        // This case should ideally not happen if invoice was found initially
         updatedInvoices.push(updatedInvoice);
     }
     setAllInvoices(updatedInvoices);
-    setInvoice(updatedInvoice); // Update local state for immediate UI reflection
+    setInvoice(updatedInvoice); 
 
     toast({ title: "Factura Anulada", description: `La factura Nro. ${invoice.invoiceNumber} ha sido anulada.` });
     setIsCancelConfirmOpen(false);
+    setCancellationReasonInput(""); // Reset reason input
   };
 
 
@@ -171,7 +173,10 @@ export default function ViewInvoicePage() {
             Volver
         </Button>
         {canCancelThisInvoice() && (
-            <Button variant="destructive" onClick={() => setIsCancelConfirmOpen(true)}>
+            <Button variant="destructive" onClick={() => {
+              setCancellationReasonInput(""); // Clear reason input when opening dialog
+              setIsCancelConfirmOpen(true);
+            }}>
                 <XCircle className="mr-2 h-4 w-4" />
                 Anular Factura
             </Button>
@@ -194,9 +199,26 @@ export default function ViewInvoicePage() {
               Esta acción no se puede deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="space-y-2 my-4">
+            <Label htmlFor="cancellationReason">Motivo de la Anulación (Obligatorio)</Label>
+            <Textarea
+              id="cancellationReason"
+              value={cancellationReasonInput}
+              onChange={(e) => setCancellationReasonInput(e.target.value)}
+              placeholder="Ej: Error en los artículos, solicitud del cliente, etc."
+              rows={3}
+            />
+             {!cancellationReasonInput.trim() && (
+                <p className="text-xs text-destructive">El motivo es obligatorio.</p>
+            )}
+          </div>
           <AlertDialogFooter>
-            <AlertDialogCancel>No</AlertDialogCancel>
-            <AlertDialogAction onClick={handleCancelInvoice} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
+            <AlertDialogCancel onClick={() => setCancellationReasonInput("")}>No</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleCancelInvoice} 
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+              disabled={!cancellationReasonInput.trim()} // Disable if reason is empty
+            >
                 Sí, anular
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -205,4 +227,3 @@ export default function ViewInvoicePage() {
     </div>
   );
 }
-

@@ -72,8 +72,9 @@ export interface Invoice {
   changeRefundPaymentMethods?: PaymentDetails[]; 
 
   cancelledAt?: string; 
+  reasonForStatusChange?: string; // Added field for cancellation/return reason
 }
 
 export const DEFAULT_COMPANY_ID = "main_company_details";
 export const defaultCustomer: CustomerDetails = { id: "", name: "", rif: "", address: "", phone: "", email: "", outstandingBalance: 0, creditBalance: 0 };
-export const TAX_RATE = 0.16; // Moved here for consistency if schemas/constants also use it.
+export const TAX_RATE = 0.16;

@@ -40,6 +40,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Label } from "@/components/ui/label";
 
 
 type InvoiceFormData = z.infer<typeof invoiceFormSchema>;
@@ -99,6 +100,7 @@ export function InvoiceEditor() {
 
   const [lastSavedInvoiceId, setLastSavedInvoiceId] = useState<string | null>(null);
   const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
+  const [editorCancellationReasonInput, setEditorCancellationReasonInput] = useState(""); // State for cancellation reason in editor
   const internalNavigationRef = useRef(false);
 
   const initialLivePreviewState = useMemo<Partial<Invoice>>(() => ({
@@ -111,7 +113,7 @@ export function InvoiceEditor() {
     amountPaid: 0, amountDue: 0, thankYouMessage: DEFAULT_THANK_YOU_MESSAGE, notes: "",
     warrantyText: "", isDebtPayment: false, isCreditDeposit: false, overpaymentAmount: 0,
     overpaymentHandling: 'creditToAccount', changeRefundPaymentMethods: [], originalInvoiceId: undefined,
-    cancelledAt: undefined,
+    cancelledAt: undefined, reasonForStatusChange: undefined,
   }), [companyDetails]);
   
   const [liveInvoicePreview, setLiveInvoicePreview] = useState<Partial<Invoice>>(initialLivePreviewState);
@@ -418,6 +420,7 @@ export function InvoiceEditor() {
           isDebtPayment: !!watchedValues.isDebtPayment, isCreditDeposit: !!watchedValues.isCreditDeposit,
           overpaymentAmount: overpaymentAmt, overpaymentHandling: watchedValues.overpaymentHandlingChoice,
           changeRefundPaymentMethods: watchedValues.changeRefundPaymentMethods as PaymentDetails[] || [],
+          reasonForStatusChange: prev.reasonForStatusChange, // Keep existing reason if any
       }));
     });
     return () => subscription.unsubscribe();
@@ -737,6 +740,7 @@ export function InvoiceEditor() {
       overpaymentAmount: (editorMode === 'normal' && (totalAmount - finalAmountPaidOnInvoice) < -0.001) ? Math.abs(totalAmount - finalAmountPaidOnInvoice) : undefined,
       overpaymentHandling: (editorMode === 'normal' && (totalAmount - finalAmountPaidOnInvoice) < -0.001) ? (data.overpaymentHandlingChoice === 'refundNow' ? 'refunded' : 'creditedToAccount') : undefined,
       changeRefundPaymentMethods: (editorMode === 'normal' && (totalAmount - finalAmountPaidOnInvoice) < -0.001 && data.overpaymentHandlingChoice === 'refundNow') ? data.changeRefundPaymentMethods : undefined,
+      reasonForStatusChange: undefined, // Reason is for status changes like cancellation/return, not for initial creation.
     };
 
     setSavedInvoices(prevInvoices => [...prevInvoices, fullInvoiceData]);
@@ -765,24 +769,33 @@ export function InvoiceEditor() {
 
   const handleCancelCreatedInvoice = () => {
     if (!lastSavedInvoiceId) return;
+    if (!editorCancellationReasonInput.trim()) {
+        toast({ variant: "destructive", title: "Motivo Requerido", description: "Por favor, ingrese el motivo de la anulación." });
+        return;
+    }
+
     const invoiceToCancelIdx = savedInvoices.findIndex(inv => inv.id === lastSavedInvoiceId);
-    if (invoiceToCancelIdx === -1) { toast({ variant: "destructive", title: "Error", description: "Factura no encontrada para anular." }); return; }
+    if (invoiceToCancelIdx === -1) { toast({ variant: "destructive", title: "Error", description: "Factura no encontrada para anular." }); setIsCancelConfirmOpen(false); return; }
+    
     const invoiceToCancel = { ...savedInvoices[invoiceToCancelIdx] };
     if (invoiceToCancel.status === 'cancelled' || invoiceToCancel.status === 'return_processed' || invoiceToCancel.type === 'return') {
-      toast({ variant: "destructive", title: "No se puede anular", description: "Esta factura no se puede anular o ya está anulada/procesada." }); return;
+      toast({ variant: "destructive", title: "No se puede anular", description: "Esta factura no se puede anular o ya está anulada/procesada." }); setIsCancelConfirmOpen(false); return;
     }
+
     const customerToUpdateIdx = customers.findIndex(c => c.id === invoiceToCancel.customerDetails.id);
-    if (customerToUpdateIdx === -1) { toast({ variant: "destructive", title: "Error", description: "Cliente asociado no encontrado." }); return; }
+    if (customerToUpdateIdx === -1) { toast({ variant: "destructive", title: "Error", description: "Cliente asociado no encontrado." }); setIsCancelConfirmOpen(false); return; }
+    
     const customerToUpdate = { ...customers[customerToUpdateIdx] };
     let updatedOutstandingBalance = customerToUpdate.outstandingBalance || 0; let updatedCreditBalance = customerToUpdate.creditBalance || 0;
 
+    // Revert financial impact based on the type of invoice being cancelled
     if (invoiceToCancel.isDebtPayment) {
         updatedOutstandingBalance += invoiceToCancel.amountPaid; 
-        if (invoiceToCancel.totalAmount < invoiceToCancel.amountPaid) updatedCreditBalance -= (invoiceToCancel.amountPaid - invoiceToCancel.totalAmount);
+        if ((invoiceToCancel.totalAmount ?? 0) < invoiceToCancel.amountPaid) updatedCreditBalance -= (invoiceToCancel.amountPaid - (invoiceToCancel.totalAmount ?? 0));
     } else if (invoiceToCancel.isCreditDeposit) {
         const depositAmount = invoiceToCancel.amountPaid; 
         updatedCreditBalance -= depositAmount; 
-    } else { 
+    } else { // Standard sale invoice
         if ((invoiceToCancel.amountDue ?? 0) > 0) updatedOutstandingBalance -= invoiceToCancel.amountDue;
         (invoiceToCancel.paymentMethods || []).forEach(pm => { if (pm.method === "Saldo a Favor" || pm.method === "Saldo a Favor (Auto)") updatedCreditBalance += pm.amount; });
         if (invoiceToCancel.overpaymentAmount && invoiceToCancel.overpaymentAmount > 0 && invoiceToCancel.overpaymentHandling === 'creditedToAccount') updatedCreditBalance -= invoiceToCancel.overpaymentAmount;
@@ -790,12 +803,21 @@ export function InvoiceEditor() {
     updatedOutstandingBalance = Math.max(0, updatedOutstandingBalance); updatedCreditBalance = Math.max(0, updatedCreditBalance);
     const updatedCustomers = [...customers]; updatedCustomers[customerToUpdateIdx] = { ...customerToUpdate, outstandingBalance: updatedOutstandingBalance, creditBalance: updatedCreditBalance };
     setCustomers(updatedCustomers);
-    const updatedInvoices = [...savedInvoices];
-    updatedInvoices[invoiceToCancelIdx] = { ...invoiceToCancel, status: 'cancelled', cancelledAt: new Date().toISOString() };
-    setSavedInvoices(updatedInvoices);
-    if(setLiveInvoicePreview) setLiveInvoicePreview(prev => ({ ...prev, status: 'cancelled' }));
+    
+    const updatedInvoiceCancelled = { 
+        ...invoiceToCancel, 
+        status: 'cancelled' as const, 
+        cancelledAt: new Date().toISOString(),
+        reasonForStatusChange: editorCancellationReasonInput.trim(),
+    };
+    const updatedInvoicesList = [...savedInvoices];
+    updatedInvoicesList[invoiceToCancelIdx] = updatedInvoiceCancelled;
+    setSavedInvoices(updatedInvoicesList);
+
+    if(setLiveInvoicePreview) setLiveInvoicePreview(prev => ({ ...prev, ...updatedInvoiceCancelled }));
     toast({ title: "Factura Anulada", description: `Factura Nro. ${invoiceToCancel.invoiceNumber} anulada.` });
     setIsCancelConfirmOpen(false);
+    setEditorCancellationReasonInput(""); // Reset reason input
   };
 
   const previewCompanyDetails = companyDetails;
@@ -811,7 +833,7 @@ export function InvoiceEditor() {
 
   const currentCustomerForActions = form.getValues("customerDetails");
   const showOverpaymentSection = liveInvoicePreview?.overpaymentAmount && liveInvoicePreview.overpaymentAmount > 0.001 && editorMode === 'normal';
-  const canCancelThisInvoice = lastSavedInvoiceId && liveInvoicePreview?.id === lastSavedInvoiceId && liveInvoicePreview.type === 'sale' && liveInvoicePreview.status === 'active';
+  const canCancelJustCreatedInvoice = lastSavedInvoiceId && liveInvoicePreview?.id === lastSavedInvoiceId && liveInvoicePreview.type === 'sale' && liveInvoicePreview.status === 'active';
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
@@ -821,7 +843,7 @@ export function InvoiceEditor() {
               <CardHeader>
                 <CardTitle className="text-xl flex items-center text-primary"> <FileText className="mr-2 h-5 w-5" /> {getEditorTitle()} </CardTitle>
                  {lastSavedInvoiceId && liveInvoicePreview?.status !== 'cancelled' && (<CardDescription> Factura guardada con Nro: <span className="font-semibold text-primary">{liveInvoicePreview?.invoiceNumber}</span>. {liveInvoicePreview?.status === 'active' ? "Ahora puede imprimirla o anularla." : ""} </CardDescription>)}
-                {lastSavedInvoiceId && liveInvoicePreview?.status === 'cancelled' && (<CardDescription className="text-destructive font-semibold"> Esta factura (Nro: {liveInvoicePreview?.invoiceNumber}) ha sido ANULADA. </CardDescription>)}
+                {lastSavedInvoiceId && liveInvoicePreview?.status === 'cancelled' && (<CardDescription className="text-destructive font-semibold"> Esta factura (Nro: {liveInvoicePreview?.invoiceNumber}) ha sido ANULADA. {liveInvoicePreview.reasonForStatusChange && `Motivo: ${liveInvoicePreview.reasonForStatusChange}`} </CardDescription>)}
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:items-start">
@@ -891,7 +913,7 @@ export function InvoiceEditor() {
                   <div key={field.id} className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_auto] gap-3 items-end p-3 border rounded-md">
                     <FormField control={form.control} name={`items.${index}.description`} render={({ field }) => (<FormItem><FormLabel>Descripción</FormLabel><FormControl><Input {...field} value={field.value || ""} placeholder="Artículo" readOnly={editorMode !== 'normal' || !!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)} />
                     <FormField control={form.control} name={`items.${index}.quantity`} render={({ field }) => (<FormItem><FormLabel>Cantidad</FormLabel><FormControl><Input {...field} value={field.value === 0 && !form.getFieldState(`items.${index}.quantity`).isDirty ? '' : (field.value ?? '')} type="number" step="1" placeholder="1" onChange={e => field.onChange(parseFloat(e.target.value) || 0)} readOnly={editorMode !== 'normal' || !!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name={`items.${index}.unitPrice`} render={({ field }) => (<FormItem><FormLabel>P.Unit ({CURRENCY_SYMBOL})</FormLabel><FormControl><Input {...field} value={field.value === 0 ? '' : field.value.toString()} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} type="number" step="0.01" placeholder="0.00" readOnly={editorMode === 'debtPayment' || (editorMode === 'creditDeposit' && field.name === `items.${index}.unitPrice`) || !!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name={`items.${index}.unitPrice`} render={({ field }) => (<FormItem><FormLabel>P.Unit ({CURRENCY_SYMBOL})</FormLabel><FormControl><Input {...field} value={field.value === 0 && !form.getFieldState(`items.${index}.unitPrice`).isDirty ? '' : (field.value?.toString() ?? '')} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} type="number" step="0.01" placeholder="0.00" readOnly={editorMode === 'debtPayment' || (editorMode === 'creditDeposit' && field.name === `items.${index}.unitPrice`) || !!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)} />
                     <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(index)} className="text-destructive hover:text-destructive/80" disabled={editorMode !== 'normal' || itemFields.length <= 1 || !!lastSavedInvoiceId}><Trash2 className="h-5 w-5" /></Button>
                   </div>))}
                 <FormMessage>{form.formState.errors.items && typeof form.formState.errors.items === 'object' && !Array.isArray(form.formState.errors.items) ? (form.formState.errors.items as any).message : null}</FormMessage>
@@ -918,7 +940,7 @@ export function InvoiceEditor() {
                                           </SelectContent></Select><FormMessage /></FormItem>)}/>
                           <FormField control={form.control} name={`paymentMethods.${index}.amount`} render={({ field: f }) => (
                                   <FormItem><FormLabel>Monto ({CURRENCY_SYMBOL})</FormLabel><FormControl>
-                                        <Input {...f} value={f.value === 0 ? '' : (f.value ?? '').toString()} onChange={e => f.onChange(parseFloat(e.target.value) || 0)} type="number" step="0.01" placeholder="0.00" readOnly={(form.getValues(`paymentMethods.${index}.method`) === 'Saldo a Favor' && editorMode === 'normal' && (liveInvoicePreview?.totalAmount || 0) <= selectedCustomerAvailableCredit && (liveInvoicePreview?.totalAmount || 0) > 0) || !!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)}/>
+                                        <Input {...f} value={f.value === 0 && !form.getFieldState(`paymentMethods.${index}.amount`).isDirty ? '' : (f.value?.toString() ?? '')} onChange={e => f.onChange(parseFloat(e.target.value) || 0)} type="number" step="0.01" placeholder="0.00" readOnly={(form.getValues(`paymentMethods.${index}.method`) === 'Saldo a Favor' && editorMode === 'normal' && (liveInvoicePreview?.totalAmount || 0) <= selectedCustomerAvailableCredit && (liveInvoicePreview?.totalAmount || 0) > 0) || !!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)}/>
                           <FormField control={form.control} name={`paymentMethods.${index}.reference`} render={({ field: f }) => (<FormItem><FormLabel>Referencia (Opc.)</FormLabel><FormControl><Input {...f} value={f.value || ""} placeholder="Nro. confirmación" readOnly={!!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)}/>
                           <Button type="button" variant="ghost" size="icon" onClick={() => removePayment(index)} className="text-destructive hover:text-destructive/80" disabled={paymentFields.length <=1 || !!lastSavedInvoiceId}><Trash2 className="h-5 w-5" /></Button>
                       </div>))}
@@ -942,7 +964,7 @@ export function InvoiceEditor() {
                                 {changePaymentFields.map((field, index) => (
                                     <div key={field.id} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_auto] gap-3 items-end p-3 border rounded-md bg-muted/30">
                                         <FormField control={form.control} name={`changeRefundPaymentMethods.${index}.method`} render={({ field: f }) => (<FormItem><FormLabel>Método Vuelto</FormLabel><Select onValueChange={f.onChange} defaultValue={f.value} disabled={!!lastSavedInvoiceId}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione" /></SelectTrigger></FormControl><SelectContent><SelectItem value="Efectivo">Efectivo</SelectItem><SelectItem value="Transferencia">Transf.</SelectItem><SelectItem value="Pago Móvil">Pago Móvil</SelectItem><SelectItem value="Otro">Otro</SelectItem></SelectContent></Select><FormMessage /></FormItem>)}/>
-                                        <FormField control={form.control} name={`changeRefundPaymentMethods.${index}.amount`} render={({ field: f }) => (<FormItem><FormLabel>Monto Vuelto ({CURRENCY_SYMBOL})</FormLabel><FormControl><Input {...f} value={f.value === 0 ? '' : (f.value ?? '').toString()} onChange={e => f.onChange(parseFloat(e.target.value) || 0)} type="number" step="0.01" placeholder="0.00" readOnly={!!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)}/>
+                                        <FormField control={form.control} name={`changeRefundPaymentMethods.${index}.amount`} render={({ field: f }) => (<FormItem><FormLabel>Monto Vuelto ({CURRENCY_SYMBOL})</FormLabel><FormControl><Input {...f} value={f.value === 0 && !form.getFieldState(`changeRefundPaymentMethods.${index}.amount`).isDirty ? '' : (f.value?.toString() ?? '')} onChange={e => f.onChange(parseFloat(e.target.value) || 0)} type="number" step="0.01" placeholder="0.00" readOnly={!!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)}/>
                                         <FormField control={form.control} name={`changeRefundPaymentMethods.${index}.reference`} render={({ field: f }) => (<FormItem><FormLabel>Ref. Vuelto (Opc.)</FormLabel><FormControl><Input {...f} value={f.value || ""} placeholder="Nro. confirmación" readOnly={!!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)}/>
                                         <Button type="button" variant="ghost" size="icon" onClick={() => removeChangePayment(index)} className="text-destructive hover:text-destructive/80" disabled={changePaymentFields.length <=1 || !!lastSavedInvoiceId}><Trash2 className="h-5 w-5" /></Button>
                                     </div>))}
@@ -980,7 +1002,7 @@ export function InvoiceEditor() {
               </CardContent>
               <CardFooter className="flex-col sm:flex-row items-stretch gap-3">
                   {!lastSavedInvoiceId && (<Button type="submit" className="w-full sm:flex-1 bg-primary hover:bg-primary/90 text-primary-foreground"><Save className="mr-2 h-4 w-4" />{editorMode === 'debtPayment' && "Guardar Abono"}{editorMode === 'creditDeposit' && "Guardar Depósito"}{editorMode === 'normal' && "Guardar Factura"}</Button>)}
-                  {canCancelThisInvoice ? (<Button type="button" variant="destructive" onClick={() => setIsCancelConfirmOpen(true)} className="w-full sm:w-auto"><XCircle className="mr-2 h-4 w-4" /> Anular Factura</Button>
+                  {canCancelJustCreatedInvoice ? (<Button type="button" variant="destructive" onClick={() => { setEditorCancellationReasonInput(""); setIsCancelConfirmOpen(true);}} className="w-full sm:w-auto"><XCircle className="mr-2 h-4 w-4" /> Anular Factura</Button>
                   ) : liveInvoicePreview?.status === 'cancelled' ? (<Button type="button" variant="outline" disabled className="w-full sm:w-auto"><ShieldCheck className="mr-2 h-4 w-4 text-destructive" /> Factura Anulada</Button>
                   ) : (<Button type="button" variant="outline" onClick={handleCleanAndExit} className="w-full sm:w-auto"><XCircle className="mr-2 h-4 w-4" /> {lastSavedInvoiceId ? "Nueva Factura / Salir" : "Limpiar y Salir"}</Button>)}
               </CardFooter>
@@ -1005,8 +1027,26 @@ export function InvoiceEditor() {
           <AlertDialogHeader><AlertDialogTitle>¿Anular esta factura?</AlertDialogTitle>
             <AlertDialogDescription>Factura Nro. <span className="font-semibold">{liveInvoicePreview?.invoiceNumber}</span>. Los saldos del cliente serán revertidos. Esta acción no se puede deshacer.</AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel>No</AlertDialogCancel><AlertDialogAction onClick={handleCancelCreatedInvoice} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">Sí, anular</AlertDialogAction></AlertDialogFooter>
+          <div className="space-y-2 my-4">
+            <Label htmlFor="editorCancellationReason">Motivo de la Anulación (Obligatorio)</Label>
+            <Textarea
+              id="editorCancellationReason"
+              value={editorCancellationReasonInput}
+              onChange={(e) => setEditorCancellationReasonInput(e.target.value)}
+              placeholder="Ej: Error en los artículos, solicitud del cliente, etc."
+              rows={3}
+            />
+            {!editorCancellationReasonInput.trim() && (
+                <p className="text-xs text-destructive">El motivo es obligatorio.</p>
+            )}
+          </div>
+          <AlertDialogFooter><AlertDialogCancel onClick={() => setEditorCancellationReasonInput("")}>No</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleCancelCreatedInvoice} 
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+              disabled={!editorCancellationReasonInput.trim()}
+            >Sí, anular</AlertDialogAction>
+          </AlertDialogFooter>
         </AlertDialogContent></AlertDialog>
     </div>);
 }
-
