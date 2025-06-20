@@ -43,22 +43,23 @@ export interface Invoice {
   originalInvoiceId?: string | null; // For returns, links to original sale invoice ID. Can be special string for withdrawals.
   isDebtPayment?: boolean; // Flag to identify debt payment invoices
   isCreditDeposit?: boolean; // Flag to identify credit deposit transactions OR credit withdrawal NCs
-  
+  status?: 'active' | 'cancelled' | 'return_processed'; // Status of the invoice
+
   companyDetails: CompanyDetails;
   customerDetails: CustomerDetails;
-  
+
   items: InvoiceItem[];
   paymentMethods: PaymentDetails[];
-  
+
   subTotal: number; // Sum of item.totalPrice
   discountPercentage?: number; // Optional discount percentage applied
   discountValue?: number; // Optional discount value applied (monetary)
   taxRate: number; // Tax rate applied (e.g., 0.16 for 16%)
   taxAmount: number; // Calculated on (subTotal - discountValue) * taxRate
   totalAmount: number; // (subTotal - discountValue) + taxAmount
-  
+
   amountPaid: number; // Total amount received from customer for this invoice
-  amountDue: number; // Final balance of THIS invoice: totalAmount - amountPaid (can be negative if overpaid and change processed)
+  amountDue: number; // Final balance of THIS invoice: totalAmount - amountPaid
                       // If overpayment was credited to account, this will be negative.
                       // If overpayment was refunded, this will be 0.
 
@@ -72,6 +73,8 @@ export interface Invoice {
   overpaymentAmount?: number; // The absolute value of the overpayment (amountPaid - totalAmount) if > 0
   overpaymentHandling?: 'creditedToAccount' | 'refunded'; // How the overpayment was handled
   changeRefundPaymentMethods?: PaymentDetails[]; // Details of how the change was given if 'refunded'
+
+  cancelledAt?: string; // Optional: timestamp of cancellation
 }
 
 export const DEFAULT_COMPANY_ID = "main_company_details";

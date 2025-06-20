@@ -1,22 +1,24 @@
 
 "use client";
 
-import type { Invoice, InvoiceItem, CompanyDetails, CustomerDetails, PaymentDetails } from "@/lib/types";
+import type { Invoice, CompanyDetails } from "@/lib/types";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Printer, ShieldCheck, ExternalLink } from "lucide-react";
-import { SENIAT_TEXT, CURRENCY_SYMBOL, FISCAL_PRINTER_LINE_WIDTH } from "@/lib/constants";
+import { ExternalLink } from "lucide-react";
+import { SENIAT_TEXT, CURRENCY_SYMBOL, FISCAL_PRINTER_LINE_WIDTH, CANCELLED_WATERMARK_TEXT } from "@/lib/constants";
 import React from "react";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import FacturaPrintControls from "@/components/FacturaPrintControls";
 import Link from "next/link";
 
 interface InvoicePreviewProps {
-  invoice: Partial<Invoice>; 
+  invoice: Partial<Invoice>;
   companyDetails: CompanyDetails | null;
   className?: string;
-  id?: string; 
-  showPrintControls?: boolean; // New prop to control visibility of print buttons
+  id?: string;
+  isSavedInvoice?: boolean; // To control print buttons visibility
+  invoiceStatus?: Invoice['status']; // To show watermark or disable actions
 }
 
 const formatCurrency = (amount: number | undefined | null) => {
@@ -33,11 +35,15 @@ const formatLine = (left: string, right: string, width: number = FISCAL_PRINTER_
 
 const DottedLine = () => <hr className="DottedLine my-1" />;
 
-export function InvoicePreview({ invoice, companyDetails, className, id, showPrintControls = true }: InvoicePreviewProps) {
-
-  const handleDirectPrint = () => {
-    window.print();
-  };
+export function InvoicePreview({
+  invoice,
+  companyDetails,
+  className,
+  id = "factura", // Default id to "factura"
+  isSavedInvoice = false,
+  invoiceStatus = 'active',
+}: InvoicePreviewProps) {
+  const router = useRouter();
 
   const c = companyDetails;
   const cust = invoice.customerDetails;
@@ -63,7 +69,10 @@ export function InvoicePreview({ invoice, companyDetails, className, id, showPri
   let documentTitle = "FACTURA";
   let watermarkText = "";
 
-  if (isReturn) {
+  if (invoiceStatus === 'cancelled') {
+    documentTitle = `FACTURA (ANULADA)`;
+    watermarkText = CANCELLED_WATERMARK_TEXT;
+  } else if (isReturn) {
     documentTitle = "NOTA DE CRÉDITO";
     watermarkText = "NOTA DE CRÉDITO";
   } else if (isDebtPayment) {
@@ -94,14 +103,23 @@ export function InvoicePreview({ invoice, companyDetails, className, id, showPri
     switch (c?.logoAlignment) {
       case 'left': return 'mr-auto';
       case 'right': return 'ml-auto';
-      default: return 'mx-auto'; 
+      default: return 'mx-auto';
     }
   };
+
+  const handleCompareFormats = () => {
+    if (invoice) {
+      localStorage.setItem('invoiceComparisonData', JSON.stringify(invoice));
+      router.push('/');
+    }
+  };
+  
+  const showPrintAndCompareControls = isSavedInvoice && invoiceStatus !== 'cancelled' && invoiceStatus !== 'return_processed';
 
 
   return (
     <Card
-      id={id} 
+      id={id}
       className={cn("w-full relative shadow-xl", className)}
       data-invoice-preview-container
     >
@@ -124,11 +142,11 @@ export function InvoicePreview({ invoice, companyDetails, className, id, showPri
 
         <div className="my-2" data-company-details-block>
           {c?.logoUrl && c.logoUrl.trim() !== '' && (
-            <img 
-              src={c.logoUrl} 
-              alt={`${c.name || 'Empresa'} logo`} 
+            <img
+              src={c.logoUrl}
+              alt={`${c.name || 'Empresa'} logo`}
               className={cn("object-contain mb-2", logoAlignmentClass())}
-              data-ai-hint="company logo" 
+              data-ai-hint="company logo"
               data-logo-align={c.logoAlignment || 'center'}
               style={{maxHeight: '50px'}}
             />
@@ -185,7 +203,7 @@ export function InvoicePreview({ invoice, companyDetails, className, id, showPri
           {discountValue > 0 && (
             <p>{formatLine(`DESCUENTO (${discountPercentage.toFixed(2)}%):`, `-${formatCurrency(discountValue)}`)}</p>
           )}
-           {(taxAmount > 0 || isDebtPayment || isCreditDeposit) && ( 
+           {(taxAmount > 0 || isDebtPayment || isCreditDeposit) && (
             <p>{formatLine(`BASE IMPONIBLE:`, formatCurrency(taxableBase))}</p>
           )}
           {taxAmount > 0 && !isDebtPayment && !isCreditDeposit && (
@@ -206,7 +224,7 @@ export function InvoicePreview({ invoice, companyDetails, className, id, showPri
         )}
 
 
-        {!isReturn && !isCreditDeposit && ( 
+        {!isReturn && !isCreditDeposit && (
             <div className="mt-1">
                 <DottedLine />
                 <p className="font-semibold">{formatLine("TOTAL PAGADO:", formatCurrency(amountPaid))}</p>
@@ -221,14 +239,14 @@ export function InvoicePreview({ invoice, companyDetails, className, id, showPri
                 {overpaymentCredited && (
                     <p className="font-semibold">{formatLine("ABONADO A SALDO CLIENTE:", formatCurrency(invoice.overpaymentAmount))}</p>
                 )}
-                {finalAmountDueForDisplay > 0 && !overpaymentWasMade && ( 
+                {finalAmountDueForDisplay > 0 && !overpaymentWasMade && (
                     <p className="font-semibold">{formatLine("MONTO PENDIENTE:", formatCurrency(finalAmountDueForDisplay))}</p>
                 )}
             </div>
         )}
 
         <DottedLine />
-        
+
         {invoice.warrantyText && (
           <>
             <div className="text-center mt-2 pt-1">
@@ -245,23 +263,26 @@ export function InvoicePreview({ invoice, companyDetails, className, id, showPri
         </div>
 
       </CardContent>
-      {showPrintControls && (
-        <CardFooter className="p-4 border-t no-print flex-col items-stretch gap-2">
-          <div className="flex flex-col sm:flex-row gap-2">
-            <Button onClick={handleDirectPrint} variant="outline" className="flex-1">
-              <Printer className="mr-2 h-4 w-4" />
-              Imprimir (Directo Navegador)
-            </Button>
-            <Button asChild variant="outline" className="flex-1">
-              <Link href="/">
-                <ExternalLink className="mr-2 h-4 w-4" />
-                Comparar Formatos (A4/Rollo)
-              </Link>
-            </Button>
-          </div>
+      <CardFooter className="p-4 border-t no-print flex flex-col items-stretch gap-2">
+        {/* Botón para comparar formatos siempre visible si la factura existe */}
+        {invoice && Object.keys(invoice).length > 0 && (
+          <Button onClick={handleCompareFormats} variant="outline" className="w-full">
+            <ExternalLink className="mr-2 h-4 w-4" />
+            Comparar Formatos de Impresión
+          </Button>
+        )}
+        {/* Controles de impresión (A4, Rollo) solo si es una factura guardada y activa */}
+        {showPrintAndCompareControls && (
           <FacturaPrintControls />
-        </CardFooter>
-      )}
+        )}
+        {isSavedInvoice && invoiceStatus === 'cancelled' && (
+            <p className="text-sm text-center text-destructive font-semibold">Esta factura está ANULADA y no puede ser impresa con los controles PDF.</p>
+        )}
+         {isSavedInvoice && invoiceStatus === 'return_processed' && (
+            <p className="text-sm text-center text-amber-600 font-semibold">Esta factura ya tiene una Nota de Crédito asociada.</p>
+        )}
+
+      </CardFooter>
     </Card>
   );
 }

@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import useLocalStorage from "@/hooks/use-local-storage";
@@ -9,7 +9,7 @@ import type { Invoice, CustomerDetails } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, User, FileText, DollarSign, CreditCard, ShoppingBag, Eye, History, FileText as PageIcon, Undo2 as ReturnIcon, FileText as SaleIcon, Gift } from "lucide-react";
+import { ArrowLeft, User, FileText, DollarSign, CreditCard, ShoppingBag, Eye, History, Undo2 as ReturnIcon, ShieldAlert, ShieldCheck, Gift } from "lucide-react";
 import { CURRENCY_SYMBOL } from "@/lib/constants";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -49,7 +49,7 @@ export default function CustomerSummaryPage() {
         setCustomerInvoices(filteredInvoices);
 
         const spent = filteredInvoices.reduce((acc, inv) => {
-          if (inv.type === 'sale' && !inv.isDebtPayment && !inv.isCreditDeposit) {
+          if (inv.type === 'sale' && !inv.isDebtPayment && !inv.isCreditDeposit && inv.status !== 'cancelled') {
             return acc + (inv.totalAmount || 0);
           }
           return acc;
@@ -58,6 +58,25 @@ export default function CustomerSummaryPage() {
       }
     }
   }, [customerId, isClient, allCustomers, allInvoices]);
+
+  const getTransactionTypeAndStatus = (invoice: Invoice) => {
+    if (invoice.status === 'cancelled') {
+      return { text: 'Factura (Anulada)', icon: <ShieldAlert className="h-3 w-3 mr-1.5 text-destructive" />, className: "bg-destructive/10 text-destructive" };
+    }
+    if (invoice.type === 'return') {
+      return { text: 'Nota de Crédito', icon: <ReturnIcon className="h-3 w-3 mr-1.5" />, className: "bg-red-100 text-red-800" };
+    }
+    if (invoice.isDebtPayment) {
+      return { text: 'Abono Deuda', icon: <DollarSign className="h-3 w-3 mr-1.5" />, className: "bg-blue-100 text-blue-800" };
+    }
+    if (invoice.isCreditDeposit) {
+      return { text: 'Depósito Cuenta', icon: <CreditCard className="h-3 w-3 mr-1.5" />, className: "bg-purple-100 text-purple-800" };
+    }
+     if (invoice.status === 'return_processed') {
+         return { text: 'Factura (NC Procesada)', icon: <ShieldCheck className="h-3 w-3 mr-1.5 text-amber-700" />, className: "bg-amber-100 text-amber-700" };
+    }
+    return { text: 'Factura', icon: <FileText className="h-3 w-3 mr-1.5" />, className: "bg-green-100 text-green-800" };
+  };
 
   if (!isClient || customer === undefined) {
     return (
@@ -129,8 +148,9 @@ export default function CustomerSummaryPage() {
               <span className="text-sm font-medium">Total Gastado en Tienda</span>
             </div>
             <p className="text-2xl font-bold text-primary">{formatCurrency(totalSpent)}</p>
+            <p className="text-xs text-muted-foreground mt-1">(Suma de facturas de venta activas)</p>
           </div>
-          
+
           <div className="p-4 rounded-lg bg-muted/50 border">
             <div className="flex items-center justify-between mb-1">
               <div className="flex items-center text-muted-foreground">
@@ -203,17 +223,22 @@ export default function CustomerSummaryPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {customerInvoices.map((invoice) => (
-                    <TableRow key={invoice.id} className={cn(invoice.type === 'return' && "bg-destructive/5 hover:bg-destructive/10")}>
+                  {customerInvoices.map((invoice) => {
+                    const typeInfo = getTransactionTypeAndStatus(invoice);
+                    return (
+                    <TableRow key={invoice.id} className={cn(
+                        invoice.status === 'cancelled' && "bg-destructive/5 hover:bg-destructive/10 opacity-70",
+                        invoice.type === 'return' && invoice.status !== 'cancelled' && "bg-destructive/5 hover:bg-destructive/10",
+                         invoice.status === 'return_processed' && "bg-amber-50 hover:bg-amber-100/80"
+                    )}>
                       <TableCell className="font-medium">{invoice.invoiceNumber}</TableCell>
                       <TableCell>
                         <span className={cn(
                           "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium",
-                           invoice.type === 'sale' && (invoice.isDebtPayment ? "bg-blue-100 text-blue-800" : invoice.isCreditDeposit ? "bg-purple-100 text-purple-800" : "bg-green-100 text-green-800"),
-                           invoice.type === 'return' && "bg-red-100 text-red-800"
+                           typeInfo.className
                         )}>
-                           {invoice.type === 'sale' ? (invoice.isDebtPayment ? <DollarSign className="h-3 w-3 mr-1.5" /> : invoice.isCreditDeposit ? <CreditCard className="h-3 w-3 mr-1.5" /> : <SaleIcon className="h-3 w-3 mr-1.5" />) : <ReturnIcon className="h-3 w-3 mr-1.5" />}
-                           {invoice.type === 'sale' ? (invoice.isDebtPayment ? 'Abono Deuda' : invoice.isCreditDeposit ? 'Depósito Cuenta' : 'Factura') : 'Nota de Crédito'}
+                           {typeInfo.icon}
+                           {typeInfo.text}
                         </span>
                       </TableCell>
                       <TableCell>{format(new Date(invoice.date), "PPP", { locale: es })}</TableCell>
@@ -228,7 +253,8 @@ export default function CustomerSummaryPage() {
                         </Button>
                       </TableCell>
                     </TableRow>
-                  ))}
+                  );
+                })}
                 </TableBody>
               </Table>
             </div>

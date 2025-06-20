@@ -2,14 +2,14 @@
 "use client";
 // No static import of html2pdf here
 import { useState } from "react";
-import { Button } from "@/components/ui/button"; 
-import { Printer, FileText } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Printer, FileText as FileTextIcon } from "lucide-react"; // Renamed to avoid conflict
 
 export default function FacturaPrintControls() {
   const [formato, setFormato] = useState<"a4" | "80mm">("a4");
   const [isPrinting, setIsPrinting] = useState(false);
 
-  const printFactura = async (printFormato: "a4" | "80mm") => { 
+  const printFactura = async (printFormato: "a4" | "80mm") => {
     const element = document.getElementById("factura");
     if (!element) {
       console.error("Elemento #factura no encontrado.");
@@ -18,24 +18,26 @@ export default function FacturaPrintControls() {
     }
 
     setIsPrinting(true);
-    setFormato(printFormato); // Set format right before printing
+    setFormato(printFormato); 
 
     const pdfClass = printFormato === "80mm" ? "printing-80mm" : "printing-a4";
     document.documentElement.classList.add(pdfClass);
+    
+    // Allow a brief moment for styles to apply
+    await new Promise(resolve => setTimeout(resolve, 100));
 
     try {
-      // Dynamically import html2pdf.js
       const { default: html2pdf } = await import('html2pdf.js');
 
       const commonOptions = {
         filename: `factura_${printFormato}.pdf`,
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: {
-          scale: printFormato === "a4" ? 2 : 3, 
-          logging: true,
+          scale: printFormato === "a4" ? 2 : 3,
+          logging: false, //logging: true,
           useCORS: true,
           scrollX: 0,
-          scrollY: -window.scrollY,
+          scrollY: -window.scrollY, // Try to capture from top
         },
         pagebreak: { mode: ['avoid-all', 'css', 'legacy'] as any[] }
       };
@@ -44,7 +46,7 @@ export default function FacturaPrintControls() {
 
       if (printFormato === "a4") {
         specificOptions = {
-          margin: [10, 10, 10, 10], 
+          margin: [10, 10, 10, 10], // 10mm margins for A4
           jsPDF: {
             unit: "mm",
             format: "a4",
@@ -53,10 +55,10 @@ export default function FacturaPrintControls() {
         };
       } else { // 80mm
         specificOptions = {
-          margin: [2, 2, 2, 2], 
+          margin: [2, 2, 2, 2], // 2mm margins for thermal
           jsPDF: {
             unit: "mm",
-            format: [80, 297], 
+            format: [80, 297], // 80mm width, standard receipt roll height (or auto)
             orientation: "portrait"
           }
         };
@@ -64,8 +66,6 @@ export default function FacturaPrintControls() {
 
       const options = { ...commonOptions, ...specificOptions };
       
-      await new Promise(resolve => setTimeout(resolve, 100));
-
       await html2pdf().from(element).set(options).save();
 
     } catch (error) {
@@ -78,14 +78,14 @@ export default function FacturaPrintControls() {
   };
 
   return (
-    <div className="flex flex-col sm:flex-row gap-2 mt-2 print-controls-container">
+    <div className="flex flex-col sm:flex-row gap-2 mt-2 print-controls-container w-full">
       <Button
         variant={formato === "a4" && isPrinting ? "secondary" : "outline"}
         onClick={() => printFactura("a4")}
         disabled={isPrinting}
-        className="w-full sm:w-auto"
+        className="w-full" // sm:w-auto
       >
-        <FileText className="mr-2 h-4 w-4" />
+        <FileTextIcon className="mr-2 h-4 w-4" />
         {isPrinting && formato === "a4" ? "Generando A4..." : "Imprimir en A4"}
       </Button>
 
@@ -93,7 +93,7 @@ export default function FacturaPrintControls() {
         variant={formato === "80mm" && isPrinting ? "secondary" : "default"}
         onClick={() => printFactura("80mm")}
         disabled={isPrinting}
-        className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white data-[variant=outline]:bg-transparent data-[variant=outline]:text-green-600 data-[variant=outline]:border-green-600"
+        className="w-full bg-green-600 hover:bg-green-700 text-white data-[variant=outline]:bg-transparent data-[variant=outline]:text-green-600 data-[variant=outline]:border-green-600" // sm:w-auto
       >
         <Printer className="mr-2 h-4 w-4" />
         {isPrinting && formato === "80mm" ? "Generando Rollo..." : "Imprimir en Rollo"}

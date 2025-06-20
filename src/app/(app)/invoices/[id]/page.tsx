@@ -15,16 +15,16 @@ import Link from "next/link";
 
 export default function ViewInvoicePage() {
   const params = useParams();
-  const router = useRouter(); 
+  const router = useRouter();
   const invoiceId = params?.id as string;
 
   const [allInvoices, setAllInvoices] = useLocalStorage<Invoice[]>("invoices", []);
   const [companyDetails] = useLocalStorage<CompanyDetails>(
     "companyDetails",
-    { id: DEFAULT_COMPANY_ID, name: "", rif: "", address: "" } 
+    { id: DEFAULT_COMPANY_ID, name: "", rif: "", address: "" }
   );
-  
-  const [invoice, setInvoice] = useState<Invoice | null | undefined>(undefined); 
+
+  const [invoice, setInvoice] = useState<Invoice | null | undefined>(undefined);
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
@@ -33,12 +33,12 @@ export default function ViewInvoicePage() {
 
   useEffect(() => {
     if (isClient && invoiceId) {
-      
+
       const currentInvoices = JSON.parse(localStorage.getItem("invoices") || "[]") as Invoice[];
       const foundInvoice = currentInvoices.find((inv) => inv.id === invoiceId);
       setInvoice(foundInvoice || null);
     }
-  }, [invoiceId, isClient, allInvoices]); 
+  }, [invoiceId, isClient, allInvoices]);
 
   if (!isClient || invoice === undefined) {
     return (
@@ -77,7 +77,13 @@ export default function ViewInvoicePage() {
           <ArrowLeft className="mr-2 h-4 w-4" />
           Volver
        </Button>
-      <InvoicePreview id="factura" invoice={invoice} companyDetails={companyDetails} />
+      <InvoicePreview
+        id="factura"
+        invoice={invoice}
+        companyDetails={companyDetails}
+        isSavedInvoice={true}
+        invoiceStatus={invoice.status || 'active'}
+      />
     </div>
   );
 }
