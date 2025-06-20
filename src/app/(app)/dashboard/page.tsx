@@ -9,7 +9,7 @@ export default function DashboardPage() {
     {
       title: "Nueva Factura",
       description: "Crear y emitir una nueva factura fiscal.",
-      href: "/invoice/new",
+      href: "/invoice/new?new=true", // Added ?new=true
       icon: FilePlus2,
       cta: "Crear Factura",
     },
