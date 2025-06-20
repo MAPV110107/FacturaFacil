@@ -155,7 +155,7 @@ export function InvoiceEditor() {
     let initialItemsArr = [{ id: uuidv4(), description: "", quantity: 1, unitPrice: 0 }];
     
     let initialCustomerState: CustomerDetails = {
-      ...defaultCustomer, // Start with all fields defined as empty strings or 0
+      ...defaultCustomer, 
     };
 
     let thankYouMsg = DEFAULT_THANK_YOU_MESSAGE;
@@ -300,8 +300,8 @@ export function InvoiceEditor() {
         }
       }
       internalNavigationRef.current = true; router.replace('/invoice/new', { scroll: false });
-      draftHandled = true; // URL params take precedence, draft is cleared
-      return; // Exit early as URL params dictate state
+      draftHandled = true; 
+      return; 
     }
 
     if (lastSavedInvoiceId) {
@@ -312,6 +312,7 @@ export function InvoiceEditor() {
              setSelectedCustomerIdForDropdown(savedFormData.customerDetails.id);
              const foundCust = customers.find(c => c.id === savedFormData.customerDetails.id);
              setSelectedCustomerAvailableCredit(foundCust?.creditBalance || 0);
+             if (foundCust) setCustomerSearchMessage(`Mostrando factura guardada de: ${foundCust.name}`);
         }
         draftHandled = true;
         return;
@@ -716,7 +717,7 @@ export function InvoiceEditor() {
             const newCustIdx = currentCustomersList.findIndex(c => c.id === StoredCustomer!.id);
             if (newCustIdx !== -1) currentCustomersList[newCustIdx] = StoredCustomer!;
         } 
-        setCustomers(currentCustomersList); // Save updated customers list
+        setCustomers(currentCustomersList); 
     } else if (!StoredCustomer) {
         toast({ variant: "destructive", title: "Error de Cliente", description: "No se pudo procesar la transacción." }); return;
     }
@@ -889,8 +890,8 @@ export function InvoiceEditor() {
                 {itemFields.map((field, index) => (
                   <div key={field.id} className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_auto] gap-3 items-end p-3 border rounded-md">
                     <FormField control={form.control} name={`items.${index}.description`} render={({ field: f }) => (<FormItem><FormLabel>Descripción</FormLabel><FormControl><Input {...f} value={f.value || ""} placeholder="Artículo" readOnly={editorMode !== 'normal' || !!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name={`items.${index}.quantity`} render={({ field: f }) => (<FormItem><FormLabel>Cantidad</FormLabel><FormControl><Input {...f} type="number" step="0.01" placeholder="1" onChange={e => f.onChange(parseFloat(e.target.value) || 0)} readOnly={editorMode !== 'normal' || !!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name={`items.${index}.unitPrice`} render={({ field: f }) => (<FormItem><FormLabel>P.Unit ({CURRENCY_SYMBOL})</FormLabel><FormControl><Input {...f} value={(editorMode === 'creditDeposit' && f.value === 0) ? '' : (f.value === 0 ? '' : f.value)} onChange={e => f.onChange(parseFloat(e.target.value) || 0)} type="number" step="0.01" placeholder="0.00" readOnly={editorMode === 'debtPayment' || (editorMode === 'creditDeposit' && f.name === `items.${index}.unitPrice`) || !!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name={`items.${index}.quantity`} render={({ field: f }) => (<FormItem><FormLabel>Cantidad</FormLabel><FormControl><Input {...f} value={f.value ?? ''} type="number" step="0.01" placeholder="1" onChange={e => f.onChange(parseFloat(e.target.value) || 0)} readOnly={editorMode !== 'normal' || !!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name={`items.${index}.unitPrice`} render={({ field: f }) => (<FormItem><FormLabel>P.Unit ({CURRENCY_SYMBOL})</FormLabel><FormControl><Input {...f} value={f.value ?? ''} onChange={e => f.onChange(parseFloat(e.target.value) || 0)} type="number" step="0.01" placeholder="0.00" readOnly={editorMode === 'debtPayment' || (editorMode === 'creditDeposit' && f.name === `items.${index}.unitPrice`) || !!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)} />
                     <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(index)} className="text-destructive hover:text-destructive/80" disabled={editorMode !== 'normal' || itemFields.length <= 1 || !!lastSavedInvoiceId}><Trash2 className="h-5 w-5" /></Button>
                   </div>))}
                 <FormMessage>{form.formState.errors.items && typeof form.formState.errors.items === 'object' && !Array.isArray(form.formState.errors.items) ? (form.formState.errors.items as any).message : null}</FormMessage>
@@ -917,7 +918,7 @@ export function InvoiceEditor() {
                                           </SelectContent></Select><FormMessage /></FormItem>)}/>
                           <FormField control={form.control} name={`paymentMethods.${index}.amount`} render={({ field: f }) => (
                                   <FormItem><FormLabel>Monto ({CURRENCY_SYMBOL})</FormLabel><FormControl>
-                                        <Input {...f} value={f.value === 0 ? '' : f.value} onChange={e => f.onChange(parseFloat(e.target.value) || 0)} type="number" step="0.01" placeholder="0.00" readOnly={(form.getValues(`paymentMethods.${index}.method`) === 'Saldo a Favor' && editorMode === 'normal' && (liveInvoicePreview?.totalAmount || 0) <= selectedCustomerAvailableCredit && (liveInvoicePreview?.totalAmount || 0) > 0) || !!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)}/>
+                                        <Input {...f} value={f.value ?? ''} onChange={e => f.onChange(parseFloat(e.target.value) || 0)} type="number" step="0.01" placeholder="0.00" readOnly={(form.getValues(`paymentMethods.${index}.method`) === 'Saldo a Favor' && editorMode === 'normal' && (liveInvoicePreview?.totalAmount || 0) <= selectedCustomerAvailableCredit && (liveInvoicePreview?.totalAmount || 0) > 0) || !!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)}/>
                           <FormField control={form.control} name={`paymentMethods.${index}.reference`} render={({ field: f }) => (<FormItem><FormLabel>Referencia (Opc.)</FormLabel><FormControl><Input {...f} value={f.value || ""} placeholder="Nro. confirmación" readOnly={!!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)}/>
                           <Button type="button" variant="ghost" size="icon" onClick={() => removePayment(index)} className="text-destructive hover:text-destructive/80" disabled={paymentFields.length <=1 || !!lastSavedInvoiceId}><Trash2 className="h-5 w-5" /></Button>
                       </div>))}
@@ -941,7 +942,7 @@ export function InvoiceEditor() {
                                 {changePaymentFields.map((field, index) => (
                                     <div key={field.id} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_auto] gap-3 items-end p-3 border rounded-md bg-muted/30">
                                         <FormField control={form.control} name={`changeRefundPaymentMethods.${index}.method`} render={({ field: f }) => (<FormItem><FormLabel>Método Vuelto</FormLabel><Select onValueChange={f.onChange} defaultValue={f.value} disabled={!!lastSavedInvoiceId}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione" /></SelectTrigger></FormControl><SelectContent><SelectItem value="Efectivo">Efectivo</SelectItem><SelectItem value="Transferencia">Transf.</SelectItem><SelectItem value="Pago Móvil">Pago Móvil</SelectItem><SelectItem value="Otro">Otro</SelectItem></SelectContent></Select><FormMessage /></FormItem>)}/>
-                                        <FormField control={form.control} name={`changeRefundPaymentMethods.${index}.amount`} render={({ field: f }) => (<FormItem><FormLabel>Monto Vuelto ({CURRENCY_SYMBOL})</FormLabel><FormControl><Input {...f} value={f.value === 0 ? '' : f.value} onChange={e => f.onChange(parseFloat(e.target.value) || 0)} type="number" step="0.01" placeholder="0.00" readOnly={!!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)}/>
+                                        <FormField control={form.control} name={`changeRefundPaymentMethods.${index}.amount`} render={({ field: f }) => (<FormItem><FormLabel>Monto Vuelto ({CURRENCY_SYMBOL})</FormLabel><FormControl><Input {...f} value={f.value ?? ''} onChange={e => f.onChange(parseFloat(e.target.value) || 0)} type="number" step="0.01" placeholder="0.00" readOnly={!!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)}/>
                                         <FormField control={form.control} name={`changeRefundPaymentMethods.${index}.reference`} render={({ field: f }) => (<FormItem><FormLabel>Ref. Vuelto (Opc.)</FormLabel><FormControl><Input {...f} value={f.value || ""} placeholder="Nro. confirmación" readOnly={!!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)}/>
                                         <Button type="button" variant="ghost" size="icon" onClick={() => removeChangePayment(index)} className="text-destructive hover:text-destructive/80" disabled={changePaymentFields.length <=1 || !!lastSavedInvoiceId}><Trash2 className="h-5 w-5" /></Button>
                                     </div>))}
@@ -957,14 +958,14 @@ export function InvoiceEditor() {
                   <div><FormField control={form.control} name="applyDiscount" render={({ field }) => (<FormItem className="flex flex-row items-center space-x-2 space-y-0"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={editorMode !== 'normal' || !!lastSavedInvoiceId} id="applyDiscountCheckbox"/></FormControl><FormLabel htmlFor="applyDiscountCheckbox" className="font-normal cursor-pointer !mt-0">Aplicar Descuento</FormLabel></FormItem>)}/>
                     {form.watch('applyDiscount') && editorMode === 'normal' && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2 pl-6">
-                            <FormField control={form.control} name="discountPercentage" render={({ field }) => (<FormItem><FormLabel>Desc. (%)</FormLabel><FormControl><Input {...field} value={field.value === 0 && !form.getFieldState('discountPercentage').isDirty ? '' : field.value} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} type="number" step="0.01" placeholder="0.00" readOnly={!!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)}/>
-                            <FormField control={form.control} name="discountValue" render={({ field }) => (<FormItem><FormLabel>Desc. ({CURRENCY_SYMBOL})</FormLabel><FormControl><Input {...field} value={field.value === 0 && !form.getFieldState('discountValue').isDirty ? '' : field.value} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} type="number" step="0.01" placeholder="0.00" readOnly={!!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)}/>
+                            <FormField control={form.control} name="discountPercentage" render={({ field }) => (<FormItem><FormLabel>Desc. (%)</FormLabel><FormControl><Input {...field} value={field.value === 0 && !form.getFieldState('discountPercentage').isDirty ? '' : (field.value ?? '')} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} type="number" step="0.01" placeholder="0.00" readOnly={!!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)}/>
+                            <FormField control={form.control} name="discountValue" render={({ field }) => (<FormItem><FormLabel>Desc. ({CURRENCY_SYMBOL})</FormLabel><FormControl><Input {...field} value={field.value === 0 && !form.getFieldState('discountValue').isDirty ? '' : (field.value ?? '')} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} type="number" step="0.01" placeholder="0.00" readOnly={!!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)}/>
                         </div>)}
                     {(!form.watch('applyDiscount') || editorMode !== 'normal') && <p className="text-xs text-muted-foreground mt-1">Descuentos desactivados/no aplican.</p>}
                   </div>
                   <div className="flex flex-col space-y-2 md:flex-row md:space-y-0 md:space-x-4 md:items-end">
                     <FormField control={form.control} name="applyTax" render={({ field }) => (<FormItem className="flex flex-row items-center space-x-2 space-y-0 pt-2 md:pt-0 md:self-center"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={editorMode !== 'normal' || !!lastSavedInvoiceId} id="applyTaxCheckbox"/></FormControl><FormLabel htmlFor="applyTaxCheckbox" className="font-normal cursor-pointer !mt-0">Aplicar IVA</FormLabel></FormItem>)}/>
-                    <FormField control={form.control} name="taxRate" render={({ field }) => (<FormItem className="flex-grow"><FormLabel>Tasa IVA (%)</FormLabel><div className="flex items-center"><FormControl><Input {...field} type="number" step="0.01" placeholder={(TAX_RATE * 100).toFixed(2)} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} disabled={!form.watch('applyTax') || editorMode !== 'normal' || !!lastSavedInvoiceId} className="w-full"/></FormControl></div>{(editorMode !== 'normal' || !form.watch('applyTax')) && <p className="text-xs text-muted-foreground mt-1">IVA desactivado/no aplica.</p>}<FormMessage /></FormItem>)}/>
+                    <FormField control={form.control} name="taxRate" render={({ field }) => (<FormItem className="flex-grow"><FormLabel>Tasa IVA (%)</FormLabel><div className="flex items-center"><FormControl><Input {...field} type="number" step="0.01" value={field.value ?? ''} placeholder={(TAX_RATE * 100).toFixed(2)} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} disabled={!form.watch('applyTax') || editorMode !== 'normal' || !!lastSavedInvoiceId} className="w-full"/></FormControl></div>{(editorMode !== 'normal' || !form.watch('applyTax')) && <p className="text-xs text-muted-foreground mt-1">IVA desactivado/no aplica.</p>}<FormMessage /></FormItem>)}/>
                   </div>
                   <div><FormField control={form.control} name="applyWarranty" render={({ field: checkboxField }) => (<FormItem className="flex flex-row items-center space-x-2 space-y-0"><FormControl><Checkbox checked={checkboxField.value} onCheckedChange={checkboxField.onChange} disabled={editorMode !== 'normal' || !!lastSavedInvoiceId} id="applyWarrantyCheckbox"/></FormControl><FormLabel htmlFor="applyWarrantyCheckbox" className="font-normal cursor-pointer !mt-0">Aplicar Nota Garantía</FormLabel></FormItem>)}/>
                     {form.watch('applyWarranty') && editorMode === 'normal' && (
@@ -1001,7 +1002,3 @@ export function InvoiceEditor() {
         </AlertDialogContent></AlertDialog>
     </div>);
 }
-
-    
-
-    
