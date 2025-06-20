@@ -85,7 +85,9 @@ export default function GeneralPrintPreviewPage() {
             amountPaid: parsedData.amountPaid !== undefined ? parsedData.amountPaid : total,
             amountDue: parsedData.amountDue !== undefined ? parsedData.amountDue : 0,
           });
-          localStorage.removeItem('invoiceComparisonData'); // Clean up
+          // Do not remove 'invoiceComparisonData' from localStorage here,
+          // so if the user refreshes this page, it still shows the compared invoice.
+          // It will be overwritten when "Comparar Formatos" is clicked again from the editor.
         } catch (error) {
           console.error("Error parsing invoice data from localStorage:", error);
           setInvoiceToPreview(sampleInvoiceData); // Fallback to sample
@@ -105,10 +107,11 @@ export default function GeneralPrintPreviewPage() {
         });
       }
     }
-    if (isClient && !companyData?.name) {
+    // Ensure company data is initialized if it's not set
+    if (isClient && !companyData?.name) { // Check for companyData.name to ensure it's not just the default empty object
         setCompanyData(defaultCompany);
     }
-  }, [isClient, companyData, setCompanyData]);
+  }, [isClient, companyData, setCompanyData]); // companyData, setCompanyData in deps to react to their changes if needed
 
 
   if (!isClient || !invoiceToPreview.customerDetails) { // Added check for customerDetails
@@ -119,14 +122,15 @@ export default function GeneralPrintPreviewPage() {
     );
   }
   
+  // Create a complete Invoice object for preview, ensuring all required fields are present
   const finalInvoiceForPreview: Invoice = {
     id: invoiceToPreview.id || "preview-id",
     invoiceNumber: invoiceToPreview.invoiceNumber || "PREVIEW-001",
     date: invoiceToPreview.date || new Date().toISOString(),
     type: invoiceToPreview.type || 'sale',
     status: invoiceToPreview.status || 'active',
-    companyDetails: companyData || defaultCompany,
-    customerDetails: invoiceToPreview.customerDetails as CustomerDetails,
+    companyDetails: companyData || defaultCompany, // Use loaded or default company data
+    customerDetails: invoiceToPreview.customerDetails as CustomerDetails, // Already checked for this
     items: invoiceToPreview.items || [],
     paymentMethods: invoiceToPreview.paymentMethods || [],
     subTotal: invoiceToPreview.subTotal || 0,
@@ -136,7 +140,7 @@ export default function GeneralPrintPreviewPage() {
     amountPaid: invoiceToPreview.amountPaid || 0,
     amountDue: invoiceToPreview.amountDue || 0,
     thankYouMessage: invoiceToPreview.thankYouMessage || "Gracias",
-    // Include other fields if they exist on invoiceToPreview
+    // Include other fields if they exist on invoiceToPreview, otherwise undefined is fine for partial
     discountPercentage: invoiceToPreview.discountPercentage,
     discountValue: invoiceToPreview.discountValue,
     cashierNumber: invoiceToPreview.cashierNumber,
@@ -173,13 +177,14 @@ export default function GeneralPrintPreviewPage() {
         <div>
           <h2 className="text-xl font-semibold mb-2 text-center text-muted-foreground">Formato A4 (Referencia)</h2>
           <div className="preview-a4-wrapper">
+            {/* For A4 preview, we pass a different id or className to ensure specific styles don't clash if #factura is global */}
             <InvoicePreview 
               invoice={finalInvoiceForPreview} 
               companyDetails={companyData || defaultCompany}
               // For this page, printing is disabled, it's just for visual comparison
               isSavedInvoice={false} 
               invoiceStatus={finalInvoiceForPreview.status}
-              className="a4-preview-styling" 
+              className="a4-preview-styling" // Custom class for A4 specific styling in this view if needed
             />
           </div>
         </div>
@@ -191,7 +196,7 @@ export default function GeneralPrintPreviewPage() {
               companyDetails={companyData || defaultCompany} 
               isSavedInvoice={false}
               invoiceStatus={finalInvoiceForPreview.status}
-              className="thermal-preview-styling"
+              className="thermal-preview-styling" // Custom class for thermal specific styling
             />
           </div>
         </div>
@@ -199,3 +204,5 @@ export default function GeneralPrintPreviewPage() {
     </div>
   );
 }
+
+    

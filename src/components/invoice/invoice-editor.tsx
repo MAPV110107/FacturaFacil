@@ -324,7 +324,7 @@ export function InvoiceEditor() {
 
     if (searchParams.get('customerId') && customers.length === 0 && !initialCustomersLoadAttemptedRef.current) {
         initialCustomersLoadAttemptedRef.current = true;
-        return;
+        return; // Wait for customers to load if params depend on them
     }
 
     const customerIdParam = searchParams.get('customerId');
@@ -332,44 +332,58 @@ export function InvoiceEditor() {
     const amountStrParam = searchParams.get('amount');
     const amountParam = parseFloat(amountStrParam || '0');
 
+    // Check if we are explicitly entering a debt payment mode via query params
     if (debtPaymentParam && customerIdParam && amountParam > 0) {
-        if (isInitializingDebtPaymentRef.current) return;
-        isInitializingDebtPaymentRef.current = true;
+        // Only initialize if not already in this debt payment setup OR if forced by isInitializingDebtPaymentRef
+        if (editorMode !== 'debtPayment' || form.getValues('customerDetails.id') !== customerIdParam || isInitializingDebtPaymentRef.current) {
+            // Avoid re-initializing if already in the correct debt payment mode for this customer, unless explicitly flagged
+            if (isInitializingDebtPaymentRef.current && editorMode === 'debtPayment' && form.getValues('customerDetails.id') === customerIdParam) {
+                 // Already initializing/initialized for this specific debt payment, but allow reset if ref is true
+            } else if (!isInitializingDebtPaymentRef.current && editorMode === 'debtPayment' && form.getValues('customerDetails.id') === customerIdParam) {
+                // Already in this mode for this customer, and not forced to re-init.
+                return;
+            }
 
-        const targetCustomer = customers.find(c => c.id === customerIdParam);
-        if (targetCustomer) {
-            setEditorMode('debtPayment');
-            setCurrentDebtOrCreditAmount(amountParam);
-            setSelectedCustomerIdForDropdown(customerIdParam);
-            setCustomerRifInput(targetCustomer.rif);
-            setCustomerSearchMessage(`Pagando deuda de: ${targetCustomer.name}`);
-            setShowNewCustomerFields(false);
-            resetFormAndState({ mode: 'debtPayment', customerId: customerIdParam, amount: amountParam });
-        } else {
-            toast({ variant: "destructive", title: "Cliente no encontrado", description: "No se pudo encontrar el cliente para el pago de deuda." });
-            setEditorMode('normal');
-            resetFormAndState({ mode: 'normal' });
+            isInitializingDebtPaymentRef.current = true; // Set flag before potentially resetting
+
+            const targetCustomer = customers.find(c => c.id === customerIdParam);
+            if (targetCustomer) {
+                setEditorMode('debtPayment');
+                setCurrentDebtOrCreditAmount(amountParam);
+                setSelectedCustomerIdForDropdown(customerIdParam);
+                setCustomerRifInput(targetCustomer.rif);
+                setCustomerSearchMessage(`Pagando deuda de: ${targetCustomer.name}`);
+                setShowNewCustomerFields(false);
+                resetFormAndState({ mode: 'debtPayment', customerId: customerIdParam, amount: amountParam });
+            } else {
+                toast({ variant: "destructive", title: "Cliente no encontrado", description: "No se pudo encontrar el cliente para el pago de deuda." });
+                // If customer not found for debt payment, it's an error state.
+                // Decide if resetting to normal is desired or showing an error until resolved.
+                // For now, let's keep the editor mode to avoid aggressive resets if user wants to retry.
+                // setEditorMode('normal'); 
+                // resetFormAndState({ mode: 'normal' });
+                isInitializingDebtPaymentRef.current = false; // Reset flag as init failed
+            }
+            // Clean up query params after processing
+            if (pathname === '/invoice/new' && searchParams.has('debtPayment')) {
+                 router.replace('/invoice/new', { scroll: false });
+            }
         }
-        if (pathname === '/invoice/new' && searchParams.has('debtPayment')) {
-             router.replace('/invoice/new', { scroll: false });
-        }
-        return;
+        return; // Handled debt payment mode setup
     } else {
-       if (isInitializingDebtPaymentRef.current) {
-         isInitializingDebtPaymentRef.current = false;
-       }
+        // If debtPaymentParam is not set (or invalid), ensure the initializing flag is false.
+        if (isInitializingDebtPaymentRef.current) {
+            isInitializingDebtPaymentRef.current = false;
+        }
     }
 
-    const currentInvoiceNumber = form.getValues('invoiceNumber');
-    const isDefaultOrSpecialModeNumber = !currentInvoiceNumber || currentInvoiceNumber.startsWith("PAGO-") || currentInvoiceNumber.startsWith("DEP-");
-
-    if (editorMode === 'normal' && isDefaultOrSpecialModeNumber && !selectedCustomerIdForDropdown ) {
-       resetFormAndState({ mode: 'normal' });
-    }
+    // If no query params dictate a special mode, the form should retain its current state.
+    // The `resetFormAndState` calls are now primarily handled by explicit user actions (Limpiar, new special mode)
+    // or the initial `defaultValues` of `useForm`.
 
 }, [
-    isClient, searchParams, customers, editorMode, selectedCustomerIdForDropdown,
-    resetFormAndState, toast, pathname, router, form
+    isClient, searchParams, customers,
+    resetFormAndState, toast, pathname, router, form, editorMode // form and editorMode are needed for debt payment check
 ]);
 
 
@@ -1905,3 +1919,5 @@ export function InvoiceEditor() {
     </div>
   );
 }
+
+    
