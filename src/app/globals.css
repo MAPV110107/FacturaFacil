@@ -4,43 +4,40 @@
 @tailwind utilities;
 
 body {
-  font-family: 'PT Sans', sans-serif; /* Changed from Arial */
+  font-family: 'PT Sans', sans-serif; 
   @apply bg-background text-foreground;
 }
 
-/* Ensure buttons with explicit foreground colors (like primary-foreground) render text clearly */
-/* This is mostly handled by the theme variables. */
-
 
 @layer base {
-  :root { /* Light theme defaults */
-    --background: 0 0% 96%; /* #F5F5F5 Very light gray (receipt paper) */
-    --foreground: 0 0% 3.9%; /* Texto principal oscuro */
+  :root { 
+    --background: 0 0% 96%; 
+    --foreground: 0 0% 3.9%; 
 
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%; /* Texto oscuro en tarjetas */
+    --card-foreground: 0 0% 3.9%; 
 
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%; /* Texto oscuro en popovers */
+    --popover-foreground: 0 0% 3.9%; 
 
-    --primary: 232 63% 30%; /* #1A237E Dark blue */
-    --primary-foreground: 0 0% 98%; /* Texto claro en botones primarios */
+    --primary: 232 63% 30%; 
+    --primary-foreground: 0 0% 98%; 
 
-    --secondary: 0 0% 92%; /* Gris claro */
-    --secondary-foreground: 0 0% 3.9%; /* Texto oscuro en botones secundarios */
+    --secondary: 0 0% 92%; 
+    --secondary-foreground: 0 0% 3.9%; 
 
-    --muted: 0 0% 90%; /* Gris más claro */
-    --muted-foreground: 0 0% 25%; /* Gris oscuro - Texto atenuado */
+    --muted: 0 0% 90%; 
+    --muted-foreground: 0 0% 25%; 
 
-    --accent: 230 46% 48%; /* #3F51B5 Light blue */
-    --accent-foreground: 0 0% 98%; /* Texto claro en botones de acento */
+    --accent: 230 46% 48%; 
+    --accent-foreground: 0 0% 98%; 
 
-    --destructive: 0 84.2% 60.2%; /* Rojo */
-    --destructive-foreground: 0 0% 98%; /* Texto claro en botones destructivos */
+    --destructive: 0 84.2% 60.2%; 
+    --destructive-foreground: 0 0% 98%; 
 
     --border: 0 0% 89.8%;
     --input: 0 0% 89.8%;
-    --ring: hsl(var(--accent)); /* Anillo ahora usa el acento del tema */
+    --ring: hsl(var(--accent)); 
 
     --chart-1: 12 76% 61%;
     --chart-2: 173 58% 39%;
@@ -49,26 +46,26 @@ body {
     --chart-5: 27 87% 67%;
     --radius: 0.5rem;
 
-    /* Colores del Sidebar para tema claro */
-    --sidebar-background: 0 0% 98%; /* Fondo claro para sidebar */
-    --sidebar-foreground: 0 0% 3.9%; /* Texto oscuro en sidebar */
-    --sidebar-primary: hsl(var(--primary)); /* Usar el primario del tema */
-    --sidebar-primary-foreground: 0 0% 98%; /* Texto claro para elementos primarios del sidebar */
-    --sidebar-accent: hsl(var(--accent)); /* Usar el acento del tema */
-    --sidebar-accent-foreground: 0 0% 98%; /* Texto claro para elementos de acento del sidebar */
+    
+    --sidebar-background: 0 0% 98%; 
+    --sidebar-foreground: 0 0% 3.9%; 
+    --sidebar-primary: hsl(var(--primary)); 
+    --sidebar-primary-foreground: 0 0% 98%; 
+    --sidebar-accent: hsl(var(--accent)); 
+    --sidebar-accent-foreground: 0 0% 98%; 
     --sidebar-border: 220 13% 91%;
-    --sidebar-ring: hsl(var(--accent)); /* Anillo del sidebar usa el acento del tema */
+    --sidebar-ring: hsl(var(--accent)); 
   }
 
   .dark {
-    --background: 0 0% 3.9%; /* Oscuro */
-    --foreground: 0 0% 98%; /* Texto principal claro */
+    --background: 0 0% 3.9%; 
+    --foreground: 0 0% 98%; 
 
-    --card: 0 0% 10%;  /* Oscuro */
-    --card-foreground: 0 0% 98%; /* Texto claro en tarjetas */
+    --card: 0 0% 10%;  
+    --card-foreground: 0 0% 98%; 
 
-    --popover: 0 0% 10%; /* Oscuro */
-    --popover-foreground: 0 0% 98%; /* Texto claro en popovers */
+    --popover: 0 0% 10%; 
+    --popover-foreground: 0 0% 98%; 
 
     --primary: 232 63% 30%;
     --primary-foreground: 0 0% 98%;
@@ -77,7 +74,7 @@ body {
     --secondary-foreground: 0 0% 98%;
 
     --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 60%; /* Gris más claro para texto atenuado */
+    --muted-foreground: 0 0% 60%; 
 
     --accent: 230 46% 48%;
     --accent-foreground: 0 0% 98%;
@@ -87,7 +84,7 @@ body {
 
     --border: 0 0% 14.9%;
     --input: 0 0% 14.9%;
-    --ring: hsl(var(--accent)); /* Anillo ahora usa el acento del tema */
+    --ring: hsl(var(--accent)); 
 
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
@@ -95,15 +92,15 @@ body {
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
 
-    /* Colores del Sidebar para tema oscuro */
-    --sidebar-background: 240 5.9% 10%; /* Fondo oscuro para sidebar */
-    --sidebar-foreground: 0 0% 98%; /* Texto claro en sidebar */
-    --sidebar-primary: hsl(var(--primary)); /* Usar el primario del tema */
-    --sidebar-primary-foreground: 0 0% 98%; /* Texto claro para elementos primarios del sidebar */
-    --sidebar-accent: hsl(var(--accent)); /* Usar el acento del tema */
-    --sidebar-accent-foreground: 0 0% 98%; /* Texto claro para elementos de acento del sidebar */
+    
+    --sidebar-background: 240 5.9% 10%; 
+    --sidebar-foreground: 0 0% 98%; 
+    --sidebar-primary: hsl(var(--primary)); 
+    --sidebar-primary-foreground: 0 0% 98%; 
+    --sidebar-accent: hsl(var(--accent)); 
+    --sidebar-accent-foreground: 0 0% 98%; 
     --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: hsl(var(--accent)); /* Anillo del sidebar usa el acento del tema */
+    --sidebar-ring: hsl(var(--accent)); 
   }
 }
 
@@ -111,36 +108,35 @@ body {
   * {
     @apply border-border;
   }
-  /* body ya está configurado arriba */
 }
 
-/* PRINT STYLES - RESTRUCTURING V5 (Direct thermal receipt print) */
+
 @media print {
   @page {
-    margin: 0mm !important; /* Elimina márgenes de la página de impresión del navegador */
-    size: auto; /* Permite que el contenido defina el tamaño, pero lo controlaremos */
+    margin: 0mm !important; 
+    size: auto; 
   }
 
   html, body {
-    width: 100% !important; /* El HTML y body ocupan el ancho del papel disponible */
+    width: 100% !important; 
     height: auto !important;
     margin: 0 !important;
     padding: 0 !important;
     background: white !important;
     color: black !important;
     font-family: 'PT Sans', sans-serif !important;
-    font-size: 10pt !important; /* Adjusted base font size for print */
+    font-size: 10pt !important; 
     font-weight: bold !important;
     -webkit-font-smoothing: antialiased !important;
     -moz-osx-font-smoothing: grayscale !important;
     line-height: 1.3 !important;
   }
 
-  /* Reseteo global agresivo para elementos impresos */
+  
   * {
     border-width: 0 !important;
     margin: 0 !important;
-    /* padding: 0 !important; -- REMOVED this specific line in a previous iteration */
+    
     box-shadow: none !important;
     background: transparent !important;
     color: black !important;
@@ -150,49 +146,49 @@ body {
     print-color-adjust: exact !important;
     letter-spacing: normal !important;
     text-decoration: none !important;
-    box-sizing: border-box !important; /* Esencial para cálculos de ancho/padding */
+    box-sizing: border-box !important; 
   }
 
-  /* Ocultar elementos no deseados */
+  
   body > *:not(div:first-child) { display: none !important; }
   header[class*="sticky"],
   body > div > footer,
   .no-print,
-  div[data-invoice-preview-header], /* La card de "Previsualización" en el editor */
-  /* Ocultar la Card de título en la página de nueva factura */
+  div[data-invoice-preview-header], 
+  
   main > div.space-y-8 > div.bg-gradient-to-r.from-primary\/10.to-accent\/10,
-  main > div.space-y-8 > .card.shadow-lg.no-print /* Título en página de devoluciones */
+  main > div.space-y-8 > .card.shadow-lg.no-print 
    {
     display: none !important;
   }
 
-  /* Asegurar visibilidad de la jerarquía de la factura */
-  body > div:first-child, /* Div raíz de Next.js */
+  
+  body > div:first-child, 
   body > div:first-child > main,
-  body > div:first-child > main > div, /* div.space-y-8 */
-  div[data-invoice-preview-wrapper] { /* Envoltorio de InvoicePreview */
+  body > div:first-child > main > div, 
+  div[data-invoice-preview-wrapper] { 
     display: block !important;
-    width: 100% !important; /* Ocupa el ancho de su padre */
+    width: 100% !important; 
     position: static !important;
     top: auto !important;
   }
   
-  /* Contenedor principal de la factura (el Card) - ESTE ES NUESTRO "PAPEL DE RECIBO" */
+  
   div[data-invoice-preview-container].card {
-    width: 78mm !important; /* Ancho de impresora térmica */
+    width: 78mm !important; 
     min-width: 78mm !important;
     max-width: 78mm !important;
     height: auto !important;
     background-color: white !important;
     page-break-inside: avoid !important;
-    margin: 0 auto !important; /* Centra el "recibo" si el papel es más ancho (ej. PDF A4) */
-    padding: 5mm !important; /* GLOBAL PADDING FOR THE ENTIRE RECEIPT */
+    margin: 0 auto !important; 
+    padding: 5mm !important; 
     box-sizing: border-box !important;
   }
 
-  /* Área de contenido real DENTRO del Card (nuestro "recibo") */
-  div[data-invoice-preview-container].card > .receipt-font { /* This is the CardContent */
-    width: 100% !important; /* Ocupa el 100% del content-box del Card (which is now 78mm - 2*5mm padding) */
+  
+  div[data-invoice-preview-container].card > .receipt-font { 
+    width: 100% !important; 
     font-family: 'PT Sans', sans-serif !important;
     font-size: 10pt !important;
     font-weight: bold !important;
@@ -200,10 +196,10 @@ body {
     line-height: 1.3 !important;
     word-break: break-word !important;
     box-sizing: border-box !important;
-    padding: 0 !important; /* Ensure CardContent's default Tailwind padding is removed for print */
+    padding: 0 !important; 
   }
 
-  /* Reaplicar márgenes/paddings mínimos para legibilidad DENTRO del .receipt-font */
+  
    .receipt-font > div:not([data-company-details-block]):not(:empty):not(.watermark-container),
    .receipt-font > p:not(:empty) {
      margin-bottom: 1.5mm !important;
@@ -214,10 +210,10 @@ body {
      text-align: center !important;
    }
 
-  /* Estilos del Logo de la Empresa */
+  
   .receipt-font [data-company-details-block] > img[data-ai-hint~="company logo"] {
     display: block !important;
-    max-height: 15mm !important; /* Ajustar altura máxima del logo */
+    max-height: 15mm !important; 
     max-width: 60% !important;
     object-fit: contain !important;
     margin-bottom: 2mm !important;
@@ -232,7 +228,7 @@ body {
     margin-left: auto !important; margin-right: 0 !important;
   }
   .receipt-font [data-company-details-block] > img[data-ai-hint~="company logo"]:not([data-logo-align]) {
-     margin-left: auto !important; margin-right: auto !important; /* Fallback */
+     margin-left: auto !important; margin-right: auto !important; 
   }
 
   .receipt-font [data-company-details-block] > p {
@@ -241,10 +237,10 @@ body {
     line-height: 1.1 !important;
   }
 
-  /* Líneas Punteadas (.DottedLine) - Now contained within the card's padding */
+  
   .receipt-font .DottedLine {
     display: block !important;
-    position: relative !important; /* Kept in flow */
+    position: relative !important; 
     height: 0px !important;
     border: none !important;
     border-top: 1px dashed black !important;
@@ -254,10 +250,10 @@ body {
     margin-bottom: 2mm !important;
     margin-left: 0 !important; 
     margin-right: 0 !important;
-    width: 100% !important; /* Will span the width of .receipt-font (respecting parent card padding) */
+    width: 100% !important; 
   }
 
-  /* Estilos para la tabla de ítems */
+  
   .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] {
     display: grid !important;
     grid-template-columns: 2fr 0.8fr 1.1fr 1.1fr !important;
@@ -272,13 +268,13 @@ body {
     text-align: left !important;
     line-height: 1.2 !important;
   }
-  .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div:nth-child(2), /* Cantidad */
-  .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div:nth-child(3), /* P.Unit */
-  .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div:nth-child(4) { /* Total */
+  .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div:nth-child(2), 
+  .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div:nth-child(3), 
+  .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] > div:nth-child(4) { 
     text-align: right !important;
   }
 
-  /* Estilos de texto específicos dentro del recibo */
+  
   .receipt-font .text-center { text-align: center !important; }
   .receipt-font .text-lg { font-size: 1.2em !important; }
   .receipt-font .text-sm { font-size: 1em !important; }
@@ -293,35 +289,33 @@ body {
 
   .receipt-font .watermark-text { display: none !important; }
 
-  /* Ayudantes de espaciado */
+  
   .receipt-font .space-y-0\.5 > * + * { margin-top: 0.5mm !important; }
   .receipt-font .space-y-1 > * + * { margin-top: 1mm !important; }
 
   .receipt-font > *:first-child:not([data-company-details-block]) {
       margin-top: 0 !important;
   }
-} /* END OF MAIN DIRECT THERMAL PRINT STYLES */
+} 
     
-/* Estilos base para pantalla (para la página de prueba /) */
+
 #factura {
   background: white; 
-  /* margin: auto; Tailwind classes like max-w-4xl mx-auto handle this on page.tsx */
-  /* padding: 20px; Tailwind p-6 handles this on page.tsx */
-  font-family: 'PT Sans', sans-serif; /* Usar la fuente del tema */
+  font-family: 'PT Sans', sans-serif; 
 }
 
-/* Estilos A4 para impresión (usados por html2pdf en page.tsx) */
+
 html.printing-a4 #factura {
-  width: 190mm !important; /* 210mm - 2*10mm de margen jsPDF */
+  width: 190mm !important; 
   padding: 0 !important; 
-  margin: 0 auto !important; /* Centrar en el PDF si es necesario */
+  margin: 0 auto !important; 
   box-shadow: none !important;
   border: none !important;
-  font-size: 10pt !important; /* Tamaño de fuente base para A4 */
+  font-size: 10pt !important; 
   line-height: 1.4 !important;
 }
 html.printing-a4 {
-  background: white !important; /* Fondo para el PDF */
+  background: white !important; 
 }
 html.printing-a4 * {
   -webkit-print-color-adjust: exact !important;
@@ -329,30 +323,29 @@ html.printing-a4 * {
 }
 
 
-/* Estilos 80mm para impresión (usados por html2pdf en page.tsx) */
+
 html.printing-80mm #factura {
-  width: 72mm !important; /* 80mm - (2*jsPDF_margin) - (2*internal_padding_if_any) */
-  padding: 0 !important; /* El padding de InvoicePreview (5mm) ya está dentro de su 78mm */
-  margin: 0 auto !important; /* Centrar en el PDF de 80mm */
+  width: 72mm !important; 
+  padding: 0 !important; 
+  margin: 0 auto !important; 
   box-shadow: none !important;
   border: none !important;
-  font-size: 9pt !important; /* Tamaño de fuente base para 80mm */
+  font-size: 9pt !important; 
   line-height: 1.2 !important;
 }
 html.printing-80mm {
-  background: white !important; /* Fondo para el PDF */
+  background: white !important; 
 }
-/* Estilos más específicos para 80mm si es necesario ajustar InvoicePreview aún más */
+
 html.printing-80mm #factura .receipt-font {
-  font-size: 9pt !important; /* Asegurar que el contenido interno también use 9pt */
+  font-size: 9pt !important; 
   line-height: 1.2 !important;
-  /* El padding de 5mm de InvoicePreview.card se mantiene, lo que es bueno */
 }
 html.printing-80mm #factura .receipt-font [data-company-details-block] > img[data-ai-hint~="company logo"] {
-  max-height: 12mm !important; /* Un poco más pequeño para 80mm */
+  max-height: 12mm !important; 
 }
 html.printing-80mm #factura .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] {
-  grid-template-columns: 2fr 0.7fr 1fr 1fr !important; /* Ajustar columnas si es necesario */
+  grid-template-columns: 2fr 0.7fr 1fr 1fr !important; 
   gap: 0.3mm 0.8mm !important;
 }
 html.printing-80mm * {
@@ -361,19 +354,17 @@ html.printing-80mm * {
 }
 
 
-/* @page rules for browser's direct print, html2pdf uses jsPDF options for page size/margins */
-@page a4-page { /* Renamed @page rule */
+@page a4-page { 
   size: A4;
   margin: 10mm;
 }
-@page thermal-page { /* Renamed @page rule */
+@page thermal-page { 
   size: 80mm auto; 
   margin: 0mm; 
 }
 
 
-/* Para ocultar los controles de impresión de la página de prueba cuando html2pdf está activo */
-/* Tambien oculta header/footer globales durante la generacion de PDF */
+
 .printing-a4 .print-controls-container,
 .printing-80mm .print-controls-container,
 .printing-a4 header.sticky, .printing-a4 body > div > footer,
@@ -381,14 +372,62 @@ html.printing-80mm * {
   display: none !important;
 }
 
-/* Ocultar elementos no deseados de la app en CUALQUIER impresión (directa o vía html2pdf) */
-/* This is a general print block, ensure it's top-level */
+
 @media print {
-  header, footer, .no-print-global { /* .no-print-global can be a utility class */
+  header, footer, .no-print-global, .print-controls-container { 
     display: none !important;
   }
-  /* Específicamente para los controles de impresión en la página de prueba / */
+  
   body > div > div.p-4 > div.mt-8.flex.justify-center { 
       display: none !important;
   }
+}
+
+
+.preview-a4-wrapper {
+  border: 1px solid hsl(var(--border));
+  padding: 10px;
+  background-color: hsl(var(--muted));
+  width: 100%; 
+  max-width: 210mm; 
+  margin: 0 auto;
+}
+.preview-a4-wrapper .card[data-invoice-preview-container] {
+  width: 100% !important; /* Allow it to fill the wrapper */
+  box-shadow: none !important;
+  border: 1px dashed hsl(var(--border)) !important; /* Visual cue for paper edge */
+  padding: 10mm !important; /* Simulate A4 margin inside */
+  margin: 0 !important;
+}
+.preview-a4-wrapper .receipt-font {
+  font-size: 10pt !important;
+  line-height: 1.4 !important;
+}
+
+
+.preview-80mm-wrapper {
+  border: 1px solid hsl(var(--border));
+  padding: 5px;
+  background-color: hsl(var(--muted));
+  width: 100%;
+  max-width: 80mm; 
+  margin: 0 auto; 
+}
+.preview-80mm-wrapper .card[data-invoice-preview-container] {
+  width: 100% !important; 
+  box-shadow: none !important;
+  border: 1px dashed hsl(var(--border)) !important; 
+  padding: 3mm !important; 
+  margin: 0 !important;
+}
+.preview-80mm-wrapper .receipt-font {
+  font-size: 8pt !important; /* Slightly smaller for screen preview of 80mm */
+  line-height: 1.2 !important;
+}
+.preview-80mm-wrapper .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] {
+  grid-template-columns: 2fr 0.7fr 1fr 1fr !important;
+  gap: 0.3mm 0.8mm !important;
+}
+.preview-80mm-wrapper .receipt-font [data-company-details-block] > img[data-ai-hint~="company logo"] {
+  max-height: 12mm !important;
 }

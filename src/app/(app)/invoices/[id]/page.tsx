@@ -33,12 +33,12 @@ export default function ViewInvoicePage() {
 
   useEffect(() => {
     if (isClient && invoiceId) {
-      // Re-fetch from localStorage directly or use the hook's value once stable
+      
       const currentInvoices = JSON.parse(localStorage.getItem("invoices") || "[]") as Invoice[];
       const foundInvoice = currentInvoices.find((inv) => inv.id === invoiceId);
       setInvoice(foundInvoice || null);
     }
-  }, [invoiceId, isClient, allInvoices]); // allInvoices is added to re-trigger if it loads later
+  }, [invoiceId, isClient, allInvoices]); 
 
   if (!isClient || invoice === undefined) {
     return (
@@ -77,7 +77,7 @@ export default function ViewInvoicePage() {
           <ArrowLeft className="mr-2 h-4 w-4" />
           Volver
        </Button>
-      <InvoicePreview invoice={invoice} companyDetails={companyDetails} />
+      <InvoicePreview id="factura" invoice={invoice} companyDetails={companyDetails} />
     </div>
   );
 }

@@ -2,18 +2,21 @@
 "use client";
 
 import type { Invoice, InvoiceItem, CompanyDetails, CustomerDetails, PaymentDetails } from "@/lib/types";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Printer, ShieldCheck } from "lucide-react";
+import { Printer, ShieldCheck, ExternalLink } from "lucide-react";
 import { SENIAT_TEXT, CURRENCY_SYMBOL, FISCAL_PRINTER_LINE_WIDTH } from "@/lib/constants";
 import React from "react";
 import { cn } from "@/lib/utils";
+import FacturaPrintControls from "@/components/FacturaPrintControls";
+import Link from "next/link";
 
 interface InvoicePreviewProps {
-  invoice: Partial<Invoice>; // Partial allows for live preview updates
+  invoice: Partial<Invoice>; 
   companyDetails: CompanyDetails | null;
   className?: string;
-  id?: string; // Added id prop
+  id?: string; 
+  showPrintControls?: boolean; // New prop to control visibility of print buttons
 }
 
 const formatCurrency = (amount: number | undefined | null) => {
@@ -28,12 +31,11 @@ const formatLine = (left: string, right: string, width: number = FISCAL_PRINTER_
   return `${sanitizedLeft}${' '.repeat(spaces)}${sanitizedRight}`;
 };
 
-// DottedLine component is now critical for all horizontal lines in print.
 const DottedLine = () => <hr className="DottedLine my-1" />;
 
-export function InvoicePreview({ invoice, companyDetails, className, id }: InvoicePreviewProps) {
+export function InvoicePreview({ invoice, companyDetails, className, id, showPrintControls = true }: InvoicePreviewProps) {
 
-  const handlePrint = () => {
+  const handleDirectPrint = () => {
     window.print();
   };
 
@@ -92,14 +94,14 @@ export function InvoicePreview({ invoice, companyDetails, className, id }: Invoi
     switch (c?.logoAlignment) {
       case 'left': return 'mr-auto';
       case 'right': return 'ml-auto';
-      default: return 'mx-auto'; // center
+      default: return 'mx-auto'; 
     }
   };
 
 
   return (
     <Card
-      id={id} // Apply the id here
+      id={id} 
       className={cn("w-full relative shadow-xl", className)}
       data-invoice-preview-container
     >
@@ -122,7 +124,6 @@ export function InvoicePreview({ invoice, companyDetails, className, id }: Invoi
 
         <div className="my-2" data-company-details-block>
           {c?.logoUrl && c.logoUrl.trim() !== '' && (
-            // eslint-disable-next-line @next/next/no-img-element
             <img 
               src={c.logoUrl} 
               alt={`${c.name || 'Empresa'} logo`} 
@@ -162,14 +163,12 @@ export function InvoicePreview({ invoice, companyDetails, className, id }: Invoi
 
         <DottedLine />
 
-        {/* Item Table Header */}
         <div className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-x-1 font-semibold">
           <div className="text-left">Descrip.</div>
           <div className="text-right">Cant.</div>
           <div className="text-right">P.Unit</div>
           <div className="text-right">Total</div>
         </div>
-        {/* Item Rows */}
         {items.map((item) => (
           <div key={item.id} className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-x-1 leading-tight">
             <div className="text-left truncate">{item.description}</div>
@@ -186,7 +185,7 @@ export function InvoicePreview({ invoice, companyDetails, className, id }: Invoi
           {discountValue > 0 && (
             <p>{formatLine(`DESCUENTO (${discountPercentage.toFixed(2)}%):`, `-${formatCurrency(discountValue)}`)}</p>
           )}
-           {(taxAmount > 0 || isDebtPayment || isCreditDeposit) && ( // Show taxable base if there's tax or if it's a special doc type
+           {(taxAmount > 0 || isDebtPayment || isCreditDeposit) && ( 
             <p>{formatLine(`BASE IMPONIBLE:`, formatCurrency(taxableBase))}</p>
           )}
           {taxAmount > 0 && !isDebtPayment && !isCreditDeposit && (
@@ -207,7 +206,7 @@ export function InvoicePreview({ invoice, companyDetails, className, id }: Invoi
         )}
 
 
-        {!isReturn && !isCreditDeposit && ( // Only show this section for regular sales invoices
+        {!isReturn && !isCreditDeposit && ( 
             <div className="mt-1">
                 <DottedLine />
                 <p className="font-semibold">{formatLine("TOTAL PAGADO:", formatCurrency(amountPaid))}</p>
@@ -222,7 +221,7 @@ export function InvoicePreview({ invoice, companyDetails, className, id }: Invoi
                 {overpaymentCredited && (
                     <p className="font-semibold">{formatLine("ABONADO A SALDO CLIENTE:", formatCurrency(invoice.overpaymentAmount))}</p>
                 )}
-                {finalAmountDueForDisplay > 0 && !overpaymentWasMade && ( // Only show if there's actual debt on this invoice
+                {finalAmountDueForDisplay > 0 && !overpaymentWasMade && ( 
                     <p className="font-semibold">{formatLine("MONTO PENDIENTE:", formatCurrency(finalAmountDueForDisplay))}</p>
                 )}
             </div>
@@ -246,13 +245,23 @@ export function InvoicePreview({ invoice, companyDetails, className, id }: Invoi
         </div>
 
       </CardContent>
-      <div className="p-4 border-t no-print flex justify-end">
-        <Button onClick={handlePrint} className="bg-accent hover:bg-accent/90 text-accent-foreground">
-          <Printer className="mr-2 h-4 w-4" />
-          Imprimir {documentTitle}
-        </Button>
-      </div>
+      {showPrintControls && (
+        <CardFooter className="p-4 border-t no-print flex-col items-stretch gap-2">
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Button onClick={handleDirectPrint} variant="outline" className="flex-1">
+              <Printer className="mr-2 h-4 w-4" />
+              Imprimir (Directo Navegador)
+            </Button>
+            <Button asChild variant="outline" className="flex-1">
+              <Link href="/">
+                <ExternalLink className="mr-2 h-4 w-4" />
+                Comparar Formatos (A4/Rollo)
+              </Link>
+            </Button>
+          </div>
+          <FacturaPrintControls />
+        </CardFooter>
+      )}
     </Card>
   );
 }
-    

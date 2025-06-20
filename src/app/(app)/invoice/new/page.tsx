@@ -2,7 +2,7 @@
 import { Suspense } from 'react';
 import { InvoiceEditor } from "@/components/invoice/invoice-editor";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { FilePlus2, RefreshCw } from "lucide-react"; // Added RefreshCw for loading state
+import { FilePlus2, RefreshCw } from "lucide-react"; 
 
 function InvoiceLoadingSkeleton() {
   return (

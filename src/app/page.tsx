@@ -3,10 +3,9 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Printer, FileText as FileTextIcon } from "lucide-react";
 import { InvoicePreview } from "@/components/invoice/invoice-preview";
-import FacturaPrintControls from "@/components/FacturaPrintControls";
-import type { Invoice, CompanyDetails } from "@/lib/types";
+import type { Invoice, CompanyDetails, CustomerDetails } from "@/lib/types";
 import { DEFAULT_COMPANY_ID, TAX_RATE } from "@/lib/types";
 import useLocalStorage from "@/hooks/use-local-storage";
 import { useEffect, useState } from "react";
@@ -43,7 +42,7 @@ const sampleInvoiceData: Partial<Invoice> = {
   ],
   paymentMethods: [
     { method: "Efectivo", amount: 200.00, reference: "" },
-    { method: "Tarjeta de Débito", amount: 146.00 + ( (346.00 * TAX_RATE) - ( (346.00 * TAX_RATE) % 0.01 ) ) , reference: "Ref 456789" }, // Adjusted to match calculated total
+    { method: "Tarjeta de Débito", amount: 146.00 + ( (346.00 * TAX_RATE) - ( (346.00 * TAX_RATE) % 0.01 ) ) , reference: "Ref 456789" },
   ],
   subTotal: 346.00,
   discountValue: 0,
@@ -51,19 +50,19 @@ const sampleInvoiceData: Partial<Invoice> = {
   taxRate: TAX_RATE,
   taxAmount: 346.00 * TAX_RATE,
   totalAmount: 346.00 * (1 + TAX_RATE),
-  amountPaid: (346.00 * (1 + TAX_RATE)) - ((346.00 * (1 + TAX_RATE)) % 0.01), // Ensure amountPaid matches totalAmount or slightly less due to rounding
+  amountPaid: (346.00 * (1 + TAX_RATE)) - ((346.00 * (1 + TAX_RATE)) % 0.01),
   amountDue: 0,
   thankYouMessage: "Gracias por revisar esta factura de muestra.",
   notes: "Esta es una factura de demostración para pruebas de impresión.",
 };
 
-export default function Page() {
+export default function GeneralPrintPreviewPage() {
   const [companyData, setCompanyData] = useLocalStorage<CompanyDetails>("companyDetails", defaultCompany);
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
-    if (!companyData?.name) { // If no company data in local storage, use default
+    if (!companyData?.name) { 
         setCompanyData(defaultCompany);
     }
   }, [companyData, setCompanyData]);
@@ -71,12 +70,11 @@ export default function Page() {
   if (!isClient) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen">
-        Cargando página de muestra...
+        Cargando vista previa general de impresión...
       </div>
     );
   }
   
-  // Recalculate totals for the preview based on items and taxRate from sampleInvoiceData
   const itemsSubtotal = sampleInvoiceData.items?.reduce((acc, item) => acc + item.totalPrice, 0) || 0;
   const tax = itemsSubtotal * (sampleInvoiceData.taxRate || 0);
   const total = itemsSubtotal + tax;
@@ -103,7 +101,7 @@ export default function Page() {
 
   return (
     <div className="p-4 flex flex-col items-center">
-      <div className="w-full max-w-4xl mb-6 flex justify-start">
+      <div className="w-full max-w-6xl mb-6 flex justify-start">
         <Button asChild variant="outline">
           <Link href="/dashboard">
             <ArrowLeft className="mr-2 h-4 w-4" />
@@ -112,17 +110,27 @@ export default function Page() {
         </Button>
       </div>
 
-      <h1 className="text-2xl font-bold mb-4 text-primary text-center">Factura de Muestra (Para Prueba de Impresión)</h1>
+      <h1 className="text-2xl font-bold mb-8 text-primary text-center">Vista Previa General de Formatos de Impresión</h1>
       
-      {/* The InvoicePreview component itself will be the target for html2pdf */}
-      <InvoicePreview 
-        id="factura" 
-        invoice={previewableInvoice} 
-        companyDetails={companyData || defaultCompany} 
-      />
-
-      <div className="mt-8 flex justify-center print-controls-container">
-        <FacturaPrintControls />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-6xl">
+        <div className="preview-a4-wrapper">
+          <h2 className="text-xl font-semibold mb-2 text-center text-muted-foreground">Formato A4 (Referencia)</h2>
+          <InvoicePreview 
+            invoice={previewableInvoice} 
+            companyDetails={companyData || defaultCompany}
+            showPrintControls={false} 
+            className="a4-preview-styling" 
+          />
+        </div>
+        <div className="preview-80mm-wrapper">
+          <h2 className="text-xl font-semibold mb-2 text-center text-muted-foreground">Formato Rollo 80mm (Referencia)</h2>
+          <InvoicePreview 
+            invoice={previewableInvoice} 
+            companyDetails={companyData || defaultCompany} 
+            showPrintControls={false}
+            className="thermal-preview-styling"
+          />
+        </div>
       </div>
     </div>
   );

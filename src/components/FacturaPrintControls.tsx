@@ -9,7 +9,7 @@ export default function FacturaPrintControls() {
   const [formato, setFormato] = useState<"a4" | "80mm">("a4");
   const [isPrinting, setIsPrinting] = useState(false);
 
-  const printFactura = async () => { 
+  const printFactura = async (printFormato: "a4" | "80mm") => { 
     const element = document.getElementById("factura");
     if (!element) {
       console.error("Elemento #factura no encontrado.");
@@ -18,7 +18,9 @@ export default function FacturaPrintControls() {
     }
 
     setIsPrinting(true);
-    const pdfClass = formato === "80mm" ? "printing-80mm" : "printing-a4";
+    setFormato(printFormato); // Set format right before printing
+
+    const pdfClass = printFormato === "80mm" ? "printing-80mm" : "printing-a4";
     document.documentElement.classList.add(pdfClass);
 
     try {
@@ -26,22 +28,21 @@ export default function FacturaPrintControls() {
       const { default: html2pdf } = await import('html2pdf.js');
 
       const commonOptions = {
-        filename: `factura_${formato}.pdf`,
+        filename: `factura_${printFormato}.pdf`,
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: {
-          scale: formato === "a4" ? 2 : 3, // Higher scale for 80mm for better text rendering if needed
+          scale: printFormato === "a4" ? 2 : 3, 
           logging: true,
           useCORS: true,
           scrollX: 0,
           scrollY: -window.scrollY,
-          // It's important that #factura is styled by `html.printing-xxx` before this runs
         },
         pagebreak: { mode: ['avoid-all', 'css', 'legacy'] as any[] }
       };
 
       let specificOptions;
 
-      if (formato === "a4") {
+      if (printFormato === "a4") {
         specificOptions = {
           margin: [10, 10, 10, 10], 
           jsPDF: {
@@ -55,7 +56,7 @@ export default function FacturaPrintControls() {
           margin: [2, 2, 2, 2], 
           jsPDF: {
             unit: "mm",
-            format: [80, 297], // Width 80mm, height can be "auto" or large like A4 height
+            format: [80, 297], 
             orientation: "portrait"
           }
         };
@@ -63,9 +64,7 @@ export default function FacturaPrintControls() {
 
       const options = { ...commonOptions, ...specificOptions };
       
-      // Ensure styles are applied before capture
       await new Promise(resolve => setTimeout(resolve, 100));
-
 
       await html2pdf().from(element).set(options).save();
 
@@ -79,10 +78,10 @@ export default function FacturaPrintControls() {
   };
 
   return (
-    <div className="flex flex-col sm:flex-row gap-4 mt-4 p-4 border rounded-lg shadow items-center bg-card print-controls-container">
+    <div className="flex flex-col sm:flex-row gap-2 mt-2 print-controls-container">
       <Button
-        variant={formato === "a4" ? "default" : "outline"}
-        onClick={() => { setFormato("a4"); printFactura(); }}
+        variant={formato === "a4" && isPrinting ? "secondary" : "outline"}
+        onClick={() => printFactura("a4")}
         disabled={isPrinting}
         className="w-full sm:w-auto"
       >
@@ -91,13 +90,13 @@ export default function FacturaPrintControls() {
       </Button>
 
       <Button
-        variant={formato === "80mm" ? "default" : "outline"}
-        onClick={() => { setFormato("80mm"); printFactura(); }}
+        variant={formato === "80mm" && isPrinting ? "secondary" : "default"}
+        onClick={() => printFactura("80mm")}
         disabled={isPrinting}
         className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white data-[variant=outline]:bg-transparent data-[variant=outline]:text-green-600 data-[variant=outline]:border-green-600"
       >
         <Printer className="mr-2 h-4 w-4" />
-        {isPrinting && formato === "80mm" ? "Generando 80mm..." : "Imprimir en 80mm"}
+        {isPrinting && formato === "80mm" ? "Generando Rollo..." : "Imprimir en Rollo"}
       </Button>
     </div>
   );
