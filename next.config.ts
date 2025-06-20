@@ -19,7 +19,15 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  // Redirects section is completely removed to ensure '/' is not redirected.
+  async redirects() {
+    return [
+      {
+        source: '/',
+        destination: '/dashboard',
+        permanent: true, // Or false if you prefer a temporary redirect
+      },
+    ];
+  },
 };
 
 export default nextConfig;
