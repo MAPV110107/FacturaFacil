@@ -16,7 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Eye, History, FileText as PageIcon, Undo2 as ReturnIcon, FileText as SaleIcon, Undo2, ShieldAlert, ShieldCheck } from "lucide-react";
+import { Eye, History, FileText as PageIcon, Undo2 as ReturnIcon, FileText as SaleIcon, Undo2, ShieldAlert, ShieldCheck, DollarSign } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { CURRENCY_SYMBOL } from "@/lib/constants";
