@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, LayoutDashboard, FileText as FileTextIcon } from "lucide-react";
 import { InvoicePreview } from "@/components/invoice/invoice-preview";
 import type { Invoice, CompanyDetails, CustomerDetails } from "@/lib/types";
-import { DEFAULT_COMPANY_ID } from "@/lib/types";
+import { DEFAULT_COMPANY_ID } from "@/lib/types"; // Corrected import
 import { TAX_RATE } from "@/lib/constants";
 import useLocalStorage from "@/hooks/use-local-storage";
 import { useEffect, useState } from "react";
@@ -72,33 +72,32 @@ export default function GeneralPrintPreviewPage() {
       if (storedInvoiceData) {
         try {
           const parsedData = JSON.parse(storedInvoiceData);
-          // Ensure critical fields for preview are present
           const itemsSubtotal = parsedData.items?.reduce((acc:number, item:any) => acc + (item.totalPrice || (item.quantity * item.unitPrice)), 0) || 0;
           const tax = itemsSubtotal * (parsedData.taxRate || 0);
           const total = itemsSubtotal + tax;
 
           setInvoiceToPreview({
             ...parsedData,
+            date: parsedData.date || new Date().toISOString(), // Ensure date is valid string
             subTotal: itemsSubtotal,
             taxAmount: tax,
             totalAmount: total,
             amountPaid: parsedData.amountPaid !== undefined ? parsedData.amountPaid : total,
             amountDue: parsedData.amountDue !== undefined ? parsedData.amountDue : 0,
           });
-          // Do not remove 'invoiceComparisonData' from localStorage here,
-          // so if the user refreshes this page, it still shows the compared invoice.
+          // Do not remove 'invoiceComparisonData' from localStorage here in this version
           // It will be overwritten when "Comparar Formatos" is clicked again from the editor.
         } catch (error) {
           console.error("Error parsing invoice data from localStorage:", error);
-          setInvoiceToPreview(sampleInvoiceData); // Fallback to sample
+          setInvoiceToPreview(sampleInvoiceData); 
         }
       } else {
-         // Ensure sample data also has calculated fields if not present
         const itemsSubtotal = sampleInvoiceData.items?.reduce((acc, item) => acc + item.totalPrice, 0) || 0;
         const tax = itemsSubtotal * (sampleInvoiceData.taxRate || 0);
         const total = itemsSubtotal + tax;
         setInvoiceToPreview({
             ...sampleInvoiceData,
+            date: sampleInvoiceData.date || new Date().toISOString(),
             subTotal: itemsSubtotal,
             taxAmount: tax,
             totalAmount: total,
@@ -107,14 +106,13 @@ export default function GeneralPrintPreviewPage() {
         });
       }
     }
-    // Ensure company data is initialized if it's not set
-    if (isClient && !companyData?.name) { // Check for companyData.name to ensure it's not just the default empty object
+    if (isClient && !companyData?.name) { 
         setCompanyData(defaultCompany);
     }
-  }, [isClient, companyData, setCompanyData]); // companyData, setCompanyData in deps to react to their changes if needed
+  }, [isClient, companyData, setCompanyData]); 
 
 
-  if (!isClient || !invoiceToPreview.customerDetails) { // Added check for customerDetails
+  if (!isClient || !invoiceToPreview.customerDetails) { 
     return (
       <div className="flex flex-col items-center justify-center min-h-screen">
         Cargando vista previa general de impresión...
@@ -122,15 +120,14 @@ export default function GeneralPrintPreviewPage() {
     );
   }
   
-  // Create a complete Invoice object for preview, ensuring all required fields are present
   const finalInvoiceForPreview: Invoice = {
     id: invoiceToPreview.id || "preview-id",
     invoiceNumber: invoiceToPreview.invoiceNumber || "PREVIEW-001",
     date: invoiceToPreview.date || new Date().toISOString(),
     type: invoiceToPreview.type || 'sale',
     status: invoiceToPreview.status || 'active',
-    companyDetails: companyData || defaultCompany, // Use loaded or default company data
-    customerDetails: invoiceToPreview.customerDetails as CustomerDetails, // Already checked for this
+    companyDetails: companyData || defaultCompany, 
+    customerDetails: invoiceToPreview.customerDetails as CustomerDetails, 
     items: invoiceToPreview.items || [],
     paymentMethods: invoiceToPreview.paymentMethods || [],
     subTotal: invoiceToPreview.subTotal || 0,
@@ -140,7 +137,6 @@ export default function GeneralPrintPreviewPage() {
     amountPaid: invoiceToPreview.amountPaid || 0,
     amountDue: invoiceToPreview.amountDue || 0,
     thankYouMessage: invoiceToPreview.thankYouMessage || "Gracias",
-    // Include other fields if they exist on invoiceToPreview, otherwise undefined is fine for partial
     discountPercentage: invoiceToPreview.discountPercentage,
     discountValue: invoiceToPreview.discountValue,
     cashierNumber: invoiceToPreview.cashierNumber,
@@ -177,14 +173,13 @@ export default function GeneralPrintPreviewPage() {
         <div>
           <h2 className="text-xl font-semibold mb-2 text-center text-muted-foreground">Formato A4 (Referencia)</h2>
           <div className="preview-a4-wrapper">
-            {/* For A4 preview, we pass a different id or className to ensure specific styles don't clash if #factura is global */}
             <InvoicePreview 
               invoice={finalInvoiceForPreview} 
               companyDetails={companyData || defaultCompany}
-              // For this page, printing is disabled, it's just for visual comparison
-              isSavedInvoice={false} 
+              isSavedInvoice={false} // No print controls here
               invoiceStatus={finalInvoiceForPreview.status}
-              className="a4-preview-styling" // Custom class for A4 specific styling in this view if needed
+              id="invoice-preview-a4" // Unique ID for this instance
+              className="a4-preview-styling" 
             />
           </div>
         </div>
@@ -194,9 +189,10 @@ export default function GeneralPrintPreviewPage() {
             <InvoicePreview 
               invoice={finalInvoiceForPreview} 
               companyDetails={companyData || defaultCompany} 
-              isSavedInvoice={false}
+              isSavedInvoice={false} // No print controls here
               invoiceStatus={finalInvoiceForPreview.status}
-              className="thermal-preview-styling" // Custom class for thermal specific styling
+              id="invoice-preview-80mm" // Unique ID for this instance
+              className="thermal-preview-styling" 
             />
           </div>
         </div>
