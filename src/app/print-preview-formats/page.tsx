@@ -3,11 +3,11 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, LayoutDashboard } from "lucide-react"; // FileText as FileTextIcon removed as it's not used directly here
+import { ArrowLeft, LayoutDashboard } from "lucide-react";
 import { InvoicePreview } from "@/components/invoice/invoice-preview";
 import type { Invoice, CompanyDetails, CustomerDetails } from "@/lib/types";
-import { DEFAULT_COMPANY_ID } from "@/lib/types"; 
-import { TAX_RATE } from "@/lib/constants";
+import { DEFAULT_COMPANY_ID, TAX_RATE } from "@/lib/types"; // TAX_RATE now from types if it was moved, else constants
+// If TAX_RATE is still in constants: import { TAX_RATE } from "@/lib/constants";
 import useLocalStorage from "@/hooks/use-local-storage";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -72,14 +72,21 @@ export default function GeneralPrintPreviewPage() {
       if (storedInvoiceData) {
         try {
           const parsedData = JSON.parse(storedInvoiceData);
+          // Ensure essential fields are present, fallback if not
           const itemsSubtotal = parsedData.items?.reduce((acc:number, item:any) => acc + (item.totalPrice || (item.quantity * item.unitPrice)), 0) || 0;
-          const tax = itemsSubtotal * (parsedData.taxRate || TAX_RATE); // Use parsed taxRate or default
+          const currentTaxRate = parsedData.taxRate !== undefined ? parsedData.taxRate : TAX_RATE;
+          const tax = itemsSubtotal * currentTaxRate;
           const total = itemsSubtotal + tax - (parsedData.discountValue || 0);
 
           setInvoiceToPreview({
-            ...parsedData,
+            ...sampleInvoiceData, // Use sample as base to ensure all fields exist
+            ...parsedData, // Override with parsed data
             date: parsedData.date || new Date().toISOString(),
+            customerDetails: parsedData.customerDetails || sampleInvoiceData.customerDetails,
+            items: parsedData.items || sampleInvoiceData.items,
+            paymentMethods: parsedData.paymentMethods || sampleInvoiceData.paymentMethods,
             subTotal: itemsSubtotal,
+            taxRate: currentTaxRate,
             taxAmount: tax,
             totalAmount: total,
             amountPaid: parsedData.amountPaid !== undefined ? parsedData.amountPaid : total,
@@ -90,50 +97,27 @@ export default function GeneralPrintPreviewPage() {
         } catch (error) {
           console.error("Error parsing invoice data from localStorage:", error);
           // Fallback to sample data if parsing fails
-          const itemsSubtotal = sampleInvoiceData.items?.reduce((acc, item) => acc + item.totalPrice, 0) || 0;
-          const tax = itemsSubtotal * (sampleInvoiceData.taxRate || TAX_RATE);
-          const total = itemsSubtotal + tax - (sampleInvoiceData.discountValue || 0);
-          setInvoiceToPreview({
-              ...sampleInvoiceData,
-              date: sampleInvoiceData.date || new Date().toISOString(),
-              subTotal: itemsSubtotal,
-              taxAmount: tax,
-              totalAmount: total,
-              amountPaid: sampleInvoiceData.amountPaid !== undefined ? sampleInvoiceData.amountPaid : total,
-              amountDue: sampleInvoiceData.amountDue !== undefined ? sampleInvoiceData.amountDue : 0,
-          });
+           setInvoiceToPreview(prev => ({...prev, ...sampleInvoiceData})); // Keep potentially loaded company details
         }
       } else {
         // Fallback to sample data if nothing in localStorage
-        const itemsSubtotal = sampleInvoiceData.items?.reduce((acc, item) => acc + item.totalPrice, 0) || 0;
-        const tax = itemsSubtotal * (sampleInvoiceData.taxRate || TAX_RATE);
-        const total = itemsSubtotal + tax - (sampleInvoiceData.discountValue || 0);
-        setInvoiceToPreview({
-            ...sampleInvoiceData,
-            date: sampleInvoiceData.date || new Date().toISOString(),
-            subTotal: itemsSubtotal,
-            taxAmount: tax,
-            totalAmount: total,
-            amountPaid: sampleInvoiceData.amountPaid !== undefined ? sampleInvoiceData.amountPaid : total,
-            amountDue: sampleInvoiceData.amountDue !== undefined ? sampleInvoiceData.amountDue : 0,
-        });
+        setInvoiceToPreview(prev => ({...prev, ...sampleInvoiceData}));
       }
     }
     if (isClient && !companyData?.name) { 
         setCompanyData(defaultCompany);
     }
-  }, [isClient, companyData, setCompanyData]); 
+  }, [isClient, companyData, setCompanyData]); // Added dependencies
 
 
   if (!isClient || !invoiceToPreview.customerDetails) { 
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen">
+      <div className="flex flex-col items-center justify-center min-h-screen text-muted-foreground">
         Cargando vista previa general de impresión...
       </div>
     );
   }
   
-  // Ensure the invoice object passed to InvoicePreview is complete as per Invoice type
   const finalInvoiceForPreview: Invoice = {
     id: invoiceToPreview.id || "preview-id",
     invoiceNumber: invoiceToPreview.invoiceNumber || "PREVIEW-001",
@@ -145,7 +129,7 @@ export default function GeneralPrintPreviewPage() {
     items: invoiceToPreview.items || [],
     paymentMethods: invoiceToPreview.paymentMethods || [],
     subTotal: invoiceToPreview.subTotal || 0,
-    taxRate: invoiceToPreview.taxRate || TAX_RATE,
+    taxRate: invoiceToPreview.taxRate === undefined ? TAX_RATE : invoiceToPreview.taxRate,
     taxAmount: invoiceToPreview.taxAmount || 0,
     totalAmount: invoiceToPreview.totalAmount || 0,
     amountPaid: invoiceToPreview.amountPaid || 0,
@@ -168,10 +152,10 @@ export default function GeneralPrintPreviewPage() {
 
   return (
     <div className="p-4 flex flex-col items-center min-h-screen bg-muted/40 no-print">
-      <div className="w-full max-w-7xl mb-6 flex justify-between items-center">
+      <div className="w-full max-w-7xl mb-6 flex justify-between items-center print:hidden">
         <Button variant="outline" onClick={() => router.back()}>
           <ArrowLeft className="mr-2 h-4 w-4" />
-          Volver
+          Volver al Editor
         </Button>
         <Button variant="outline" asChild>
             <Link href="/dashboard">
@@ -181,32 +165,32 @@ export default function GeneralPrintPreviewPage() {
         </Button>
       </div>
 
-      <h1 className="text-2xl font-bold mb-8 text-primary text-center">Vista Previa General de Formatos de Impresión</h1>
+      <h1 className="text-2xl font-bold mb-8 text-primary text-center print:hidden">Vista Previa General de Formatos de Impresión</h1>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-7xl">
         <div>
-          <h2 className="text-xl font-semibold mb-2 text-center text-muted-foreground">Formato A4 (Referencia)</h2>
-          <div className="preview-a4-wrapper">
+          <h2 className="text-xl font-semibold mb-2 text-center text-muted-foreground print:hidden">Formato A4 (Referencia en Pantalla)</h2>
+          <div className="preview-a4-wrapper"> {/* This class applies A4-like styling for screen */}
             <InvoicePreview 
               invoice={finalInvoiceForPreview} 
               companyDetails={companyData || defaultCompany}
-              isSavedInvoice={false} // No print controls here, just visual comparison
+              isSavedInvoice={false} // This is for comparison, not direct printing from here
               invoiceStatus={finalInvoiceForPreview.status}
-              id="invoice-comparison-a4" // Unique ID for this instance
-              className="a4-preview-styling" 
+              id="invoice-comparison-a4" 
+              className="a4-preview-styling" // Additional class if needed
             />
           </div>
         </div>
         <div>
-          <h2 className="text-xl font-semibold mb-2 text-center text-muted-foreground">Formato Rollo (Referencia)</h2>
-          <div className="preview-80mm-wrapper">
+          <h2 className="text-xl font-semibold mb-2 text-center text-muted-foreground print:hidden">Formato Rollo (Referencia en Pantalla)</h2>
+          <div className="preview-80mm-wrapper"> {/* This class applies 80mm-like styling for screen */}
             <InvoicePreview 
               invoice={finalInvoiceForPreview} 
               companyDetails={companyData || defaultCompany} 
-              isSavedInvoice={false} // No print controls here, just visual comparison
+              isSavedInvoice={false} // This is for comparison, not direct printing from here
               invoiceStatus={finalInvoiceForPreview.status}
-              id="invoice-comparison-80mm" // Unique ID for this instance
-              className="thermal-preview-styling" 
+              id="invoice-comparison-80mm" 
+              className="thermal-preview-styling" // Additional class if needed
             />
           </div>
         </div>

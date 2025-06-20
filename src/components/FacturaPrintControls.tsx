@@ -1,106 +1,73 @@
 
 "use client";
-// No static import of html2pdf here
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Printer, FileText as FileTextIcon } from "lucide-react"; // Renamed to avoid conflict
+import { Printer, FileText as FileTextIcon, Eye } from "lucide-react";
+import { useRouter } from "next/navigation";
 
-export default function FacturaPrintControls() {
-  const [formato, setFormato] = useState<"a4" | "80mm">("a4");
+interface FacturaPrintControlsProps {
+  invoiceData?: any; // Data of the current invoice for comparison page
+}
+
+export default function FacturaPrintControls({ invoiceData }: FacturaPrintControlsProps) {
   const [isPrinting, setIsPrinting] = useState(false);
+  const router = useRouter();
 
   const printFactura = async (printFormato: "a4" | "80mm") => {
-    const element = document.getElementById("factura");
-    if (!element) {
-      console.error("Elemento #factura no encontrado.");
-      alert("Error: No se encontró el contenido de la factura para imprimir.");
-      return;
-    }
-
     setIsPrinting(true);
-    setFormato(printFormato); 
 
-    const pdfClass = printFormato === "80mm" ? "printing-80mm" : "printing-a4";
-    if (typeof document !== 'undefined') {
-      document.documentElement.classList.add(pdfClass);
-    }
-        
-    // Allow a brief moment for styles to apply
-    await new Promise(resolve => setTimeout(resolve, 100));
+    const printClassName = printFormato === "80mm" ? "printing-80mm" : "printing-a4";
+    document.documentElement.classList.add(printClassName);
 
-    try {
-      const { default: html2pdf } = await import('html2pdf.js');
+    // Allow a brief moment for styles to apply before triggering print
+    await new Promise(resolve => setTimeout(resolve, 150));
 
-      const commonOptions = {
-        filename: `factura_${printFormato}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: {
-          scale: printFormato === "a4" ? 2 : 3, // Increased scale for potentially better quality
-          logging: false,
-          useCORS: true,
-          scrollX: 0,
-          scrollY: -window.scrollY, 
-        },
-        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] as any[] }
-      };
+    window.print();
 
-      let specificOptions;
-
-      if (printFormato === "a4") {
-        specificOptions = {
-          margin: [10, 10, 10, 10], // 10mm margins for A4
-          jsPDF: {
-            unit: "mm",
-            format: "a4",
-            orientation: "portrait"
-          }
-        };
-      } else { // 80mm
-        specificOptions = {
-          margin: [2, 2, 2, 2], // 2mm margins for thermal
-          jsPDF: {
-            unit: "mm",
-            format: [80, 297], // 80mm width, standard receipt roll height (or auto)
-            orientation: "portrait"
-          }
-        };
-      }
-
-      const options = { ...commonOptions, ...specificOptions };
-      
-      await html2pdf().from(element).set(options).save();
-
-    } catch (error) {
-      console.error("Error al cargar o generar el PDF:", error);
-      alert("Hubo un error al generar el PDF. Revise la consola para más detalles.");
-    } finally {
-      if (typeof document !== 'undefined') {
-        document.documentElement.classList.remove(pdfClass);
-      }
+    // Cleanup: remove the class after printing dialog is closed or print job sent
+    // Using a timeout as onafterprint is not universally reliable or might fire too soon.
+    setTimeout(() => {
+      document.documentElement.classList.remove(printClassName);
       setIsPrinting(false);
-    }
+    }, 500); // Adjust timeout if needed
   };
 
+  const handleCompareFormats = () => {
+    if (invoiceData && Object.keys(invoiceData).length > 0) {
+      localStorage.setItem('invoiceComparisonData', JSON.stringify(invoiceData));
+      router.push('/print-preview-formats');
+    } else {
+      // If no specific invoice data, still go to comparison page (it will use sample data)
+      localStorage.removeItem('invoiceComparisonData'); 
+      router.push('/print-preview-formats');
+    }
+  };
+  
   return (
-    <div className="flex flex-col sm:flex-row gap-2 mt-2 print-controls-container w-full">
+    <div className="flex flex-col gap-2 mt-2 print-controls-container w-full">
       <Button
-        variant={formato === "a4" && isPrinting ? "secondary" : "outline"}
+        variant={"outline"}
         onClick={() => printFactura("a4")}
         disabled={isPrinting}
-        className="w-full" 
+        className="w-full"
       >
         <FileTextIcon className="mr-2 h-4 w-4" />
-        {isPrinting && formato === "a4" ? "Generando A4..." : "Imprimir en A4"}
+        {isPrinting ? "Preparando A4..." : "Imprimir en A4"}
       </Button>
 
       <Button
-        variant={formato === "80mm" && isPrinting ? "secondary" : "default"}
+        variant={"default"}
         onClick={() => printFactura("80mm")}
         disabled={isPrinting}
-        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground data-[variant=outline]:bg-transparent data-[variant=outline]:text-primary data-[variant=outline]:border-primary"
+        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
       >
         <Printer className="mr-2 h-4 w-4" />
-        {isPrinting && formato === "80mm" ? "Generando Rollo..." : "Imprimir en Rollo"}
+        {isPrinting ? "Preparando Rollo..." : "Imprimir en Rollo"}
+      </Button>
+      
+      <Button onClick={handleCompareFormats} variant="outline" className="w-full mt-2">
+        <Eye className="mr-2 h-4 w-4" />
+        Comparar Formatos de Impresión
       </Button>
     </div>
   );
