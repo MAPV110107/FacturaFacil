@@ -21,8 +21,10 @@ export default function FacturaPrintControls() {
     setFormato(printFormato); 
 
     const pdfClass = printFormato === "80mm" ? "printing-80mm" : "printing-a4";
-    document.documentElement.classList.add(pdfClass);
-    
+    if (typeof document !== 'undefined') {
+      document.documentElement.classList.add(pdfClass);
+    }
+        
     // Allow a brief moment for styles to apply
     await new Promise(resolve => setTimeout(resolve, 100));
 
@@ -33,11 +35,11 @@ export default function FacturaPrintControls() {
         filename: `factura_${printFormato}.pdf`,
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: {
-          scale: printFormato === "a4" ? 2 : 3,
-          logging: false, //logging: true,
+          scale: printFormato === "a4" ? 2 : 3, // Increased scale for potentially better quality
+          logging: false,
           useCORS: true,
           scrollX: 0,
-          scrollY: -window.scrollY, // Try to capture from top
+          scrollY: -window.scrollY, 
         },
         pagebreak: { mode: ['avoid-all', 'css', 'legacy'] as any[] }
       };
@@ -72,7 +74,9 @@ export default function FacturaPrintControls() {
       console.error("Error al cargar o generar el PDF:", error);
       alert("Hubo un error al generar el PDF. Revise la consola para más detalles.");
     } finally {
-      document.documentElement.classList.remove(pdfClass);
+      if (typeof document !== 'undefined') {
+        document.documentElement.classList.remove(pdfClass);
+      }
       setIsPrinting(false);
     }
   };
@@ -83,7 +87,7 @@ export default function FacturaPrintControls() {
         variant={formato === "a4" && isPrinting ? "secondary" : "outline"}
         onClick={() => printFactura("a4")}
         disabled={isPrinting}
-        className="w-full" // sm:w-auto
+        className="w-full" 
       >
         <FileTextIcon className="mr-2 h-4 w-4" />
         {isPrinting && formato === "a4" ? "Generando A4..." : "Imprimir en A4"}
@@ -93,7 +97,7 @@ export default function FacturaPrintControls() {
         variant={formato === "80mm" && isPrinting ? "secondary" : "default"}
         onClick={() => printFactura("80mm")}
         disabled={isPrinting}
-        className="w-full bg-green-600 hover:bg-green-700 text-white data-[variant=outline]:bg-transparent data-[variant=outline]:text-green-600 data-[variant=outline]:border-green-600" // sm:w-auto
+        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground data-[variant=outline]:bg-transparent data-[variant=outline]:text-primary data-[variant=outline]:border-primary"
       >
         <Printer className="mr-2 h-4 w-4" />
         {isPrinting && formato === "80mm" ? "Generando Rollo..." : "Imprimir en Rollo"}
