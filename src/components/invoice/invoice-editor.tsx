@@ -261,12 +261,9 @@ export function InvoiceEditor() {
     };
     form.reset(formValuesToReset);
 
-     // If resetting to a truly blank state, also clear lastSavedInvoiceId
-    if (resetToDefaultBlank) {
-        setLastSavedInvoiceId(null);
-        if (typeof window !== 'undefined') {
-            sessionStorage.removeItem(SESSION_STORAGE_DRAFT_KEY);
-        }
+    // If resetting to a truly blank state, also clear draft from sessionStorage
+    if (resetToDefaultBlank && typeof window !== 'undefined') {
+        sessionStorage.removeItem(SESSION_STORAGE_DRAFT_KEY);
     }
 
     const currentItems = (formValuesToReset.items || []).map(item => ({
@@ -315,8 +312,7 @@ export function InvoiceEditor() {
       changeRefundPaymentMethods: formValuesToReset.changeRefundPaymentMethods as PaymentDetails[],
     });
     
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form, customers, companyDetails, calculateTotals, calculatePaymentSummary, initialLivePreviewState, /*setLastSavedInvoiceId (removed to break cycle with other effect)*/]);
+  }, [form, customers, companyDetails, calculateTotals, calculatePaymentSummary, initialLivePreviewState]);
 
 
   useEffect(() => {
@@ -334,22 +330,24 @@ export function InvoiceEditor() {
 
     const customerIdParam = searchParams.get('customerId');
     const debtPaymentParam = searchParams.get('debtPayment') === 'true';
+    const creditDepositParam = searchParams.get('creditDeposit') === 'true';
     const amountStrParam = searchParams.get('amount');
     const amountParam = parseFloat(amountStrParam || '0');
     const newInvoiceParam = searchParams.get('new') === 'true';
 
     let actionTakenByUrl = false;
 
-    // Priority 1: Explicit URL actions (new, debt payment, etc.)
+    // Priority 1: Explicit URL actions (clear draft and reset for action)
     if (newInvoiceParam) {
         if (typeof window !== 'undefined') sessionStorage.removeItem(SESSION_STORAGE_DRAFT_KEY);
+        setLastSavedInvoiceId(null);
         resetFormAndState({ mode: 'normal', resetToDefaultBlank: true });
         setEditorMode('normal');
-        setLastSavedInvoiceId(null);
         setSelectedCustomerIdForDropdown(undefined);
         setCustomerRifInput("");
         setCustomerSearchMessage(null);
         setShowNewCustomerFields(false);
+        setSelectedCustomerAvailableCredit(0);
         internalNavigationRef.current = true;
         router.replace('/invoice/new', { scroll: false });
         actionTakenByUrl = true;
@@ -357,6 +355,7 @@ export function InvoiceEditor() {
         const targetCustomer = customers.find(c => c.id === customerIdParam);
         if (targetCustomer) {
             if (typeof window !== 'undefined') sessionStorage.removeItem(SESSION_STORAGE_DRAFT_KEY);
+            setLastSavedInvoiceId(null);
             resetFormAndState({ mode: 'debtPayment', customerId: customerIdParam, amount: amountParam });
             setEditorMode('debtPayment');
             setCurrentDebtOrCreditAmount(amountParam);
@@ -364,30 +363,54 @@ export function InvoiceEditor() {
             setCustomerRifInput(targetCustomer.rif);
             setCustomerSearchMessage(`Pagando deuda de: ${targetCustomer.name}`);
             setShowNewCustomerFields(false);
-            setLastSavedInvoiceId(null);
+            setSelectedCustomerAvailableCredit(targetCustomer.creditBalance || 0);
             internalNavigationRef.current = true;
             router.replace('/invoice/new', { scroll: false });
             actionTakenByUrl = true;
         } else {
-            toast({ variant: "destructive", title: "Cliente no encontrado" });
-            // Fall through, might load draft or default blank
+            toast({ variant: "destructive", title: "Cliente no encontrado para pago de deuda." });
+        }
+    } else if (creditDepositParam && customerIdParam) {
+        const targetCustomer = customers.find(c => c.id === customerIdParam);
+        if (targetCustomer) {
+            if (typeof window !== 'undefined') sessionStorage.removeItem(SESSION_STORAGE_DRAFT_KEY);
+            setLastSavedInvoiceId(null);
+            resetFormAndState({ mode: 'creditDeposit', customerId: customerIdParam });
+            setEditorMode('creditDeposit');
+            setCurrentDebtOrCreditAmount(0);
+            setSelectedCustomerIdForDropdown(customerIdParam);
+            setCustomerRifInput(targetCustomer.rif);
+            setCustomerSearchMessage(`Registrando depósito para: ${targetCustomer.name}`);
+            setShowNewCustomerFields(false);
+            setSelectedCustomerAvailableCredit(targetCustomer.creditBalance || 0);
+            internalNavigationRef.current = true;
+            router.replace('/invoice/new', { scroll: false });
+            actionTakenByUrl = true;
+        } else {
+             toast({ variant: "destructive", title: "Cliente no encontrado para depósito a cuenta." });
         }
     }
-    // Add similar 'else if' for creditDepositParam if it can be triggered by URL
 
-    // Priority 2: If an action was taken by URL, we're done with this effect run.
     if (actionTakenByUrl) {
         return;
     }
 
-    // Priority 3: Viewing a just-saved invoice (lastSavedInvoiceId is set)
+    // Priority 2: Viewing a just-saved invoice
     if (lastSavedInvoiceId) {
-        // The form is currently displaying the preview of the saved invoice.
-        // No draft should be loaded. The liveInvoicePreview is already up-to-date.
+        const savedInvoiceData = form.getValues();
+        const custDetails = savedInvoiceData.customerDetails;
+        if (custDetails) {
+            setCustomerRifInput(custDetails.rif || "");
+            setSelectedCustomerIdForDropdown(custDetails.id || undefined);
+            const foundCust = customers.find(c => c.id === custDetails.id);
+            setSelectedCustomerAvailableCredit(foundCust?.creditBalance || 0);
+            setCustomerSearchMessage(custDetails.name ? `Cliente: ${custDetails.name}` : "Cliente no especificado");
+            setShowNewCustomerFields(!custDetails.id && !!custDetails.rif);
+        }
         return;
     }
 
-    // Priority 4: Attempt to load from sessionStorage if no URL action and not viewing a saved invoice
+    // Priority 3: Load draft from sessionStorage
     const draftDataJson = typeof window !== 'undefined' ? sessionStorage.getItem(SESSION_STORAGE_DRAFT_KEY) : null;
     if (draftDataJson) {
         try {
@@ -395,65 +418,58 @@ export function InvoiceEditor() {
             if (draftData.date && typeof draftData.date === 'string') {
                 draftData.date = new Date(draftData.date);
             }
-            form.reset(draftData); // Reset form with draft data
-
-            const modeFromDraft = draftData.isDebtPayment ? 'debtPayment' : draftData.isCreditDeposit ? 'creditDeposit' : 'normal';
-            setEditorMode(modeFromDraft);
+            form.reset(draftData);
 
             const loadedCustomerDetails = draftData.customerDetails;
             if (loadedCustomerDetails) {
-                setCustomerRifInput(loadedCustomerDetails.rif || "");
                 form.setValue('customerDetails.id', loadedCustomerDetails.id || "", { shouldValidate: true });
                 form.setValue('customerDetails.name', loadedCustomerDetails.name || "", { shouldValidate: true });
                 form.setValue('customerDetails.rif', loadedCustomerDetails.rif || "", { shouldValidate: true });
                 form.setValue('customerDetails.address', loadedCustomerDetails.address || "", { shouldValidate: true });
                 form.setValue('customerDetails.phone', loadedCustomerDetails.phone || "", { shouldValidate: true });
                 form.setValue('customerDetails.email', loadedCustomerDetails.email || "", { shouldValidate: true });
+                form.setValue('customerDetails.outstandingBalance', loadedCustomerDetails.outstandingBalance || 0);
+                form.setValue('customerDetails.creditBalance', loadedCustomerDetails.creditBalance || 0);
 
+
+                setCustomerRifInput(loadedCustomerDetails.rif || "");
                 if (loadedCustomerDetails.id) {
                     const existingCustomer = customers.find(c => c.id === loadedCustomerDetails.id);
-                    if (existingCustomer) {
-                        setSelectedCustomerIdForDropdown(existingCustomer.id);
-                        setSelectedCustomerAvailableCredit(existingCustomer.creditBalance || 0);
-                        setCustomerSearchMessage(`Cliente cargado del borrador: ${existingCustomer.name}`);
-                        setShowNewCustomerFields(false);
-                    } else { // Customer from draft not in current customer list
-                        setSelectedCustomerIdForDropdown(undefined);
-                        setSelectedCustomerAvailableCredit(0);
-                        setCustomerSearchMessage("Cliente del borrador (no encontrado en lista actual). Edite o busque.");
-                        setShowNewCustomerFields(true); // Allow editing
-                    }
-                } else if (loadedCustomerDetails.rif) { // New customer from draft
+                    setSelectedCustomerIdForDropdown(existingCustomer?.id);
+                    setSelectedCustomerAvailableCredit(existingCustomer?.creditBalance || 0);
+                    setCustomerSearchMessage(existingCustomer ? `Cliente cargado del borrador: ${existingCustomer.name}` : "Cliente del borrador (no encontrado).");
+                    setShowNewCustomerFields(!existingCustomer);
+                } else if (loadedCustomerDetails.rif) {
                     setSelectedCustomerIdForDropdown(undefined);
                     setSelectedCustomerAvailableCredit(0);
                     setCustomerSearchMessage("Nuevo cliente (desde borrador). Verifique/complete datos.");
                     setShowNewCustomerFields(true);
-                } else { // No significant customer info in draft
+                } else {
                    setCustomerRifInput("");
                    setSelectedCustomerIdForDropdown(undefined);
                    setSelectedCustomerAvailableCredit(0);
                    setCustomerSearchMessage("Busque o ingrese datos del cliente.");
-                   setShowNewCustomerFields(false); // No specific customer to show fields for yet
-                   form.setValue('customerDetails', { ...defaultCustomer }, { shouldValidate: true }); // Reset form part to default
+                   setShowNewCustomerFields(false);
                 }
-            } else { // No customerDetails object in draft
+            } else {
+                form.setValue('customerDetails', { ...defaultCustomer }, { shouldValidate: true });
                 setCustomerRifInput("");
                 setSelectedCustomerIdForDropdown(undefined);
                 setSelectedCustomerAvailableCredit(0);
                 setCustomerSearchMessage(null);
                 setShowNewCustomerFields(false);
-                form.setValue('customerDetails', { ...defaultCustomer }, { shouldValidate: true });
             }
 
-            // Explicitly set warranty fields from draft
             form.setValue('applyWarranty', draftData.applyWarranty || false, { shouldValidate: true });
             form.setValue('warrantyDuration', draftData.warrantyDuration || "no_aplica", { shouldValidate: true });
             form.setValue('warrantyText', draftData.warrantyText || "", { shouldValidate: true });
-            
+
+            const modeFromDraft = draftData.isDebtPayment ? 'debtPayment' : draftData.isCreditDeposit ? 'creditDeposit' : 'normal';
+            setEditorMode(modeFromDraft);
             if (modeFromDraft === 'debtPayment' && draftData.items.length > 0) {
                 setCurrentDebtOrCreditAmount(draftData.items[0].unitPrice);
             } else if (modeFromDraft === 'creditDeposit') {
-                setCurrentDebtOrCreditAmount(0); // Amount comes from payment for deposit
+                setCurrentDebtOrCreditAmount(0);
             } else {
                 setCurrentDebtOrCreditAmount(0);
             }
@@ -461,25 +477,30 @@ export function InvoiceEditor() {
         } catch (error) {
             console.error("Error parsing draft from sessionStorage:", error);
             if (typeof window !== 'undefined') sessionStorage.removeItem(SESSION_STORAGE_DRAFT_KEY);
-            // Fall through to default blank state if draft is corrupted
+            setLastSavedInvoiceId(null);
             resetFormAndState({ resetToDefaultBlank: true });
             setEditorMode('normal');
         }
     } else {
-        // Priority 5: Default blank state if no URL action, not viewing saved, and no draft
+        // Priority 4: Default blank state
+        setLastSavedInvoiceId(null);
         resetFormAndState({ resetToDefaultBlank: true });
         setEditorMode('normal');
+        setSelectedCustomerIdForDropdown(undefined);
+        setCustomerRifInput("");
+        setCustomerSearchMessage(null);
+        setShowNewCustomerFields(false);
+        setSelectedCustomerAvailableCredit(0);
     }
-
-    // Clean up URL if it has params that were processed and are no longer needed
-    if ((newInvoiceParam || (debtPaymentParam && customerIdParam)) && !lastSavedInvoiceId ) {
+    
+    // Clean up URL params if they were processed and no longer represent the current state
+    if ((newInvoiceParam || (debtPaymentParam && customerIdParam) || (creditDepositParam && customerIdParam)) && !lastSavedInvoiceId) {
       if (pathname === '/invoice/new' && searchParams.toString()) {
            internalNavigationRef.current = true;
            router.replace('/invoice/new', { scroll: false });
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isClient, searchParams, customers, /* form, resetFormAndState, toast are omitted to prevent cycles, use with caution or pass specific setters */ router, pathname ]);
+  }, [isClient, searchParams, customers, router, pathname, resetFormAndState, toast, form, setLastSavedInvoiceId]);
 
 
   const { fields: itemFields, append: appendItem, remove: removeItem } = useFieldArray({
@@ -501,7 +522,7 @@ export function InvoiceEditor() {
   // Effect for saving draft to sessionStorage
   useEffect(() => {
     const debouncedSaveDraft = debounce((values: InvoiceFormData) => {
-        if (isClient && !lastSavedInvoiceId && form.formState.isDirty) {
+        if (isClient && !lastSavedInvoiceId) { // Only save draft if invoice is not yet finalized
             sessionStorage.setItem(SESSION_STORAGE_DRAFT_KEY, JSON.stringify(values));
         }
     }, 750); 
@@ -570,7 +591,6 @@ export function InvoiceEditor() {
     return () => {
         subscription.unsubscribe();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.watch, isClient, lastSavedInvoiceId, companyDetails, calculateTotals, calculatePaymentSummary, setLiveInvoicePreview, form.formState.isDirty]); 
 
 
@@ -596,12 +616,13 @@ export function InvoiceEditor() {
             replaceChangePayments([]);
         }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    form.watch("overpaymentHandlingChoice"), // Specific watch
+    form.watch("overpaymentHandlingChoice"), 
     liveInvoicePreview.overpaymentAmount,
-    // changePaymentFields, // Avoid direct array dependency if possible
-    // appendChangePayment, replaceChangePayments, updateChangePayment // These are stable if wrapped in useCallback
+    changePaymentFields, 
+    appendChangePayment, 
+    replaceChangePayments, 
+    updateChangePayment
   ]);
 
   useEffect(() => {
@@ -619,8 +640,7 @@ export function InvoiceEditor() {
     } else if (applyTaxValue === true && currentTaxRateValue === 0) {
       form.setValue('taxRate', TAX_RATE * 100, { shouldValidate: true });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.watch('applyTax'), editorMode, /*form*/]); // form removed
+  }, [form.watch('applyTax'), editorMode, form]); 
 
 
   const watchedItems = form.watch('items');
@@ -646,8 +666,7 @@ export function InvoiceEditor() {
             form.setValue('discountValue', 0, { shouldValidate: true });
         }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.watch('discountPercentage'), watchedItems, watchedApplyDiscount, editorMode, /*form,*/ calculateSubTotal]); // form removed
+  }, [form.watch('discountPercentage'), watchedItems, watchedApplyDiscount, editorMode, form, calculateSubTotal]); 
 
   useEffect(() => {
     if (!watchedApplyDiscount || editorMode !== 'normal') return;
@@ -669,8 +688,7 @@ export function InvoiceEditor() {
             form.setValue('discountPercentage', 0, { shouldValidate: true });
         }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.watch('discountValue'), watchedItems, watchedApplyDiscount, editorMode, /*form,*/ calculateSubTotal]); // form removed
+  }, [form.watch('discountValue'), watchedItems, watchedApplyDiscount, editorMode, form, calculateSubTotal]);
 
   useEffect(() => {
     if (!watchedApplyDiscount || editorMode !== 'normal') {
@@ -689,8 +707,7 @@ export function InvoiceEditor() {
             form.setValue('applyDiscount', form.getValues('applyDiscount'), {shouldDirty: true});
         }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [watchedApplyDiscount, editorMode, /*form*/]); // form removed
+  }, [watchedApplyDiscount, editorMode, form]); 
 
   const watchedApplyWarranty = form.watch('applyWarranty');
   const watchedWarrantyDuration = form.watch('warrantyDuration');
@@ -745,8 +762,7 @@ export function InvoiceEditor() {
         }
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [watchedApplyWarranty, watchedWarrantyDuration, watchedInvoiceDate, editorMode, /*form*/]); // form removed
+  }, [watchedApplyWarranty, watchedWarrantyDuration, watchedInvoiceDate, editorMode, form]); 
 
 
   const handleRifSearch = async () => {
@@ -786,12 +802,12 @@ export function InvoiceEditor() {
       setSelectedCustomerIdForDropdown(foundCustomer.id);
       setSelectedCustomerAvailableCredit(foundCustomer.creditBalance || 0);
     } else {
-      form.setValue("customerDetails.id", ""); // Clear ID for new customer
+      form.setValue("customerDetails.id", ""); 
       form.setValue("customerDetails.name", "");
       form.setValue("customerDetails.address", "");
       form.setValue("customerDetails.phone", "");
       form.setValue("customerDetails.email", "");
-      form.setValue("customerDetails.rif", customerRifInput.toUpperCase(), { shouldValidate: true }); // Keep RIF input
+      form.setValue("customerDetails.rif", customerRifInput.toUpperCase(), { shouldValidate: true }); 
       setCustomerSearchMessage("Cliente no encontrado. Complete los datos para registrarlo.");
       setShowNewCustomerFields(true);
       setSelectedCustomerIdForDropdown(undefined);
@@ -850,6 +866,7 @@ export function InvoiceEditor() {
     const customer = form.getValues("customerDetails");
     if (customer && customer.id && (customer.outstandingBalance ?? 0) > 0) {
       if (typeof window !== 'undefined') sessionStorage.removeItem(SESSION_STORAGE_DRAFT_KEY);
+      setLastSavedInvoiceId(null);
       resetFormAndState({ mode: 'debtPayment', customerId: customer.id, amount: customer.outstandingBalance ?? 0 });
       setEditorMode('debtPayment');
       setCurrentDebtOrCreditAmount(customer.outstandingBalance ?? 0);
@@ -857,7 +874,6 @@ export function InvoiceEditor() {
       setCustomerRifInput(customer.rif);
       setCustomerSearchMessage(`Pagando deuda de: ${customer.name}`);
       setShowNewCustomerFields(false);
-      setLastSavedInvoiceId(null);
     } else {
       toast({ variant: "destructive", title: "Sin Deuda Pendiente", description: "El cliente seleccionado no tiene deuda pendiente o no hay cliente seleccionado." });
     }
@@ -867,6 +883,7 @@ export function InvoiceEditor() {
     const customer = form.getValues("customerDetails");
     if (customer && customer.id) {
       if (typeof window !== 'undefined') sessionStorage.removeItem(SESSION_STORAGE_DRAFT_KEY);
+      setLastSavedInvoiceId(null);
       resetFormAndState({ mode: 'creditDeposit', customerId: customer.id });
       setEditorMode('creditDeposit');
       setCurrentDebtOrCreditAmount(0);
@@ -874,7 +891,6 @@ export function InvoiceEditor() {
       setCustomerRifInput(customer.rif);
       setCustomerSearchMessage(`Registrando depósito para: ${customer.name}`);
       setShowNewCustomerFields(false);
-      setLastSavedInvoiceId(null);
     } else {
       toast({ variant: "destructive", title: "Cliente no seleccionado", description: "Por favor, seleccione o busque un cliente primero." });
     }
@@ -993,9 +1009,6 @@ export function InvoiceEditor() {
             finalAmountPaidOnInvoice += autoCreditUsed; 
 
             let overpaymentAmountToStore = 0;
-            // let overpaymentHandlingToStore: 'creditedToAccount' | 'refunded' | undefined = undefined; // This will be set on fullInvoiceData
-            // let changeRefundPaymentMethodsToStore: PaymentDetails[] | undefined = undefined; // This will be set on fullInvoiceData
-
             const netAmountDueAfterAllPayments = totalAmount - finalAmountPaidOnInvoice;
 
             if (netAmountDueAfterAllPayments < 0) { 
@@ -1007,11 +1020,8 @@ export function InvoiceEditor() {
                         form.setError("changeRefundPaymentMethods", {type: "manual", message: "El total del vuelto debe igualar el sobrepago."});
                         return;
                     }
-                    // overpaymentHandlingToStore = 'refunded'; // Set on fullInvoiceData
-                    // changeRefundPaymentMethodsToStore = data.changeRefundPaymentMethods; // Set on fullInvoiceData
                     finalAmountDueForInvoiceRecord = 0;
                 } else { 
-                    // overpaymentHandlingToStore = 'creditedToAccount'; // Set on fullInvoiceData
                     StoredCustomer.creditBalance += overpaymentAmountToStore;
                     finalAmountDueForInvoiceRecord = 0;
                 }
@@ -1114,6 +1124,7 @@ export function InvoiceEditor() {
 
   const handleCleanAndExit = () => {
     if (typeof window !== 'undefined') sessionStorage.removeItem(SESSION_STORAGE_DRAFT_KEY);
+    setLastSavedInvoiceId(null);
     resetFormAndState({ mode: 'normal', resetToDefaultBlank: true }); 
     setEditorMode('normal');
     setCurrentDebtOrCreditAmount(0);
@@ -1125,8 +1136,6 @@ export function InvoiceEditor() {
         title: "Formulario Limpiado",
         description: "El documento ha sido descartado y el formulario reiniciado.",
     });
-    // Do not automatically navigate to dashboard. User might want to start a new blank invoice.
-    // If they want to go to dashboard, they can use the site header.
      if (pathname === '/invoice/new' && searchParams.toString()) {
         internalNavigationRef.current = true;
         router.replace('/invoice/new', { scroll: false });
@@ -1168,18 +1177,10 @@ export function InvoiceEditor() {
     } else if (invoiceToCancel.isCreditDeposit) {
         const depositAmount = invoiceToCancel.amountPaid; 
         let amountCreditedDirectly = depositAmount;
-        // Search for original invoice to see if debt was paid first - this is complex without a transaction ledger
-        // Simplified: Assume direct impact or that the deposit already factored in debt payment during its creation.
-        // The most accurate reversal would require knowing the state *before* this specific deposit.
-        // For now, we reduce credit balance by the deposit amount. If it covered debt,
-        // that debt should effectively be "re-instated" if the deposit is "undone".
-        // This simplification means if a deposit paid off debt, cancelling the deposit "receipt"
-        // won't automatically re-add that debt unless explicitly handled.
-        // For simplicity, we just reduce credit balance.
         updatedCreditBalance -= amountCreditedDirectly;
 
-    } else { // Regular sale invoice cancellation
-        if ((invoiceToCancel.amountDue ?? 0) > 0) { // If there was an amount due on this invoice, it increased outstanding balance
+    } else { 
+        if ((invoiceToCancel.amountDue ?? 0) > 0) { 
             updatedOutstandingBalance -= invoiceToCancel.amountDue;
         }
 
@@ -1195,13 +1196,6 @@ export function InvoiceEditor() {
     }
     
     updatedOutstandingBalance = Math.max(0, updatedOutstandingBalance);
-    // Credit balance can temporarily go negative if a large deposit that covered debt is "cancelled",
-    // and the original debt isn't automatically reinstated by this simplified logic.
-    // This would need more sophisticated transaction management or manual adjustment.
-    // For now, let's keep it from going below 0 if it was positive.
-    // updatedCreditBalance = Math.max(0, updatedCreditBalance); 
-    // Allowing it to go negative might be more indicative that a manual review is needed.
-
     const updatedCustomers = [...customers];
     updatedCustomers[customerToUpdateIdx] = { ...customerToUpdate, outstandingBalance: updatedOutstandingBalance, creditBalance: updatedCreditBalance };
     setCustomers(updatedCustomers);
@@ -1450,10 +1444,10 @@ export function InvoiceEditor() {
                   <div className="pt-4 mt-4 border-t">
                       <Button type="button" variant="outline" onClick={() => {
                         if (typeof window !== 'undefined') sessionStorage.removeItem(SESSION_STORAGE_DRAFT_KEY);
+                        setLastSavedInvoiceId(null);
                         resetFormAndState({mode: 'normal', customerId: selectedCustomerIdForDropdown, resetToDefaultBlank: true });
                         setEditorMode('normal');
                         setCurrentDebtOrCreditAmount(0);
-                        // Explicitly clear customer selection states too
                         setSelectedCustomerIdForDropdown(undefined);
                         setCustomerRifInput("");
                         setCustomerSearchMessage(null);
@@ -2002,7 +1996,7 @@ export function InvoiceEditor() {
                      <Button type="button" variant="outline" disabled className="w-full sm:w-auto">
                         <ShieldCheck className="mr-2 h-4 w-4 text-destructive" /> Factura Ya Anulada
                     </Button>
-                  ) : ( // Covers both !lastSavedInvoiceId and lastSavedInvoiceId but status is not 'active' (e.g., return_processed)
+                  ) : ( 
                     <Button type="button" variant="outline" onClick={handleCleanAndExit} className="w-full sm:w-auto">
                         <XCircle className="mr-2 h-4 w-4" /> {lastSavedInvoiceId ? "Nueva Factura / Salir" : "Limpiar y Salir"}
                     </Button>

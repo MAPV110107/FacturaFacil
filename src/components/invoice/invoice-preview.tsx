@@ -10,7 +10,7 @@ import React from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import FacturaPrintControls from "@/components/FacturaPrintControls";
-// Removed Link import as it's not used here
+
 
 interface InvoicePreviewProps {
   invoice: Partial<Invoice>;
@@ -108,14 +108,11 @@ export function InvoicePreview({
   };
 
   const handleCompareFormats = () => {
-    if (invoice && Object.keys(invoice).length > 0) { // Check if invoice has data
+    if (invoice && Object.keys(invoice).length > 0) { 
       localStorage.setItem('invoiceComparisonData', JSON.stringify(invoice));
-      router.push('/print-preview-formats'); // Corrected link
+      router.push('/print-preview-formats');
     } else {
-      // Optionally, show a toast or alert if there's no invoice data to compare
-      console.warn("No invoice data available to compare.");
-      // Fallback to sample data for comparison page if no live data
-      localStorage.removeItem('invoiceComparisonData'); // Ensure sample data is used on target page
+      localStorage.removeItem('invoiceComparisonData'); 
       router.push('/print-preview-formats');
     }
   };
@@ -182,6 +179,7 @@ export function InvoicePreview({
           <p className="font-semibold">CLIENTE:</p>
           <p>{cust?.name || "Consumidor Final"}</p>
           <p>RIF/CI: {cust?.rif || "V-00000000-0"}</p>
+          {cust?.phone && <p>{formatLine("TELF:", cust.phone)}</p>}
           <p className="truncate" title={cust?.address}>{cust?.address || "N/A"}</p>
         </div>
 
@@ -270,15 +268,7 @@ export function InvoicePreview({
 
       </CardContent>
       <CardFooter className="p-4 border-t no-print flex flex-col items-stretch gap-2">
-        {/* Botón para comparar formatos siempre visible si la factura existe */}
-        {invoice && Object.keys(invoice).length > 0 && !showPrintAndCompareControls && (
-          <Button onClick={handleCompareFormats} variant="outline" className="w-full">
-            <ExternalLink className="mr-2 h-4 w-4" />
-            Comparar Formatos de Impresión
-          </Button>
-        )}
-        {/* Controles de impresión (A4, Rollo) solo si es una factura guardada y activa */}
-        {showPrintAndCompareControls && (
+        {showPrintAndCompareControls ? (
           <>
             <FacturaPrintControls />
             <Button onClick={handleCompareFormats} variant="outline" className="w-full mt-2">
@@ -286,6 +276,13 @@ export function InvoicePreview({
               Comparar Formatos de Impresión
             </Button>
           </>
+        ) : (
+          invoice && Object.keys(invoice).length > 0 && !isSavedInvoice && ( // Only show compare for unsaved invoices in editor
+            <Button onClick={handleCompareFormats} variant="outline" className="w-full">
+              <ExternalLink className="mr-2 h-4 w-4" />
+              Comparar Formatos de Impresión
+            </Button>
+          )
         )}
         {isSavedInvoice && invoiceStatus === 'cancelled' && (
             <p className="text-sm text-center text-destructive font-semibold">Esta factura está ANULADA y no puede ser impresa con los controles PDF.</p>
