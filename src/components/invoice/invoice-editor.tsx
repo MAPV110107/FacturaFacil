@@ -153,7 +153,12 @@ export function InvoiceEditor() {
     let initialInvoiceNumber = `FACT-${Date.now().toString().slice(-6)}`;
     const initialDate = new Date();
     let initialItemsArr = [{ id: uuidv4(), description: "", quantity: 1, unitPrice: 0 }];
-    let initialCustomerState = { ...defaultCustomer };
+    
+    let initialCustomerState: CustomerDetails = {
+      id: "", name: "", rif: "", address: "", phone: "", email: "", // Ensured defaults
+      outstandingBalance: 0, creditBalance: 0,
+    };
+
     let thankYouMsg = DEFAULT_THANK_YOU_MESSAGE;
     let notesMsg = "";
 
@@ -171,7 +176,11 @@ export function InvoiceEditor() {
     const targetCustomer = customers.find(c => c.id === customerId);
 
     if (mode === 'debtPayment' && targetCustomer && amount > 0) {
-      initialCustomerState = { ...targetCustomer };
+      initialCustomerState = { 
+        id: targetCustomer.id, name: targetCustomer.name, rif: targetCustomer.rif, address: targetCustomer.address,
+        phone: targetCustomer.phone || "", email: targetCustomer.email || "",
+        outstandingBalance: targetCustomer.outstandingBalance || 0, creditBalance: targetCustomer.creditBalance || 0,
+       };
       initialInvoiceNumber = `PAGO-${Date.now().toString().slice(-6)}`;
       initialItemsArr = [{ id: uuidv4(), description: "Abono a Deuda Pendiente", quantity: 1, unitPrice: amount }];
       thankYouMsg = "Gracias por su abono.";
@@ -179,7 +188,11 @@ export function InvoiceEditor() {
       formTaxRatePercent = 0; formApplyTax = false; formApplyDiscount = false;
       formDiscountPercentage = 0; formDiscountValue = 0; formIsDebtPayment = true; formApplyWarranty = false;
     } else if (mode === 'creditDeposit' && targetCustomer) {
-      initialCustomerState = { ...targetCustomer };
+      initialCustomerState = { 
+        id: targetCustomer.id, name: targetCustomer.name, rif: targetCustomer.rif, address: targetCustomer.address,
+        phone: targetCustomer.phone || "", email: targetCustomer.email || "",
+        outstandingBalance: targetCustomer.outstandingBalance || 0, creditBalance: targetCustomer.creditBalance || 0,
+      };
       initialInvoiceNumber = `DEP-${Date.now().toString().slice(-6)}`;
       initialItemsArr = [{ id: uuidv4(), description: "Depósito a Cuenta Cliente", quantity: 1, unitPrice: 0 }];
       thankYouMsg = "Gracias por su depósito.";
@@ -188,7 +201,11 @@ export function InvoiceEditor() {
       formDiscountPercentage = 0; formDiscountValue = 0; formIsCreditDeposit = true; formApplyWarranty = false;
     } else {
       if (targetCustomer && !resetToDefaultBlank) { 
-        initialCustomerState = {...targetCustomer};
+        initialCustomerState = {
+          id: targetCustomer.id, name: targetCustomer.name, rif: targetCustomer.rif, address: targetCustomer.address,
+          phone: targetCustomer.phone || "", email: targetCustomer.email || "",
+          outstandingBalance: targetCustomer.outstandingBalance || 0, creditBalance: targetCustomer.creditBalance || 0,
+        };
       }
     }
 
@@ -288,7 +305,6 @@ export function InvoiceEditor() {
       return; // Exit early as URL params dictate state
     }
 
-    // If there's a lastSavedInvoiceId, form is showing a saved invoice, don't load draft
     if (lastSavedInvoiceId) {
         const savedFormData = form.getValues();
         setEditorMode(savedFormData.isDebtPayment ? 'debtPayment' : savedFormData.isCreditDeposit ? 'creditDeposit' : 'normal');
@@ -302,7 +318,6 @@ export function InvoiceEditor() {
         return;
     }
     
-    // Attempt to load draft if no overriding URL params and not viewing a saved invoice
     if (!draftHandled) {
         const draftDataJson = typeof window !== 'undefined' ? sessionStorage.getItem(SESSION_STORAGE_DRAFT_KEY) : null;
         if (draftDataJson) {
@@ -312,19 +327,23 @@ export function InvoiceEditor() {
                 if (!isValid(draftDate)) throw new Error("Invalid date in draft");
                 
                 form.reset({ ...draftData, date: draftDate as Date });
-
-                // Explicitly set values for nested and complex fields from draft
+                
                 if (draftData.customerDetails) {
-                    Object.keys(draftData.customerDetails).forEach(key => {
-                        const K = key as keyof CustomerDetails;
-                        form.setValue(`customerDetails.${K}`, draftData.customerDetails[K] as any);
-                    });
-                    setCustomerRifInput(draftData.customerDetails.rif || "");
-                    setSelectedCustomerIdForDropdown(draftData.customerDetails.id);
-                    const foundCust = customers.find(c => c.id === draftData.customerDetails.id);
+                    const loadedCustomerDetails = draftData.customerDetails;
+                    form.setValue("customerDetails.id", loadedCustomerDetails.id || "");
+                    form.setValue("customerDetails.name", loadedCustomerDetails.name || "");
+                    form.setValue("customerDetails.rif", loadedCustomerDetails.rif || "");
+                    form.setValue("customerDetails.address", loadedCustomerDetails.address || "");
+                    form.setValue("customerDetails.phone", loadedCustomerDetails.phone || "");
+                    form.setValue("customerDetails.email", loadedCustomerDetails.email || "");
+                    form.setValue("customerDetails.outstandingBalance", loadedCustomerDetails.outstandingBalance || 0);
+                    form.setValue("customerDetails.creditBalance", loadedCustomerDetails.creditBalance || 0);
+                    setCustomerRifInput(loadedCustomerDetails.rif || "");
+                    setSelectedCustomerIdForDropdown(loadedCustomerDetails.id);
+                    const foundCust = customers.find(c => c.id === loadedCustomerDetails.id);
                     setSelectedCustomerAvailableCredit(foundCust?.creditBalance || 0);
-                    setCustomerSearchMessage(foundCust ? `Borrador: ${foundCust.name}` : (draftData.customerDetails.name ? `Borrador: ${draftData.customerDetails.name} (nuevo)` : "Borrador cargado"));
-                    setShowNewCustomerFields(!foundCust && !!draftData.customerDetails.rif);
+                    setCustomerSearchMessage(foundCust ? `Borrador: ${foundCust.name}` : (loadedCustomerDetails.name ? `Borrador: ${loadedCustomerDetails.name} (nuevo)` : "Borrador cargado"));
+                    setShowNewCustomerFields(!foundCust && !!loadedCustomerDetails.rif);
                 } else {
                     form.setValue("customerDetails", { ...defaultCustomer });
                     setCustomerRifInput(""); setSelectedCustomerIdForDropdown(undefined); setShowNewCustomerFields(false); setCustomerSearchMessage(null); setSelectedCustomerAvailableCredit(0);
@@ -348,7 +367,6 @@ export function InvoiceEditor() {
                 resetFormAndState({ resetToDefaultBlank: true }); 
             }
         } else {
-             // No URL params, not viewing saved invoice, no draft found -> reset to blank
             resetFormAndState({ resetToDefaultBlank: true });
             setEditorMode('normal'); setSelectedCustomerIdForDropdown(undefined); setCustomerRifInput("");
             setCustomerSearchMessage(null); setShowNewCustomerFields(false); setSelectedCustomerAvailableCredit(0);
@@ -429,7 +447,7 @@ export function InvoiceEditor() {
     }
   }, [
       overpaymentHandlingChoiceValue, 
-      liveInvoicePreview, // Keep liveInvoicePreview as a whole object dependency
+      liveInvoicePreview, 
       changePaymentFields, 
       replaceChangePayments, 
       updateChangePayment
@@ -607,7 +625,13 @@ export function InvoiceEditor() {
   };
 
   function onSubmit(data: InvoiceFormData) {
-    let customerToSaveOnInvoice = { ...data.customerDetails }; 
+    let customerToSaveOnInvoice: CustomerDetails = {
+      ...data.customerDetails,
+      phone: data.customerDetails.phone || "",
+      email: data.customerDetails.email || "",
+      outstandingBalance: data.customerDetails.outstandingBalance || 0,
+      creditBalance: data.customerDetails.creditBalance || 0,
+    };
     let customerWasModified = false; let newCustomerJustAdded: CustomerDetails | null = null;
     if (showNewCustomerFields && !customerToSaveOnInvoice.id && editorMode === 'normal') {
       if (customerToSaveOnInvoice.name && customerToSaveOnInvoice.rif && customerToSaveOnInvoice.address) {
@@ -654,6 +678,8 @@ export function InvoiceEditor() {
 
     if (StoredCustomer) {
         StoredCustomer.outstandingBalance = StoredCustomer.outstandingBalance || 0; StoredCustomer.creditBalance = StoredCustomer.creditBalance || 0;
+        StoredCustomer.phone = StoredCustomer.phone || ""; StoredCustomer.email = StoredCustomer.email || "";
+
         if (editorMode === 'normal') {
             StoredCustomer.creditBalance -= totalExplicitCreditUsedInTransaction;
             let amountPaidByCustomerExcludingExplicitCredit = 0;
@@ -696,7 +722,8 @@ export function InvoiceEditor() {
         else if (newCustomerJustAdded) { 
             const newCustIdx = currentCustomersList.findIndex(c => c.id === StoredCustomer!.id);
             if (newCustIdx !== -1) currentCustomersList[newCustIdx] = StoredCustomer!;
-        } setCustomers(currentCustomersList);
+        } 
+        setCustomers(currentCustomersList); // Save updated customers list
     } else if (!StoredCustomer) {
         toast({ variant: "destructive", title: "Error de Cliente", description: "No se pudo procesar la transacción." }); return;
     }
@@ -804,7 +831,7 @@ export function InvoiceEditor() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:items-start">
-                  <FormField control={form.control} name="invoiceNumber" render={({ field }) => (<FormItem><FormLabel htmlFor="invoiceNumber">Número de Documento</FormLabel><FormControl><Input id="invoiceNumber" {...field} readOnly={!!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="invoiceNumber" render={({ field }) => (<FormItem><FormLabel htmlFor="invoiceNumber">Número de Documento</FormLabel><FormControl><Input id="invoiceNumber" {...field} value={field.value || ""} readOnly={!!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)} />
                   <FormField control={form.control} name="date" render={({ field }) => (
                       <FormItem><FormLabel htmlFor="date">Fecha</FormLabel>
                         <Popover><PopoverTrigger asChild><FormControl>
@@ -816,8 +843,8 @@ export function InvoiceEditor() {
                       </FormItem>)} />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:items-start">
-                  <FormField control={form.control} name="cashierNumber" render={({ field }) => (<FormItem><FormLabel htmlFor="cashierNumber">Nro. Caja (Opc.)</FormLabel><FormControl><Input id="cashierNumber" {...field} placeholder="Ej: 01" readOnly={!!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)} />
-                  <FormField control={form.control} name="salesperson" render={({ field }) => (<FormItem><FormLabel htmlFor="salesperson">Vendedor (Opc.)</FormLabel><FormControl><Input id="salesperson" {...field} placeholder="Ej: Ana Pérez" readOnly={!!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="cashierNumber" render={({ field }) => (<FormItem><FormLabel htmlFor="cashierNumber">Nro. Caja (Opc.)</FormLabel><FormControl><Input id="cashierNumber" {...field} value={field.value || ""} placeholder="Ej: 01" readOnly={!!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="salesperson" render={({ field }) => (<FormItem><FormLabel htmlFor="salesperson">Vendedor (Opc.)</FormLabel><FormControl><Input id="salesperson" {...field} value={field.value || ""} placeholder="Ej: Ana Pérez" readOnly={!!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)} />
                 </div>
               </CardContent>
             </Card>
@@ -833,11 +860,11 @@ export function InvoiceEditor() {
                 </div>
                 {customerSearchMessage && <p className={cn("text-sm mt-1", form.formState.errors.customerDetails?.rif || form.formState.errors.customerDetails?.name ? 'text-destructive' : 'text-muted-foreground')}>{customerSearchMessage}</p>}
                 <div className="space-y-3 pt-3 border-t mt-3">
-                  <FormField control={form.control} name="customerDetails.rif" render={({ field }) => (<FormItem><FormLabel>RIF/CI</FormLabel><FormControl><Input {...field} readOnly={editorMode !== 'normal' || (!showNewCustomerFields && !!form.getValues("customerDetails.id")) || !!lastSavedInvoiceId} placeholder="RIF" /></FormControl><FormMessage /></FormItem>)} />
-                  <FormField control={form.control} name="customerDetails.name" render={({ field }) => (<FormItem><FormLabel>Nombre/Razón Social</FormLabel><FormControl><Input {...field} placeholder="Nombre" readOnly={editorMode !== 'normal' || (!showNewCustomerFields && !!form.getValues("customerDetails.id") && !isSearchingCustomer && !selectedCustomerIdForDropdown) || !!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)} />
-                  <FormField control={form.control} name="customerDetails.address" render={({ field }) => (<FormItem><FormLabel>Dirección Fiscal</FormLabel><FormControl><Textarea {...field} placeholder="Dirección" readOnly={editorMode !== 'normal' || (!showNewCustomerFields && !!form.getValues("customerDetails.id") && !isSearchingCustomer && !selectedCustomerIdForDropdown) || !!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)} />
-                  <FormField control={form.control} name="customerDetails.phone" render={({ field }) => (<FormItem><FormLabel>Teléfono (Opc.)</FormLabel><FormControl><Input {...field} placeholder="Teléfono" readOnly={editorMode !== 'normal' || (!showNewCustomerFields && !!form.getValues("customerDetails.id") && !isSearchingCustomer && !selectedCustomerIdForDropdown) || !!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)} />
-                  <FormField control={form.control} name="customerDetails.email" render={({ field }) => (<FormItem><FormLabel>Email (Opc.)</FormLabel><FormControl><Input {...field} type="email" placeholder="Email" readOnly={editorMode !== 'normal' || (!showNewCustomerFields && !!form.getValues("customerDetails.id") && !isSearchingCustomer && !selectedCustomerIdForDropdown) || !!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="customerDetails.rif" render={({ field }) => (<FormItem><FormLabel>RIF/CI</FormLabel><FormControl><Input {...field} value={field.value || ""} readOnly={editorMode !== 'normal' || (!showNewCustomerFields && !!form.getValues("customerDetails.id")) || !!lastSavedInvoiceId} placeholder="RIF" /></FormControl><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="customerDetails.name" render={({ field }) => (<FormItem><FormLabel>Nombre/Razón Social</FormLabel><FormControl><Input {...field} value={field.value || ""} placeholder="Nombre" readOnly={editorMode !== 'normal' || (!showNewCustomerFields && !!form.getValues("customerDetails.id") && !isSearchingCustomer && !selectedCustomerIdForDropdown) || !!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="customerDetails.address" render={({ field }) => (<FormItem><FormLabel>Dirección Fiscal</FormLabel><FormControl><Textarea {...field} value={field.value || ""} placeholder="Dirección" readOnly={editorMode !== 'normal' || (!showNewCustomerFields && !!form.getValues("customerDetails.id") && !isSearchingCustomer && !selectedCustomerIdForDropdown) || !!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="customerDetails.phone" render={({ field }) => (<FormItem><FormLabel>Teléfono (Opc.)</FormLabel><FormControl><Input {...field} value={field.value || ""} placeholder="Teléfono" readOnly={editorMode !== 'normal' || (!showNewCustomerFields && !!form.getValues("customerDetails.id") && !isSearchingCustomer && !selectedCustomerIdForDropdown) || !!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="customerDetails.email" render={({ field }) => (<FormItem><FormLabel>Email (Opc.)</FormLabel><FormControl><Input {...field} value={field.value || ""} type="email" placeholder="Email" readOnly={editorMode !== 'normal' || (!showNewCustomerFields && !!form.getValues("customerDetails.id") && !isSearchingCustomer && !selectedCustomerIdForDropdown) || !!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)} />
                 </div>
                 <FormItem className="mt-4"><FormLabel>O seleccionar de la lista:</FormLabel>
                   <Select onValueChange={handleCustomerSelectFromDropdown} value={selectedCustomerIdForDropdown || ""} disabled={editorMode !== 'normal' || !!lastSavedInvoiceId}>
@@ -868,7 +895,7 @@ export function InvoiceEditor() {
               <CardContent className="space-y-4">
                 {itemFields.map((field, index) => (
                   <div key={field.id} className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_auto] gap-3 items-end p-3 border rounded-md">
-                    <FormField control={form.control} name={`items.${index}.description`} render={({ field: f }) => (<FormItem><FormLabel>Descripción</FormLabel><FormControl><Input {...f} placeholder="Artículo" readOnly={editorMode !== 'normal' || !!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name={`items.${index}.description`} render={({ field: f }) => (<FormItem><FormLabel>Descripción</FormLabel><FormControl><Input {...f} value={f.value || ""} placeholder="Artículo" readOnly={editorMode !== 'normal' || !!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)} />
                     <FormField control={form.control} name={`items.${index}.quantity`} render={({ field: f }) => (<FormItem><FormLabel>Cantidad</FormLabel><FormControl><Input {...f} type="number" step="0.01" placeholder="1" onChange={e => f.onChange(parseFloat(e.target.value) || 0)} readOnly={editorMode !== 'normal' || !!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)} />
                     <FormField control={form.control} name={`items.${index}.unitPrice`} render={({ field: f }) => (<FormItem><FormLabel>P.Unit ({CURRENCY_SYMBOL})</FormLabel><FormControl><Input {...f} value={(editorMode === 'creditDeposit' && f.value === 0) ? '' : (f.value === 0 ? '' : f.value)} onChange={e => f.onChange(parseFloat(e.target.value) || 0)} type="number" step="0.01" placeholder="0.00" readOnly={editorMode === 'debtPayment' || (editorMode === 'creditDeposit' && f.name === `items.${index}.unitPrice`) || !!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)} />
                     <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(index)} className="text-destructive hover:text-destructive/80" disabled={editorMode !== 'normal' || itemFields.length <= 1 || !!lastSavedInvoiceId}><Trash2 className="h-5 w-5" /></Button>
@@ -898,7 +925,7 @@ export function InvoiceEditor() {
                           <FormField control={form.control} name={`paymentMethods.${index}.amount`} render={({ field: f }) => (
                                   <FormItem><FormLabel>Monto ({CURRENCY_SYMBOL})</FormLabel><FormControl>
                                         <Input {...f} value={f.value === 0 ? '' : f.value} onChange={e => f.onChange(parseFloat(e.target.value) || 0)} type="number" step="0.01" placeholder="0.00" readOnly={(form.getValues(`paymentMethods.${index}.method`) === 'Saldo a Favor' && editorMode === 'normal' && (liveInvoicePreview?.totalAmount || 0) <= selectedCustomerAvailableCredit && (liveInvoicePreview?.totalAmount || 0) > 0) || !!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)}/>
-                          <FormField control={form.control} name={`paymentMethods.${index}.reference`} render={({ field: f }) => (<FormItem><FormLabel>Referencia (Opc.)</FormLabel><FormControl><Input {...f} placeholder="Nro. confirmación" readOnly={!!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)}/>
+                          <FormField control={form.control} name={`paymentMethods.${index}.reference`} render={({ field: f }) => (<FormItem><FormLabel>Referencia (Opc.)</FormLabel><FormControl><Input {...f} value={f.value || ""} placeholder="Nro. confirmación" readOnly={!!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)}/>
                           <Button type="button" variant="ghost" size="icon" onClick={() => removePayment(index)} className="text-destructive hover:text-destructive/80" disabled={paymentFields.length <=1 || !!lastSavedInvoiceId}><Trash2 className="h-5 w-5" /></Button>
                       </div>))}
                   <FormMessage>{form.formState.errors.paymentMethods && typeof form.formState.errors.paymentMethods === 'object' && !Array.isArray(form.formState.errors.paymentMethods) ? (form.formState.errors.paymentMethods as any).message : null}</FormMessage>
@@ -922,7 +949,7 @@ export function InvoiceEditor() {
                                     <div key={field.id} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_auto] gap-3 items-end p-3 border rounded-md bg-muted/30">
                                         <FormField control={form.control} name={`changeRefundPaymentMethods.${index}.method`} render={({ field: f }) => (<FormItem><FormLabel>Método Vuelto</FormLabel><Select onValueChange={f.onChange} defaultValue={f.value} disabled={!!lastSavedInvoiceId}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione" /></SelectTrigger></FormControl><SelectContent><SelectItem value="Efectivo">Efectivo</SelectItem><SelectItem value="Transferencia">Transf.</SelectItem><SelectItem value="Pago Móvil">Pago Móvil</SelectItem><SelectItem value="Otro">Otro</SelectItem></SelectContent></Select><FormMessage /></FormItem>)}/>
                                         <FormField control={form.control} name={`changeRefundPaymentMethods.${index}.amount`} render={({ field: f }) => (<FormItem><FormLabel>Monto Vuelto ({CURRENCY_SYMBOL})</FormLabel><FormControl><Input {...f} value={f.value === 0 ? '' : f.value} onChange={e => f.onChange(parseFloat(e.target.value) || 0)} type="number" step="0.01" placeholder="0.00" readOnly={!!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)}/>
-                                        <FormField control={form.control} name={`changeRefundPaymentMethods.${index}.reference`} render={({ field: f }) => (<FormItem><FormLabel>Ref. Vuelto (Opc.)</FormLabel><FormControl><Input {...f} placeholder="Nro. confirmación" readOnly={!!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)}/>
+                                        <FormField control={form.control} name={`changeRefundPaymentMethods.${index}.reference`} render={({ field: f }) => (<FormItem><FormLabel>Ref. Vuelto (Opc.)</FormLabel><FormControl><Input {...f} value={f.value || ""} placeholder="Nro. confirmación" readOnly={!!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)}/>
                                         <Button type="button" variant="ghost" size="icon" onClick={() => removeChangePayment(index)} className="text-destructive hover:text-destructive/80" disabled={changePaymentFields.length <=1 || !!lastSavedInvoiceId}><Trash2 className="h-5 w-5" /></Button>
                                     </div>))}
                                 {!lastSavedInvoiceId && (<Button type="button" variant="outline" size="sm" onClick={() => appendChangePayment({ method: "Efectivo", amount: 0, reference: "" })}><PlusCircle className="mr-2 h-4 w-4" />Añadir Método Vuelto</Button>)}
@@ -950,12 +977,12 @@ export function InvoiceEditor() {
                     {form.watch('applyWarranty') && editorMode === 'normal' && (
                       <div className="space-y-3 mt-2 pl-6">
                         <FormField control={form.control} name="warrantyDuration" render={({ field: selectField }) => (<FormItem><FormLabel className="flex items-center"><Clock className="mr-2 h-4 w-4 text-muted-foreground" />Duración Garantía</FormLabel><Select onValueChange={selectField.onChange} value={selectField.value} disabled={!form.watch('applyWarranty') || editorMode !== 'normal' || !!lastSavedInvoiceId}><FormControl><SelectTrigger><SelectValue placeholder="Seleccione duración" /></SelectTrigger></FormControl><SelectContent>{warrantyDurationOptions.map(option => (<SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)}/>
-                        {form.watch('warrantyDuration') !== "no_aplica" && (<FormField control={form.control} name="warrantyText" render={({ field: textareaField }) => (<FormItem><FormLabel htmlFor="warrantyText">Texto Adicional Garantía</FormLabel><FormControl><Textarea id="warrantyText" placeholder="Ej: contra defectos de fábrica." {...textareaField} disabled={!form.watch('applyWarranty') || editorMode !== 'normal' || !!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)}/>)}
+                        {form.watch('warrantyDuration') !== "no_aplica" && (<FormField control={form.control} name="warrantyText" render={({ field: textareaField }) => (<FormItem><FormLabel htmlFor="warrantyText">Texto Adicional Garantía</FormLabel><FormControl><Textarea id="warrantyText" placeholder="Ej: contra defectos de fábrica." {...textareaField} value={textareaField.value || ""} disabled={!form.watch('applyWarranty') || editorMode !== 'normal' || !!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)}/>)}
                       </div>)}
                     {(!form.watch('applyWarranty') || editorMode !== 'normal') && <p className="text-xs text-muted-foreground mt-1">Garantía desactivada/no aplica.</p>}
                   </div>
-                  <FormField control={form.control} name="thankYouMessage" render={({ field }) => (<FormItem><FormLabel>Mensaje Agradecimiento</FormLabel><FormControl><Input {...field} placeholder="¡Gracias por su compra!" readOnly={!!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)}/>
-                  <FormField control={form.control} name="notes" render={({ field }) => (<FormItem><FormLabel>Notas Adicionales (Opc.)</FormLabel><FormControl><Textarea {...field} placeholder="Ej: Sin derecho a nota de crédito fiscal." readOnly={!!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)}/>
+                  <FormField control={form.control} name="thankYouMessage" render={({ field }) => (<FormItem><FormLabel>Mensaje Agradecimiento</FormLabel><FormControl><Input {...field} value={field.value || ""} placeholder="¡Gracias por su compra!" readOnly={!!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)}/>
+                  <FormField control={form.control} name="notes" render={({ field }) => (<FormItem><FormLabel>Notas Adicionales (Opc.)</FormLabel><FormControl><Textarea {...field} value={field.value || ""} placeholder="Ej: Sin derecho a nota de crédito fiscal." readOnly={!!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)}/>
               </CardContent>
               <CardFooter className="flex-col sm:flex-row items-stretch gap-3">
                   {!lastSavedInvoiceId && (<Button type="submit" className="w-full sm:flex-1 bg-primary hover:bg-primary/90 text-primary-foreground"><Save className="mr-2 h-4 w-4" />{editorMode === 'debtPayment' && "Guardar Abono"}{editorMode === 'creditDeposit' && "Guardar Depósito"}{editorMode === 'normal' && "Guardar Factura"}</Button>)}
