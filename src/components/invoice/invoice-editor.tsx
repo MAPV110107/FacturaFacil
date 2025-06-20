@@ -445,7 +445,7 @@ export function InvoiceEditor() {
     } else if (overpaymentHandlingChoiceValue === 'creditToAccount') {
         if (changePaymentFields.length > 0) replaceChangePayments([]);
     }
-  }, [overpaymentHandlingChoiceValue, liveInvoicePreview, changePaymentFields, replaceChangePayments, updateChangePayment]);
+  }, [overpaymentHandlingChoiceValue, liveInvoicePreview?.overpaymentAmount, changePaymentFields, replaceChangePayments, updateChangePayment]);
 
 
   useEffect(() => {
@@ -684,7 +684,7 @@ export function InvoiceEditor() {
             if (currentShortfall > 0 && StoredCustomer.creditBalance > 0) {
                 autoCreditUsed = Math.min(currentShortfall, StoredCustomer.creditBalance); StoredCustomer.creditBalance -= autoCreditUsed;
                 finalPaymentMethodsForInvoice.push({ method: "Saldo a Favor (Auto)", amount: autoCreditUsed, reference: "Uso automático para cubrir factura" });
-                finalInvoiceNotes += `${finalInvoiceNotes ? '\n' : ''}Se utilizaron ${formatCurrency(autoCreditUsed)} del saldo a favor (auto.) para cubrir el pago.`;
+                finalInvoiceNotes += `${finalInvoiceNotes ? '\\n' : ''}Se utilizaron ${formatCurrency(autoCreditUsed)} del saldo a favor (auto.) para cubrir el pago.`;
                 currentShortfall -= autoCreditUsed;
             }
             finalAmountPaidOnInvoice += autoCreditUsed; 
@@ -991,7 +991,14 @@ export function InvoiceEditor() {
         <Card className="shadow-md no-print" data-invoice-preview-header>
           <CardHeader><CardTitle className="text-xl flex items-center text-primary"><Info className="mr-2 h-5 w-5" />Previsualización {editorMode === 'debtPayment' ? "Abono" : editorMode === 'creditDeposit' ? "Depósito" : (liveInvoicePreview?.status === 'cancelled' ? "Factura Anulada" : "Factura")}</CardTitle><CardDescription>Así se verá su documento.</CardDescription></CardHeader>
         </Card>
-        <InvoicePreview invoice={liveInvoicePreview || initialLivePreviewState} companyDetails={previewCompanyDetails} className="print-receipt" isSavedInvoice={!!lastSavedInvoiceId} invoiceStatus={liveInvoicePreview?.status || 'active'} id="invoice-editor-preview-card" />
+        <InvoicePreview 
+            invoice={liveInvoicePreview || initialLivePreviewState} 
+            companyDetails={previewCompanyDetails} 
+            className="print-receipt" 
+            isSavedInvoice={!!lastSavedInvoiceId} 
+            invoiceStatus={liveInvoicePreview?.status || 'active'} 
+            id="invoice-editor-preview-card" 
+        />
       </div>
        <AlertDialog open={isCancelConfirmOpen} onOpenChange={setIsCancelConfirmOpen}>
         <AlertDialogContent>

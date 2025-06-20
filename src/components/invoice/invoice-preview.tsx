@@ -13,14 +13,13 @@ interface InvoicePreviewProps {
   invoice: Partial<Invoice>;
   companyDetails: CompanyDetails | null;
   className?: string;
-  id?: string; // This ID will be used for the main Card wrapper.
+  id?: string; 
   isSavedInvoice?: boolean;
   invoiceStatus?: Invoice['status'];
 }
 
 const formatCurrency = (amount: number | undefined | null) => {
   if (amount === undefined || amount === null) return `${CURRENCY_SYMBOL} 0.00`;
-  // Ensure it's a number before toFixed
   const numericAmount = Number(amount);
   if (isNaN(numericAmount)) return `${CURRENCY_SYMBOL} 0.00`;
   return `${CURRENCY_SYMBOL}${numericAmount.toFixed(2)}`;
@@ -39,7 +38,7 @@ export function InvoicePreview({
   invoice,
   companyDetails,
   className,
-  id = "factura-preview-card", // Default ID for the card
+  id = "factura-preview-card", 
   isSavedInvoice = false,
   invoiceStatus = 'active',
 }: InvoicePreviewProps) {
@@ -73,7 +72,6 @@ export function InvoicePreview({
     watermarkTextContent = CANCELLED_WATERMARK_TEXT;
   } else if (isReturn) {
     documentTitle = "NOTA DE CRÉDITO";
-    // watermarkTextContent = "NOTA DE CRÉDITO"; // Optional: watermark for NC too
   } else if (isDebtPayment) {
     documentTitle = "RECIBO DE PAGO DE DEUDA";
   } else if (isCreditDeposit) {
@@ -109,13 +107,10 @@ export function InvoicePreview({
   const showPrintAndCompareControls = isSavedInvoice && invoiceStatus !== 'cancelled' && invoiceStatus !== 'return_processed';
 
   return (
-    // This outer div can be used as a wrapper if needed,
-    // or the Card itself becomes the #invoice-print-content-wrapper for printing logic.
-    // For simplicity, we'll use data-invoice-preview-container on the Card for print targeting.
-    <div id={id} className={cn("invoice-preview-wrapper", className)}> {/* Wrapper for print controls positioning relative to the card */}
+    <div id={id} className={cn("invoice-preview-wrapper", className)}> 
         <Card
           className={cn("w-full relative shadow-xl", className)}
-          data-invoice-preview-container // Used by globals.css for print targeting
+          data-invoice-preview-container 
         >
           {watermarkTextContent && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 watermark-container">
@@ -127,7 +122,7 @@ export function InvoicePreview({
               </span>
             </div>
           )}
-          <CardContent className={cn("text-xs relative z-10 p-4 sm:p-6", "receipt-font")}> {/* Adjusted padding */}
+          <CardContent className={cn("text-xs relative z-10 p-4 sm:p-6", "receipt-font")}> 
             <div className="text-center mb-1">
               <p className="font-bold text-lg my-1">{SENIAT_TEXT}</p>
             </div>
@@ -142,7 +137,7 @@ export function InvoicePreview({
                   className={cn("object-contain mb-2", logoAlignmentClass())}
                   data-ai-hint="company logo"
                   data-logo-align={c.logoAlignment || 'center'}
-                  style={{maxHeight: '50px'}} // Consistent max height
+                  style={{maxHeight: '50px'}} 
                 />
               )}
               <p className="font-bold text-sm text-center">{c?.name || "Nombre de Empresa"}</p>
@@ -198,13 +193,13 @@ export function InvoicePreview({
               {discountValue > 0 && (
                 <p>{formatLine(`DESCUENTO (${Number(discountPercentage).toFixed(2)}%):`, `-${formatCurrency(discountValue)}`)}</p>
               )}
-              {(taxAmount > 0 || isDebtPayment || isCreditDeposit || (taxRate === 0 && taxableBase > 0)) && ( // Show base if taxable even if tax is 0
+              {(taxAmount > 0 || isDebtPayment || isCreditDeposit || (taxRate === 0 && taxableBase > 0)) && ( 
                 <p>{formatLine(`BASE IMPONIBLE:`, formatCurrency(taxableBase))}</p>
               )}
               {taxAmount > 0 && !isDebtPayment && !isCreditDeposit && (
                 <p>{formatLine(`IVA (${(taxRate * 100).toFixed(0)}%):`, formatCurrency(taxAmount))}</p>
               )}
-               {taxAmount === 0 && taxRate > 0 && !isDebtPayment && !isCreditDeposit && ( // Handle case where tax is 0 but rate is > 0 (e.g. exempt items)
+               {taxAmount === 0 && taxRate > 0 && !isDebtPayment && !isCreditDeposit && ( 
                 <p>{formatLine(`IVA (${(taxRate * 100).toFixed(0)}%):`, formatCurrency(0))}</p>
               )}
               <p className="font-bold text-sm">{formatLine(isReturn ? "TOTAL CRÉDITO:" : isDebtPayment ? "TOTAL ABONO:" : isCreditDeposit ? "TOTAL DEPÓSITO:" : "TOTAL A PAGAR:", formatCurrency(totalAmount))}</p>
@@ -237,7 +232,7 @@ export function InvoicePreview({
                     {overpaymentCredited && (
                         <p className="font-semibold">{formatLine("ABONADO A SALDO CLIENTE:", formatCurrency(invoice.overpaymentAmount))}</p>
                     )}
-                    {finalAmountDueForDisplay > 0.001 && !overpaymentWasMade && ( // Use a small epsilon for float comparison
+                    {finalAmountDueForDisplay > 0.001 && !overpaymentWasMade && ( 
                         <p className="font-semibold">{formatLine("MONTO PENDIENTE:", formatCurrency(finalAmountDueForDisplay))}</p>
                     )}
                 </div>
@@ -262,7 +257,7 @@ export function InvoicePreview({
 
           </CardContent>
         </Card>
-        {/* Print controls are now outside the printed card but part of the preview component wrapper */}
+        
         {showPrintAndCompareControls && (
             <CardFooter className="p-4 border-t no-print flex flex-col items-stretch gap-2">
                 <FacturaPrintControls invoiceData={invoice} />
@@ -280,7 +275,7 @@ export function InvoicePreview({
                  <FacturaPrintControls invoiceData={invoice} />
             </CardFooter>
         )}
-        {!isSavedInvoice && invoice && Object.keys(invoice).length > 0 && ( // For live preview in editor
+        {!isSavedInvoice && invoice && Object.keys(invoice).length > 0 && (
             <CardFooter className="p-4 border-t no-print flex flex-col items-stretch gap-2">
                 <FacturaPrintControls invoiceData={invoice} />
             </CardFooter>
