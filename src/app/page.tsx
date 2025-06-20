@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Printer, FileText as FileTextIcon } from "lucide-react";
 import { InvoicePreview } from "@/components/invoice/invoice-preview";
 import type { Invoice, CompanyDetails, CustomerDetails } from "@/lib/types";
-import { DEFAULT_COMPANY_ID, TAX_RATE } from "@/lib/types";
+import { DEFAULT_COMPANY_ID } from "@/lib/types";
+import { TAX_RATE } from "@/lib/constants"; // Corrected import
 import useLocalStorage from "@/hooks/use-local-storage";
 import { useEffect, useState } from "react";
 
