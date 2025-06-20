@@ -133,8 +133,6 @@ export function InvoiceEditor() {
     cancelledAt: undefined,
   }), [companyDetails]);
 
-  const [liveInvoicePreview, setLiveInvoicePreview] = useState<Partial<Invoice>>(initialLivePreviewState);
-
   const form = useForm<InvoiceFormData>({
     resolver: zodResolver(invoiceFormSchema),
     // Default values will be set by resetFormAndState or draft loading
@@ -224,7 +222,6 @@ export function InvoiceEditor() {
       overpaymentHandlingChoice: 'creditToAccount', changeRefundPaymentMethods: [],
     };
     form.reset(defaultFormValues);
-    form.formState.isDirty = false; // Manually reset dirty state after programmatic reset
 
     if (resetToDefaultBlank && typeof window !== 'undefined') {
         sessionStorage.removeItem(SESSION_STORAGE_DRAFT_KEY);
@@ -274,12 +271,11 @@ export function InvoiceEditor() {
     const customerIdParam = searchParams.get('customerId');
     const debtPaymentParam = searchParams.get('debtPayment') === 'true';
     const creditDepositParam = searchParams.get('creditDeposit') === 'true';
-    const amountStrParam = searchParams.get('amount'); // Note: this might be stale if customer balance changed
+    const amountStrParam = searchParams.get('amount'); 
     const newInvoiceParam = searchParams.get('new') === 'true';
 
     let actionTakenByUrl = false;
 
-    // Priority 1: Explicit URL Actions
     if (newInvoiceParam) {
         if (typeof window !== 'undefined') sessionStorage.removeItem(SESSION_STORAGE_DRAFT_KEY);
         setLastSavedInvoiceId(null);
@@ -294,7 +290,6 @@ export function InvoiceEditor() {
         if (targetCustomer && (targetCustomer.outstandingBalance || 0) > 0) {
             if (typeof window !== 'undefined') sessionStorage.removeItem(SESSION_STORAGE_DRAFT_KEY);
             setLastSavedInvoiceId(null);
-            // Use current outstandingBalance from customer record, not potentially stale URL param
             const currentDebt = targetCustomer.outstandingBalance || 0;
             resetFormAndState({ mode: 'debtPayment', customerId: customerIdParam, amount: currentDebt, resetToDefaultBlank: true });
             setEditorMode('debtPayment'); setCurrentDebtOrCreditAmount(currentDebt); setSelectedCustomerIdForDropdown(customerIdParam);
@@ -329,7 +324,6 @@ export function InvoiceEditor() {
 
     if (actionTakenByUrl) return;
 
-    // Priority 2: Viewing a Just-Saved Invoice
     if (lastSavedInvoiceId) {
         const savedFormData = form.getValues();
         if (savedFormData.customerDetails) {
@@ -344,40 +338,35 @@ export function InvoiceEditor() {
         return;
     }
 
-    // Priority 3: Load from sessionStorage Draft
     const draftDataJson = typeof window !== 'undefined' ? sessionStorage.getItem(SESSION_STORAGE_DRAFT_KEY) : null;
     if (draftDataJson) {
         try {
             const draftData: InvoiceFormData = JSON.parse(draftDataJson);
             if (draftData.date && typeof draftData.date === 'string') draftData.date = parseISO(draftData.date);
             
-            form.reset({}, { keepValues: false }); // Clear form state completely before resetting with draft
+            form.reset({}, { keepValues: false }); 
             
-            // Explicitly set all values to ensure full restoration
             Object.keys(draftData).forEach(key => {
                 const K = key as keyof InvoiceFormData;
                 if (K === 'customerDetails') {
-                    const cd = draftData[K] as CustomerDetails; // type assertion
+                    const cd = draftData[K] as CustomerDetails; 
                     form.setValue('customerDetails.id', cd.id || "");
                     form.setValue('customerDetails.name', cd.name || "");
                     form.setValue('customerDetails.rif', cd.rif || "");
                     form.setValue('customerDetails.address', cd.address || "");
                     form.setValue('customerDetails.phone', cd.phone || "");
                     form.setValue('customerDetails.email', cd.email || "");
-                    // Balances are not part of form, but part of customer object
                 } else if (K === 'items') {
                     replaceItems(draftData.items || [{ id: uuidv4(), description: "", quantity: 1, unitPrice: 0 }]);
                 } else if (K === 'paymentMethods') {
                     replacePayments(draftData.paymentMethods || [{ method: "Efectivo", amount: 0, reference: "" }]);
                 } else if (K === 'changeRefundPaymentMethods') {
                     replaceChangePayments(draftData.changeRefundPaymentMethods || []);
-                } else if (draftData[K] !== undefined) { // Ensure value is not undefined before setting
+                } else if (draftData[K] !== undefined) {
                      form.setValue(K, draftData[K] as any);
                 }
             });
-             form.formState.isDirty = true; // Assume draft is "dirty" relative to a blank state
 
-            // Restore UI states
             const loadedCust = draftData.customerDetails;
             if (loadedCust) {
                 setCustomerRifInput(loadedCust.rif || "");
@@ -385,7 +374,7 @@ export function InvoiceEditor() {
                 const foundCust = customers.find(c => c.id === loadedCust.id);
                 setSelectedCustomerAvailableCredit(foundCust?.creditBalance || 0);
                 setCustomerSearchMessage(foundCust ? `Borrador: ${foundCust.name}` : (loadedCust.name ? `Borrador: ${loadedCust.name} (nuevo)`: "Borrador cargado"));
-                setShowNewCustomerFields(!foundCust && !!loadedCust.rif); // Show if RIF exists but not in customer list
+                setShowNewCustomerFields(!foundCust && !!loadedCust.rif); 
             } else {
                 setCustomerRifInput(""); setSelectedCustomerIdForDropdown(undefined);
                 setShowNewCustomerFields(false); setCustomerSearchMessage(null); setSelectedCustomerAvailableCredit(0);
@@ -397,11 +386,10 @@ export function InvoiceEditor() {
         } catch (error) {
             console.error("Error parsing/restoring draft from sessionStorage:", error);
             if (typeof window !== 'undefined') sessionStorage.removeItem(SESSION_STORAGE_DRAFT_KEY);
-            resetFormAndState({ resetToDefaultBlank: true }); // Fallback to blank
+            resetFormAndState({ resetToDefaultBlank: true }); 
         }
     } else {
-        // Priority 4: Default Blank State (if no URL action, not viewing saved invoice, and no draft)
-        if (!lastSavedInvoiceId) { // Ensure not overwriting a just-saved invoice view
+        if (!lastSavedInvoiceId) { 
             resetFormAndState({ resetToDefaultBlank: true });
             setEditorMode('normal'); setSelectedCustomerIdForDropdown(undefined); setCustomerRifInput("");
             setCustomerSearchMessage(null); setShowNewCustomerFields(false); setSelectedCustomerAvailableCredit(0);
@@ -414,18 +402,16 @@ export function InvoiceEditor() {
   // Save draft to sessionStorage on form change
   useEffect(() => {
     const debouncedSaveDraft = debounce((values: Partial<InvoiceFormData>) => {
-        if (isClient && !lastSavedInvoiceId && form.formState.isDirty) {
+        if (isClient && !lastSavedInvoiceId ) { // Removed form.formState.isDirty check here to always save if not viewing saved invoice
             sessionStorage.setItem(SESSION_STORAGE_DRAFT_KEY, JSON.stringify(values));
         }
     }, 750);
 
     const subscription = form.watch((valuesFromWatch) => {
-      // Only save draft if not viewing a saved invoice and form has been touched
-      if (!lastSavedInvoiceId && form.formState.isDirty) {
+      if (!lastSavedInvoiceId) {
         debouncedSaveDraft(valuesFromWatch as InvoiceFormData);
       }
       
-      // Live Preview Update Logic
       const watchedValues = valuesFromWatch as InvoiceFormData;
       const currentItems = (watchedValues.items || []).map(item => ({
           ...item, quantity: item.quantity || 0, unitPrice: item.unitPrice || 0,
@@ -532,7 +518,7 @@ export function InvoiceEditor() {
         let changed = false;
         if (currentPercentage !== 0) { form.setValue('discountPercentage', 0, { shouldValidate: true, shouldDirty: false }); changed = true; }
         if (currentValue !== 0) { form.setValue('discountValue', 0, { shouldValidate: true, shouldDirty: false }); changed = true; }
-        if (changed && form.formState.dirtyFields.applyDiscount) form.setValue('applyDiscount', form.getValues('applyDiscount'), {shouldDirty: true});
+        // if (changed && form.formState.dirtyFields.applyDiscount) form.setValue('applyDiscount', form.getValues('applyDiscount'), {shouldDirty: true});
     }
   }, [watchedApplyDiscount, editorMode, form]); 
 
@@ -774,7 +760,7 @@ export function InvoiceEditor() {
     setLastSavedInvoiceId(newInvoiceId); 
     setLiveInvoicePreview(prev => ({...prev, ...fullInvoiceData, status: 'active'})); 
     if (typeof window !== 'undefined') sessionStorage.removeItem(SESSION_STORAGE_DRAFT_KEY);
-    form.formState.isDirty = false; // Mark form as not dirty after save
+    // form.formState.isDirty = false; // Mark form as not dirty after save
 
     let toastTitle = "Factura Guardada";
     if (editorMode === 'debtPayment') toastTitle = "Abono a Deuda Registrado";
@@ -813,8 +799,8 @@ export function InvoiceEditor() {
         if (invoiceToCancel.totalAmount < invoiceToCancel.amountPaid) updatedCreditBalance -= (invoiceToCancel.amountPaid - invoiceToCancel.totalAmount);
     } else if (invoiceToCancel.isCreditDeposit) {
         const depositAmount = invoiceToCancel.amountPaid; 
-        updatedCreditBalance -= depositAmount; // Simplistic revert: assumes deposit went fully to credit or fully paid some debt
-    } else { // Normal Sale Invoice
+        updatedCreditBalance -= depositAmount; 
+    } else { 
         if ((invoiceToCancel.amountDue ?? 0) > 0) updatedOutstandingBalance -= invoiceToCancel.amountDue;
         (invoiceToCancel.paymentMethods || []).forEach(pm => { if (pm.method === "Saldo a Favor" || pm.method === "Saldo a Favor (Auto)") updatedCreditBalance += pm.amount; });
         if (invoiceToCancel.overpaymentAmount && invoiceToCancel.overpaymentAmount > 0 && invoiceToCancel.overpaymentHandling === 'creditedToAccount') updatedCreditBalance -= invoiceToCancel.overpaymentAmount;
