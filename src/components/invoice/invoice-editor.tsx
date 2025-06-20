@@ -155,8 +155,7 @@ export function InvoiceEditor() {
     let initialItemsArr = [{ id: uuidv4(), description: "", quantity: 1, unitPrice: 0 }];
     
     let initialCustomerState: CustomerDetails = {
-      id: "", name: "", rif: "", address: "", phone: "", email: "", // Ensured defaults
-      outstandingBalance: 0, creditBalance: 0,
+      ...defaultCustomer, // Start with all fields defined as empty strings or 0
     };
 
     let thankYouMsg = DEFAULT_THANK_YOU_MESSAGE;
@@ -445,13 +444,7 @@ export function InvoiceEditor() {
     } else if (overpaymentHandlingChoiceValue === 'creditToAccount') {
         if (changePaymentFields.length > 0) replaceChangePayments([]);
     }
-  }, [
-      overpaymentHandlingChoiceValue, 
-      liveInvoicePreview, 
-      changePaymentFields, 
-      replaceChangePayments, 
-      updateChangePayment
-  ]);
+  }, [overpaymentHandlingChoiceValue, liveInvoicePreview, changePaymentFields, replaceChangePayments, updateChangePayment]);
 
 
   useEffect(() => {
@@ -1008,5 +1001,7 @@ export function InvoiceEditor() {
         </AlertDialogContent></AlertDialog>
     </div>);
 }
+
+    
 
     
