@@ -183,7 +183,7 @@ export default function ViewInvoicePage() {
         )}
       </div>
       <InvoicePreview
-        id="factura"
+        containerId="factura"
         invoice={invoice}
         companyDetails={companyDetails}
         isSavedInvoice={true}

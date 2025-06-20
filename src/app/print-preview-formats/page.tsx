@@ -108,16 +108,25 @@ export default function GeneralPrintPreviewPage() {
   const printSpecificFormat = async (printFormato: "a4" | "80mm") => {
     if (typeof window === 'undefined') return;
     setIsPrinting(true);
+    
+    const printClassName = printFormato === '80mm' ? 'printing-80mm' : 'printing-a4';
+    const elementId = printFormato === '80mm' ? 'invoice-comparison-80mm' : 'invoice-comparison-a4';
+    const elementToPrint = document.getElementById(elementId);
 
-    const printClassName = printFormato === "80mm" ? "printing-80mm" : "printing-a4";
+    if (!elementToPrint) {
+      setIsPrinting(false);
+      return;
+    }
+
     document.documentElement.classList.add(printClassName);
+    elementToPrint.classList.add('print-this-one');
 
     await new Promise(resolve => setTimeout(resolve, 150));
-
     window.print();
-
+    
     setTimeout(() => {
       document.documentElement.classList.remove(printClassName);
+      elementToPrint.classList.remove('print-this-one');
       setIsPrinting(false);
     }, 500);
   };
@@ -182,13 +191,13 @@ export default function GeneralPrintPreviewPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-7xl">
         <div>
           <h2 className="text-xl font-semibold mb-2 text-center text-muted-foreground print:hidden">Formato A4 (Referencia en Pantalla)</h2>
-          <div className="preview-a4-wrapper"> 
+          <div className="preview-a4-wrapper" id="preview-a4-wrapper-id"> 
             <InvoicePreview 
               invoice={finalInvoiceForPreview} 
               companyDetails={companyData || defaultCompany}
               isSavedInvoice={false} 
               invoiceStatus={finalInvoiceForPreview.status}
-              id="invoice-comparison-a4" 
+              containerId="invoice-comparison-a4" 
               className="a4-preview-styling" 
             />
           </div>
@@ -203,13 +212,13 @@ export default function GeneralPrintPreviewPage() {
         </div>
         <div>
           <h2 className="text-xl font-semibold mb-2 text-center text-muted-foreground print:hidden">Formato Rollo (Referencia en Pantalla)</h2>
-          <div className="preview-80mm-wrapper"> 
+          <div className="preview-80mm-wrapper" id="preview-80mm-wrapper-id"> 
             <InvoicePreview 
               invoice={finalInvoiceForPreview} 
               companyDetails={companyData || defaultCompany} 
               isSavedInvoice={false} 
               invoiceStatus={finalInvoiceForPreview.status}
-              id="invoice-comparison-80mm" 
+              containerId="invoice-comparison-80mm" 
               className="thermal-preview-styling" 
             />
           </div>

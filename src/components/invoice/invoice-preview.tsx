@@ -13,7 +13,7 @@ interface InvoicePreviewProps {
   invoice: Partial<Invoice>;
   companyDetails: CompanyDetails | null;
   className?: string;
-  id?: string;
+  containerId?: string;
   isSavedInvoice?: boolean;
   invoiceStatus?: Invoice['status'];
 }
@@ -38,7 +38,7 @@ export function InvoicePreview({
   invoice,
   companyDetails,
   className,
-  id = "factura-preview-card",
+  containerId = "factura-preview-card",
   isSavedInvoice = false,
   invoiceStatus = 'active',
 }: InvoicePreviewProps) {
@@ -105,10 +105,10 @@ export function InvoicePreview({
     }
   };
 
-  const showPrintAndCompareControls = isSavedInvoice && invoiceStatus !== 'cancelled' && invoiceStatus !== 'return_processed';
+  const showPrintAndCompareControls = isSavedInvoice;
 
   return (
-    <div id={id} className={cn("invoice-preview-wrapper", className)}>
+    <div id={containerId} className={cn("invoice-preview-wrapper", className)}>
         <Card
           className={cn("w-full relative shadow-xl", className)}
           data-invoice-preview-container
@@ -270,19 +270,7 @@ export function InvoicePreview({
 
           {showPrintAndCompareControls && (
               <CardFooter className="p-4 border-t no-print flex flex-col items-stretch gap-2">
-                  <FacturaPrintControls invoiceData={invoice} />
-              </CardFooter>
-          )}
-          {isSavedInvoice && invoiceStatus === 'cancelled' && (
-              <CardFooter className="p-4 border-t no-print flex flex-col items-stretch gap-2">
-                  <p className="text-sm text-center text-destructive font-semibold">Esta factura está ANULADA.</p>
-                   <FacturaPrintControls invoiceData={invoice} />
-              </CardFooter>
-          )}
-          {isSavedInvoice && invoiceStatus === 'return_processed' && (
-              <CardFooter className="p-4 border-t no-print flex flex-col items-stretch gap-2">
-                  <p className="text-sm text-center text-amber-600 font-semibold">Esta factura ya tiene una Nota de Crédito asociada.</p>
-                   <FacturaPrintControls invoiceData={invoice} />
+                  <FacturaPrintControls containerId={containerId} invoiceData={invoice} />
               </CardFooter>
           )}
         </Card>

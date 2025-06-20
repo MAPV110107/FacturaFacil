@@ -7,17 +7,28 @@ import { useRouter } from "next/navigation";
 
 interface FacturaPrintControlsProps {
   invoiceData?: any; // Data of the current invoice for comparison page
+  containerId: string; // The ID of the InvoicePreview container to print
 }
 
-export default function FacturaPrintControls({ invoiceData }: FacturaPrintControlsProps) {
+export default function FacturaPrintControls({ invoiceData, containerId }: FacturaPrintControlsProps) {
   const [isPrinting, setIsPrinting] = useState(false);
   const router = useRouter();
 
   const printFactura = async (printFormato: "a4" | "80mm") => {
+    if (typeof window === 'undefined') return;
     setIsPrinting(true);
 
     const printClassName = printFormato === "80mm" ? "printing-80mm" : "printing-a4";
+    const elementToPrint = document.getElementById(containerId);
+
+    if (!elementToPrint) {
+        console.error("Print Error: Could not find element with ID:", containerId);
+        setIsPrinting(false);
+        return;
+    }
+
     document.documentElement.classList.add(printClassName);
+    elementToPrint.classList.add('print-this-one');
 
     // Allow a brief moment for styles to apply before triggering print
     await new Promise(resolve => setTimeout(resolve, 150));
@@ -25,9 +36,9 @@ export default function FacturaPrintControls({ invoiceData }: FacturaPrintContro
     window.print();
 
     // Cleanup: remove the class after printing dialog is closed or print job sent
-    // Using a timeout as onafterprint is not universally reliable or might fire too soon.
     setTimeout(() => {
       document.documentElement.classList.remove(printClassName);
+      elementToPrint.classList.remove('print-this-one');
       setIsPrinting(false);
     }, 500); // Adjust timeout if needed
   };
