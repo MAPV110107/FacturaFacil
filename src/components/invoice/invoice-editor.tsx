@@ -10,7 +10,7 @@ import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 
 import useLocalStorage from "@/hooks/use-local-storage";
 import type { Invoice, CompanyDetails, CustomerDetails, InvoiceItem, PaymentDetails } from "@/lib/types";
-import { DEFAULT_COMPANY_ID } from "@/lib/types";
+import { DEFAULT_COMPANY_ID, defaultCustomer } from "@/lib/types";
 import { invoiceFormSchema } from "@/lib/schemas";
 import { CURRENCY_SYMBOL, DEFAULT_THANK_YOU_MESSAGE, TAX_RATE } from "@/lib/constants";
 
@@ -47,7 +47,6 @@ type InvoiceItemForm = InvoiceFormData['items'][number];
 
 
 const defaultCompany: CompanyDetails = { id: DEFAULT_COMPANY_ID, name: "", rif: "", address: "" };
-const defaultCustomer: CustomerDetails = { id: "", name: "", rif: "", address: "", phone: "", email: "", outstandingBalance: 0, creditBalance: 0 };
 
 const debounce = <F extends (...args: any[]) => any>(func: F, waitFor: number) => {
   let timeout: NodeJS.Timeout;
@@ -76,7 +75,7 @@ const warrantyDurationOptions = [
   { value: "personalizado", label: "Personalizado (detallar en texto)" },
 ];
 
-const SESSION_STORAGE_DRAFT_KEY = "invoiceEditorDraft";
+const SESSION_STORAGE_DRAFT_KEY = "invoiceEditorDraft_v2";
 
 export function InvoiceEditor() {
   const [companyDetails] = useLocalStorage<CompanyDetails>("companyDetails", defaultCompany);
@@ -312,7 +311,7 @@ export function InvoiceEditor() {
     if (typeof window !== 'undefined' && resetToDefaultBlank) { 
       sessionStorage.removeItem(SESSION_STORAGE_DRAFT_KEY);
     }
-  }, [form, customers, companyDetails, calculateTotals, calculatePaymentSummary]);
+  }, [form, customers, companyDetails, calculateTotals, calculatePaymentSummary, initialLivePreviewState]);
 
 
   useEffect(() => {
@@ -360,9 +359,8 @@ export function InvoiceEditor() {
       }
       actionTaken = true;
     }
-    // Consider adding similar 'creditDeposit' handling here if it can be URL-triggered
 
-    if (!actionTaken) {
+    if (!actionTaken && !lastSavedInvoiceId) { // Only load draft if no action taken and not already showing a saved invoice
       const draftDataJson = sessionStorage.getItem(SESSION_STORAGE_DRAFT_KEY);
       if (draftDataJson) {
         try {
@@ -370,45 +368,85 @@ export function InvoiceEditor() {
           if (draftData.date && typeof draftData.date === 'string') {
             draftData.date = new Date(draftData.date);
           }
-          form.reset(draftData); 
-
+          
           const modeFromDraft = draftData.isDebtPayment ? 'debtPayment' : draftData.isCreditDeposit ? 'creditDeposit' : 'normal';
+          
+          form.reset(draftData); // Reset the form first
+
+          // Then, explicitly set other UI states and form values if needed
           setEditorMode(modeFromDraft);
-          if (modeFromDraft === 'debtPayment' && draftData.items.length > 0) {
-            setCurrentDebtOrCreditAmount(draftData.items[0].unitPrice);
+
+          const loadedCustomerDetails = draftData.customerDetails;
+          if (loadedCustomerDetails) {
+              setCustomerRifInput(loadedCustomerDetails.rif || "");
+              form.setValue('customerDetails.id', loadedCustomerDetails.id || "", { shouldValidate: false, shouldDirty: false });
+              form.setValue('customerDetails.name', loadedCustomerDetails.name || "", { shouldValidate: false, shouldDirty: false });
+              form.setValue('customerDetails.rif', loadedCustomerDetails.rif || "", { shouldValidate: false, shouldDirty: false });
+              form.setValue('customerDetails.address', loadedCustomerDetails.address || "", { shouldValidate: false, shouldDirty: false });
+              form.setValue('customerDetails.phone', loadedCustomerDetails.phone || "", { shouldValidate: false, shouldDirty: false });
+              form.setValue('customerDetails.email', loadedCustomerDetails.email || "", { shouldValidate: false, shouldDirty: false });
+
+              if (loadedCustomerDetails.id) {
+                  const existingCustomer = customers.find(c => c.id === loadedCustomerDetails.id);
+                  if (existingCustomer) {
+                      setSelectedCustomerIdForDropdown(existingCustomer.id);
+                      setSelectedCustomerAvailableCredit(existingCustomer.creditBalance || 0);
+                      setCustomerSearchMessage(`Cliente: ${existingCustomer.name}`);
+                      setShowNewCustomerFields(false);
+                  } else {
+                      setSelectedCustomerIdForDropdown(undefined);
+                      setSelectedCustomerAvailableCredit(0);
+                      setCustomerSearchMessage("Cliente del borrador (ID no hallado). Edite o busque.");
+                      setShowNewCustomerFields(true);
+                  }
+              } else if (loadedCustomerDetails.rif) {
+                  setSelectedCustomerIdForDropdown(undefined);
+                  setSelectedCustomerAvailableCredit(0);
+                  setCustomerSearchMessage("Nuevo cliente del borrador. Complete datos.");
+                  setShowNewCustomerFields(true);
+              } else {
+                   setCustomerRifInput("");
+                   setSelectedCustomerIdForDropdown(undefined);
+                   setSelectedCustomerAvailableCredit(0);
+                   setCustomerSearchMessage(null);
+                   setShowNewCustomerFields(false);
+              }
           } else {
-            setCurrentDebtOrCreditAmount(0);
+              setCustomerRifInput("");
+              setSelectedCustomerIdForDropdown(undefined);
+              setSelectedCustomerAvailableCredit(0);
+              setCustomerSearchMessage(null);
+              setShowNewCustomerFields(false);
+              form.setValue('customerDetails', { ...defaultCustomer }, { shouldValidate: false, shouldDirty: false });
           }
 
-          if (draftData.customerDetails?.id) {
-            setSelectedCustomerIdForDropdown(draftData.customerDetails.id);
-            setCustomerRifInput(draftData.customerDetails.rif);
-            const cust = customers.find(c => c.id === draftData.customerDetails.id);
-            if (cust) setSelectedCustomerAvailableCredit(cust.creditBalance || 0);
-            setCustomerSearchMessage(cust ? `Cliente: ${cust.name}` : "Datos de cliente cargados.");
-            setShowNewCustomerFields(!cust && !!draftData.customerDetails.name); // Show fields if new customer from draft
+          form.setValue('applyWarranty', draftData.applyWarranty || false, { shouldValidate: false, shouldDirty: false });
+          form.setValue('warrantyDuration', draftData.warrantyDuration || "no_aplica", { shouldValidate: false, shouldDirty: false });
+          form.setValue('warrantyText', draftData.warrantyText || "", { shouldValidate: false, shouldDirty: false });
+
+
+          if (modeFromDraft === 'debtPayment' && draftData.items.length > 0) {
+            setCurrentDebtOrCreditAmount(draftData.items[0].unitPrice);
+          } else if (modeFromDraft === 'creditDeposit') {
+            setCurrentDebtOrCreditAmount(0);
           } else {
-            setCustomerRifInput(draftData.customerDetails?.rif || "");
-            setSelectedCustomerIdForDropdown(undefined);
-            setSelectedCustomerAvailableCredit(0);
-            setCustomerSearchMessage(null);
-            setShowNewCustomerFields(!!draftData.customerDetails?.name); // Show if name exists, even if no ID (new customer)
+            setCurrentDebtOrCreditAmount(0);
           }
         } catch (error) {
           console.error("Error parsing draft from sessionStorage:", error);
           sessionStorage.removeItem(SESSION_STORAGE_DRAFT_KEY);
-          resetFormAndState({ resetToDefaultBlank: true });
-          setEditorMode('normal');
-        }
-      } else {
-        if (!lastSavedInvoiceId) {
+          if (!lastSavedInvoiceId) {
              resetFormAndState({ resetToDefaultBlank: true });
              setEditorMode('normal');
+          }
         }
+      } else if (!lastSavedInvoiceId) { // No draft, no action taken by params, and not viewing a saved invoice
+         resetFormAndState({ resetToDefaultBlank: true });
+         setEditorMode('normal');
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isClient, searchParams, customers, pathname, router, form, resetFormAndState, toast]);
+  }, [isClient, searchParams, customers, pathname, router, /*form, resetFormAndState, toast,*/ lastSavedInvoiceId]); // Reduced deps for main effect
 
 
   const { fields: itemFields, append: appendItem, remove: removeItem } = useFieldArray({
@@ -428,48 +466,54 @@ export function InvoiceEditor() {
 
 
   useEffect(() => {
-    const debouncedSaveDraftAndUpdatePreview = debounce((values: InvoiceFormData) => {
+    const debouncedSaveDraft = debounce((values: InvoiceFormData) => {
         if (isClient && !lastSavedInvoiceId) {
             sessionStorage.setItem(SESSION_STORAGE_DRAFT_KEY, JSON.stringify(values));
         }
+    }, 750); 
 
-        const currentItems = (values.items || []).map(item => ({
+    const subscription = form.watch((valuesFromWatch, { name, type }) => {
+        const watchedValues = valuesFromWatch as InvoiceFormData;
+        debouncedSaveDraft(watchedValues);
+
+        // Live Preview Update Logic (already exists and seems mostly fine)
+        const currentItems = (watchedValues.items || []).map(item => ({
             ...item,
             quantity: item.quantity || 0,
             unitPrice: item.unitPrice || 0,
             totalPrice: (item.quantity || 0) * (item.unitPrice || 0),
         })) as InvoiceItem[];
 
-        const currentTaxRatePercent = values.isDebtPayment || values.isCreditDeposit ? 0 : (values.taxRate ?? TAX_RATE * 100);
-        const currentApplyTax = values.isDebtPayment || values.isCreditDeposit ? false : (values.applyTax ?? true);
-        const currentDiscountValue = (values.isDebtPayment || values.isCreditDeposit || !values.applyDiscount) ? 0 : (values.discountValue || 0);
-        const currentDiscountPercentage = (values.isDebtPayment || values.isCreditDeposit || !values.applyDiscount) ? 0 : (values.discountPercentage || 0);
+        const currentTaxRatePercent = watchedValues.isDebtPayment || watchedValues.isCreditDeposit ? 0 : (watchedValues.taxRate ?? TAX_RATE * 100);
+        const currentApplyTax = watchedValues.isDebtPayment || watchedValues.isCreditDeposit ? false : (watchedValues.applyTax ?? true);
+        const currentDiscountValue = (watchedValues.isDebtPayment || watchedValues.isCreditDeposit || !watchedValues.applyDiscount) ? 0 : (watchedValues.discountValue || 0);
+        const currentDiscountPercentage = (watchedValues.isDebtPayment || watchedValues.isCreditDeposit || !watchedValues.applyDiscount) ? 0 : (watchedValues.discountPercentage || 0);
 
         const { subTotal, discountAmount, taxAmount, totalAmount } = calculateTotals(currentItems, currentTaxRatePercent, currentDiscountValue, currentApplyTax);
-        const { amountPaid, amountDue } = calculatePaymentSummary(values.paymentMethods || [], totalAmount);
+        const { amountPaid, amountDue } = calculatePaymentSummary(watchedValues.paymentMethods || [], totalAmount);
 
         let overpaymentAmt = 0;
         let finalAmountDueForInvoice = amountDue;
 
         if (amountDue < 0) {
             overpaymentAmt = Math.abs(amountDue);
-            if (values.overpaymentHandlingChoice === 'refundNow') {
+            if (watchedValues.overpaymentHandlingChoice === 'refundNow') {
                 finalAmountDueForInvoice = 0;
             }
         }
-
+        
         setLiveInvoicePreview(prev => ({
             ...prev,
             id: lastSavedInvoiceId || prev.id || '',
             status: prev.status || 'active',
-            invoiceNumber: values.invoiceNumber,
-            date: values.date ? (typeof values.date === 'string' ? values.date : values.date.toISOString()) : (prev.date || new Date(0).toISOString()),
+            invoiceNumber: watchedValues.invoiceNumber,
+            date: watchedValues.date ? (typeof watchedValues.date === 'string' ? watchedValues.date : watchedValues.date.toISOString()) : (prev.date || new Date(0).toISOString()),
             companyDetails: companyDetails || defaultCompany,
-            cashierNumber: values.cashierNumber,
-            salesperson: values.salesperson,
-            customerDetails: values.customerDetails as CustomerDetails,
+            cashierNumber: watchedValues.cashierNumber,
+            salesperson: watchedValues.salesperson,
+            customerDetails: watchedValues.customerDetails as CustomerDetails,
             items: currentItems,
-            paymentMethods: values.paymentMethods as PaymentDetails[],
+            paymentMethods: watchedValues.paymentMethods as PaymentDetails[],
             subTotal,
             discountPercentage: currentDiscountPercentage,
             discountValue: discountAmount,
@@ -478,25 +522,21 @@ export function InvoiceEditor() {
             totalAmount,
             amountPaid,
             amountDue: finalAmountDueForInvoice,
-            thankYouMessage: values.thankYouMessage || DEFAULT_THANK_YOU_MESSAGE,
-            notes: values.notes,
-            warrantyText: values.applyWarranty ? values.warrantyText : undefined,
+            thankYouMessage: watchedValues.thankYouMessage || DEFAULT_THANK_YOU_MESSAGE,
+            notes: watchedValues.notes,
+            warrantyText: watchedValues.applyWarranty ? watchedValues.warrantyText : undefined,
             type: 'sale',
-            isDebtPayment: !!values.isDebtPayment,
-            isCreditDeposit: !!values.isCreditDeposit,
+            isDebtPayment: !!watchedValues.isDebtPayment,
+            isCreditDeposit: !!watchedValues.isCreditDeposit,
             overpaymentAmount: overpaymentAmt,
-            overpaymentHandling: values.overpaymentHandlingChoice,
-            changeRefundPaymentMethods: values.changeRefundPaymentMethods as PaymentDetails[] || [],
+            overpaymentHandling: watchedValues.overpaymentHandlingChoice,
+            changeRefundPaymentMethods: watchedValues.changeRefundPaymentMethods as PaymentDetails[] || [],
         }));
-    }, 500); 
-
-    const subscription = form.watch((values) => {
-        debouncedSaveDraftAndUpdatePreview(values as InvoiceFormData);
     });
     return () => {
         subscription.unsubscribe();
     };
-  }, [form, isClient, calculateTotals, calculatePaymentSummary, lastSavedInvoiceId, companyDetails]); 
+  }, [form, isClient, lastSavedInvoiceId, companyDetails, calculateTotals, calculatePaymentSummary, setLiveInvoicePreview]); 
 
 
   useEffect(() => {
@@ -801,7 +841,7 @@ export function InvoiceEditor() {
   };
 
   function onSubmit(data: InvoiceFormData) {
-    let customerToSaveOnInvoice = { ...data.customerDetails }; // Clone to avoid direct mutation issues
+    let customerToSaveOnInvoice = { ...data.customerDetails }; 
     let customerWasModified = false;
     let newCustomerJustAdded: CustomerDetails | null = null;
     
@@ -841,7 +881,6 @@ export function InvoiceEditor() {
                      form.setError(`paymentMethods.${index}.amount`, { type: "manual", message: `Monto de saldo a favor no puede ser negativo.`});
                      creditUsageError = true;
                 }
-                // Ensure customerToSaveOnInvoice has an ID before this check if it's a new customer
                 const currentCustForCreditCheck = customerToSaveOnInvoice.id ? customers.find(c => c.id === customerToSaveOnInvoice.id) : null;
                 const availableCredit = currentCustForCreditCheck?.creditBalance || 0;
 
@@ -878,7 +917,7 @@ export function InvoiceEditor() {
     let finalInvoiceNotes = data.notes || "";
     let finalPaymentMethodsForInvoice = [...data.paymentMethods];
     let finalAmountPaidOnInvoice = data.paymentMethods.reduce((sum, p) => sum + p.amount, 0);
-    let finalAmountDueForInvoiceRecord: number = totalAmount - finalAmountPaidOnInvoice; // Initial calculation
+    let finalAmountDueForInvoiceRecord: number = totalAmount - finalAmountPaidOnInvoice; 
 
     if (StoredCustomer) {
         StoredCustomer.outstandingBalance = StoredCustomer.outstandingBalance || 0;
@@ -911,7 +950,7 @@ export function InvoiceEditor() {
                 finalInvoiceNotes += `${finalInvoiceNotes ? '\n' : ''}Se utilizaron ${formatCurrency(autoCreditUsed)} del saldo a favor (auto.) para cubrir el pago.`;
                 currentShortfall -= autoCreditUsed;
             }
-            finalAmountPaidOnInvoice += autoCreditUsed; // Update total paid with auto credit
+            finalAmountPaidOnInvoice += autoCreditUsed; 
 
             let overpaymentAmountToStore = 0;
             let overpaymentHandlingToStore: 'creditedToAccount' | 'refunded' | undefined = undefined;
@@ -919,7 +958,7 @@ export function InvoiceEditor() {
 
             const netAmountDueAfterAllPayments = totalAmount - finalAmountPaidOnInvoice;
 
-            if (netAmountDueAfterAllPayments < 0) { // Overpayment
+            if (netAmountDueAfterAllPayments < 0) { 
                 overpaymentAmountToStore = Math.abs(netAmountDueAfterAllPayments);
                 if (data.overpaymentHandlingChoice === 'refundNow') {
                     const totalChangeRefunded = (data.changeRefundPaymentMethods || []).reduce((sum, pm) => sum + pm.amount, 0);
@@ -931,29 +970,27 @@ export function InvoiceEditor() {
                     overpaymentHandlingToStore = 'refunded';
                     changeRefundPaymentMethodsToStore = data.changeRefundPaymentMethods;
                     finalAmountDueForInvoiceRecord = 0;
-                } else { // creditToAccount
+                } else { 
                     overpaymentHandlingToStore = 'creditedToAccount';
                     StoredCustomer.creditBalance += overpaymentAmountToStore;
                     finalAmountDueForInvoiceRecord = 0;
                 }
-            } else if (netAmountDueAfterAllPayments > 0) { // Underpayment
+            } else if (netAmountDueAfterAllPayments > 0) { 
                 StoredCustomer.outstandingBalance += netAmountDueAfterAllPayments;
                 finalAmountDueForInvoiceRecord = netAmountDueAfterAllPayments;
-            } else { // Exact payment
+            } else { 
                 finalAmountDueForInvoiceRecord = 0;
             }
 
         } else if (editorMode === 'debtPayment') {
             StoredCustomer.outstandingBalance = Math.max(0, StoredCustomer.outstandingBalance - finalAmountPaidOnInvoice);
-             // For debt payment, amountDue on invoice is amount - paid. If paid > amount, it's overpayment on debt.
             finalAmountDueForInvoiceRecord = totalAmount - finalAmountPaidOnInvoice; 
-            if (finalAmountDueForInvoiceRecord < 0) { // Paid more than the debt target of this transaction
-                 // This "overpayment" for a debt payment ideally should go to customer credit balance
+            if (finalAmountDueForInvoiceRecord < 0) { 
                 StoredCustomer.creditBalance += Math.abs(finalAmountDueForInvoiceRecord);
-                finalAmountDueForInvoiceRecord = 0; // Debt is covered or overpaid
+                finalAmountDueForInvoiceRecord = 0; 
             }
 
-        } else { // creditDeposit mode
+        } else { 
             if (StoredCustomer.outstandingBalance > 0) {
                 const amountToPayDebt = Math.min(finalAmountPaidOnInvoice, StoredCustomer.outstandingBalance);
                 StoredCustomer.outstandingBalance -= amountToPayDebt;
@@ -962,15 +999,14 @@ export function InvoiceEditor() {
             } else {
                 StoredCustomer.creditBalance += finalAmountPaidOnInvoice;
             }
-            finalAmountDueForInvoiceRecord = 0; // Deposits are fully paid by definition
+            finalAmountDueForInvoiceRecord = 0; 
         }
 
         if (customerIndex !== -1) {
             currentCustomersList[customerIndex] = StoredCustomer;
-        } else if (newCustomerJustAdded) { // StoredCustomer is newCustomerJustAdded if this branch is hit
+        } else if (newCustomerJustAdded) { 
             const newCustIdx = currentCustomersList.findIndex(c => c.id === StoredCustomer!.id);
             if (newCustIdx !== -1) currentCustomersList[newCustIdx] = StoredCustomer!;
-            // else already pushed if newCustomerJustAdded earlier
         }
         setCustomers(currentCustomersList);
 
@@ -1037,6 +1073,7 @@ export function InvoiceEditor() {
   }
 
   const handleCleanAndExit = () => {
+    if (typeof window !== 'undefined') sessionStorage.removeItem(SESSION_STORAGE_DRAFT_KEY);
     setEditorMode('normal');
     setCurrentDebtOrCreditAmount(0);
     setSelectedCustomerIdForDropdown(undefined);
@@ -1082,29 +1119,21 @@ export function InvoiceEditor() {
     let updatedOutstandingBalance = customerToUpdate.outstandingBalance || 0;
     let updatedCreditBalance = customerToUpdate.creditBalance || 0;
 
-    // Revert balances based on the type of invoice being cancelled
     if (invoiceToCancel.isDebtPayment) {
-        // Re-add the paid amount to outstanding balance if it was a debt payment
         updatedOutstandingBalance += invoiceToCancel.amountPaid; 
-         // If the debt payment resulted in overpayment (which went to credit), revert that too
         if (invoiceToCancel.totalAmount < invoiceToCancel.amountPaid) {
             updatedCreditBalance -= (invoiceToCancel.amountPaid - invoiceToCancel.totalAmount);
         }
     } else if (invoiceToCancel.isCreditDeposit) {
-        // Revert credit deposit: subtract from credit balance, re-add to outstanding if it covered debt
-        const depositAmount = invoiceToCancel.amountPaid; // Amount of the deposit
-        // This part is tricky: need to know how much of the deposit covered debt vs went to credit.
-        // For simplicity, assume it went to creditBalance or covered debt that was immediately reduced.
-        // A more precise reversal would need the customer's balance *before* this deposit.
-        // For now, we'll primarily reduce creditBalance. If it goes negative, it implies an issue.
-        updatedCreditBalance -= depositAmount;
-        // If the original deposit covered some debt, that debt should ideally be reinstated.
-        // This logic is complex without knowing pre-deposit state. A simplified approach:
-        // if credit balance becomes negative, it implies the deposit covered debt.
-        // This simplified reversal might not be perfect for all scenarios of credit deposit cancellation.
-        
-    } else { // Regular sale invoice
-        if (invoiceToCancel.amountDue > 0) {
+        const depositAmount = invoiceToCancel.amountPaid; 
+        // This is a simplified reversal. A precise one would need pre-deposit state.
+        // Assume for now that deposit directly impacts credit balance or covered a debt that was immediately offset.
+        // Search for the customer's balance BEFORE this specific credit deposit to make a more accurate reversal.
+        // For simplicity here, we'll directly reduce credit balance.
+        // We'd ideally find out how much of the deposit went to cover outstanding debt vs. directly to credit.
+        updatedCreditBalance -= depositAmount; 
+    } else { 
+        if ((invoiceToCancel.amountDue ?? 0) > 0) { // If there was an amount due on this invoice
             updatedOutstandingBalance -= invoiceToCancel.amountDue;
         }
 
@@ -1120,7 +1149,7 @@ export function InvoiceEditor() {
     }
     
     updatedOutstandingBalance = Math.max(0, updatedOutstandingBalance);
-    updatedCreditBalance = Math.max(0, updatedCreditBalance); // Ensure balances don't go negative from simple reversal
+    updatedCreditBalance = Math.max(0, updatedCreditBalance); 
 
     const updatedCustomers = [...customers];
     updatedCustomers[customerToUpdateIdx] = { ...customerToUpdate, outstandingBalance: updatedOutstandingBalance, creditBalance: updatedCreditBalance };
@@ -1160,7 +1189,7 @@ export function InvoiceEditor() {
 
   const canCancelThisInvoice = lastSavedInvoiceId &&
                              liveInvoicePreview.id === lastSavedInvoiceId &&
-                             liveInvoicePreview.type === 'sale' && // Can only cancel 'sale' type directly this way
+                             liveInvoicePreview.type === 'sale' && 
                              liveInvoicePreview.status === 'active';
 
 

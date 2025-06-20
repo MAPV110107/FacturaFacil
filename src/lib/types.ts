@@ -78,3 +78,4 @@ export interface Invoice {
 }
 
 export const DEFAULT_COMPANY_ID = "main_company_details";
+export const defaultCustomer: CustomerDetails = { id: "", name: "", rif: "", address: "", phone: "", email: "", outstandingBalance: 0, creditBalance: 0 };
