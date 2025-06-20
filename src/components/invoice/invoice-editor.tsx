@@ -23,7 +23,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { InvoicePreview } from "./invoice-preview";
 import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, Trash2, Users, FileText, DollarSign, Settings, Receipt, CalendarDays, Info, Save, Percent, Search, Ban, ArrowRight, HandCoins, PiggyBank, XCircle, WalletCards, RotateCcw, ShieldCheck, Clock, History } from "lucide-react";
+import { PlusCircle, Trash2, Users, FileText, DollarSign, Settings, Receipt, CalendarDays, Info, Save, Percent, Search, Ban, ArrowRight, HandCoins, PiggyBank, XCircle, WalletCards, RotateCcw, ShieldCheck, Clock, History, FilePlus2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Form, FormField, FormItem, FormControl, FormLabel, FormMessage } from "@/components/ui/form";
@@ -766,6 +766,29 @@ export function InvoiceEditor() {
     toast({ title: "Formulario Limpiado", description: "El documento ha sido descartado." });
      if (pathname === '/invoice/new' && searchParams.toString()) { internalNavigationRef.current = true; router.replace('/invoice/new', { scroll: false }); }
   };
+  
+  const handleCreateNewInvoice = () => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem(SESSION_STORAGE_DRAFT_KEY);
+    }
+    setLastSavedInvoiceId(null);
+    resetFormAndState({ mode: 'normal', resetToDefaultBlank: true });
+    setEditorMode('normal');
+    setCurrentDebtOrCreditAmount(0);
+    setSelectedCustomerIdForDropdown(undefined);
+    setCustomerRifInput("");
+    setCustomerSearchMessage(null);
+    setShowNewCustomerFields(false);
+    setSelectedCustomerAvailableCredit(0);
+    toast({
+      title: "Nueva Factura Lista",
+      description: "Puede comenzar a ingresar los datos del nuevo documento.",
+    });
+    if (pathname === '/invoice/new' && searchParams.toString()) {
+      internalNavigationRef.current = true;
+      router.replace('/invoice/new', { scroll: false });
+    }
+  };
 
   const handleCancelCreatedInvoice = () => {
     if (!lastSavedInvoiceId) return;
@@ -1001,10 +1024,35 @@ export function InvoiceEditor() {
                   <FormField control={form.control} name="notes" render={({ field }) => (<FormItem><FormLabel>Notas Adicionales (Opc.)</FormLabel><FormControl><Textarea {...field} value={field.value || ""} placeholder="Ej: Sin derecho a nota de crédito fiscal." readOnly={!!lastSavedInvoiceId} /></FormControl><FormMessage /></FormItem>)}/>
               </CardContent>
               <CardFooter className="flex-col sm:flex-row items-stretch gap-3">
-                  {!lastSavedInvoiceId && (<Button type="submit" className="w-full sm:flex-1 bg-primary hover:bg-primary/90 text-primary-foreground"><Save className="mr-2 h-4 w-4" />{editorMode === 'debtPayment' && "Guardar Abono"}{editorMode === 'creditDeposit' && "Guardar Depósito"}{editorMode === 'normal' && "Guardar Factura"}</Button>)}
-                  {canCancelJustCreatedInvoice ? (<Button type="button" variant="destructive" onClick={() => { setEditorCancellationReasonInput(""); setIsCancelConfirmOpen(true);}} className="w-full sm:w-auto"><XCircle className="mr-2 h-4 w-4" /> Anular Factura</Button>
-                  ) : liveInvoicePreview?.status === 'cancelled' ? (<Button type="button" variant="outline" disabled className="w-full sm:w-auto"><ShieldCheck className="mr-2 h-4 w-4 text-destructive" /> Factura Anulada</Button>
-                  ) : (<Button type="button" variant="outline" onClick={handleCleanAndExit} className="w-full sm:w-auto"><XCircle className="mr-2 h-4 w-4" /> {lastSavedInvoiceId ? "Nueva Factura / Salir" : "Limpiar y Salir"}</Button>)}
+                  {!lastSavedInvoiceId ? (
+                    <>
+                      <Button type="submit" className="w-full sm:flex-1 bg-primary hover:bg-primary/90 text-primary-foreground">
+                        <Save className="mr-2 h-4 w-4" />
+                        {editorMode === 'debtPayment' && "Guardar Abono"}
+                        {editorMode === 'creditDeposit' && "Guardar Depósito"}
+                        {editorMode === 'normal' && "Guardar Factura"}
+                      </Button>
+                      <Button type="button" variant="outline" onClick={handleCleanAndExit} className="w-full sm:w-auto">
+                        <XCircle className="mr-2 h-4 w-4" /> Limpiar y Salir
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      {canCancelJustCreatedInvoice && (
+                        <Button type="button" variant="destructive" onClick={() => { setEditorCancellationReasonInput(""); setIsCancelConfirmOpen(true); }} className="w-full sm:w-auto">
+                          <XCircle className="mr-2 h-4 w-4" /> Anular Factura
+                        </Button>
+                      )}
+                      {liveInvoicePreview?.status === 'cancelled' && (
+                        <Button type="button" variant="outline" disabled className="w-full sm:w-auto">
+                          <ShieldCheck className="mr-2 h-4 w-4 text-destructive" /> Factura Anulada
+                        </Button>
+                      )}
+                      <Button type="button" variant="default" onClick={handleCreateNewInvoice} className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground">
+                        <FilePlus2 className="mr-2 h-4 w-4" /> Nueva Factura
+                      </Button>
+                    </>
+                  )}
               </CardFooter>
             </Card>
         </Form>
@@ -1019,7 +1067,7 @@ export function InvoiceEditor() {
             className="print-receipt" 
             isSavedInvoice={!!lastSavedInvoiceId} 
             invoiceStatus={liveInvoicePreview?.status || 'active'} 
-            id="invoice-editor-preview-card" 
+            containerId="invoice-editor-preview-card" 
         />
       </div>
        <AlertDialog open={isCancelConfirmOpen} onOpenChange={setIsCancelConfirmOpen}>
