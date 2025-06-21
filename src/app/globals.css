@@ -143,7 +143,6 @@ body {
     padding: 10mm 15mm !important;
     display: flex !important;
     flex-direction: column !important;
-    page-break-after: always !important;
     box-sizing: border-box !important;
   }
   
@@ -163,7 +162,6 @@ body {
     width: 80mm !important;
     margin: 0 auto !important;
     padding: 5mm !important;
-    page-break-after: always !important;
     box-sizing: border-box !important;
   }
 
@@ -369,3 +367,5 @@ body {
   color: rgba(0, 0, 0, 0.08) !important;
   transform: rotate(-35deg) !important;
 }
+
+    
