@@ -112,41 +112,37 @@ body {
 
 /* PRINT STYLES */
 @media print {
-  /* Hide elements not meant for printing on the main page */
+  /* Hide UI elements not meant for printing */
   .no-print {
     display: none !important;
   }
-
-  /* This is a fallback in case some elements are still visible */
-  body > *:not(.print-this-one) {
-     /* display: none; */
+  
+  /* Global print resets */
+  * {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    background: none !important;
+    color: black !important;
   }
 
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    font-family: 'PT Sans', sans-serif, Arial, sans-serif !important;
+  }
+  
   @page {
     margin: 0 !important; /* Remove browser default margins */
   }
 
-  /* These styles apply inside the iframe or when a printing class is active */
-  body, html {
-    background: white !important;
-    color: black !important;
-    font-family: 'PT Sans', sans-serif !important;
-    font-size: 10pt !important;
-    -webkit-font-smoothing: antialiased !important;
-    -moz-osx-font-smoothing: grayscale !important;
-  }
-  
-  .card[data-invoice-preview-container] {
-    display: block !important;
-    position: static !important;
-    width: 100% !important;
-    height: auto !important;
-    box-shadow: none !important;
-    border: none !important;
+  /* The JS print function wraps the content in these classes */
+  .preview-a4-wrapper, .preview-80mm-wrapper {
     margin: 0 !important;
     padding: 0 !important;
-    background-color: white !important;
-    page-break-inside: avoid !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: white !important;
   }
 
   .receipt-font {
@@ -260,29 +256,29 @@ body {
   .receipt-font .space-y-0\.5 > * + * { margin-top: 0.5mm !important; }
   .receipt-font .space-y-1 > * + * { margin-top: 1mm !important; }
 
-  /* Specific formatting for A4 */
-  html.printing-a4 .card[data-invoice-preview-container] {
-    width: 190mm !important;
+  /* Specific formatting for A4 - defines the size of the wrapper */
+  body > .preview-a4-wrapper {
+    width: 210mm !important;
     padding: 10mm !important;
   }
-  html.printing-a4 .receipt-font {
+  body > .preview-a4-wrapper .receipt-font {
     font-size: 10pt !important;
     line-height: 1.4 !important;
   }
 
-  /* Specific formatting for 80mm Thermal Roll */
-  html.printing-80mm .card[data-invoice-preview-container] {
+  /* Specific formatting for 80mm Thermal Roll - defines the size of the wrapper */
+  body > .preview-80mm-wrapper {
     width: 76mm !important;
     padding: 2mm !important;
   }
-  html.printing-80mm .receipt-font {
+  body > .preview-80mm-wrapper .receipt-font {
     font-size: 9pt !important;
     line-height: 1.2 !important;
   }
-   html.printing-80mm .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] {
+   body > .preview-80mm-wrapper .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] {
     grid-template-columns: 2fr 0.7fr 1fr 1fr !important;
   }
-  html.printing-80mm .receipt-font [data-company-details-block] > img[data-ai-hint~="company logo"] {
+  body > .preview-80mm-wrapper .receipt-font [data-company-details-block] > img[data-ai-hint~="company logo"] {
     max-height: 12mm !important;
   }
 }
@@ -357,9 +353,4 @@ body {
   font-size: 20pt !important; /* Smaller for 80mm preview */
   color: rgba(0, 0, 0, 0.08) !important;
   transform: rotate(-35deg) !important;
-}
-
-/* These classes are added to the iframe's HTML element to control print layout */
-html.printing-a4, html.printing-80mm {
-  /* These are just for triggering print styles, no visual change on screen */
 }

@@ -1,3 +1,4 @@
+
 'use client';
 
 export function printFromElementId(elementId: string, printFormat: 'a4' | '80mm' = 'a4') {
@@ -14,12 +15,15 @@ export function printFromElementId(elementId: string, printFormat: 'a4' | '80mm'
     return;
   }
 
-  // Copy all style and link tags from the main document to the new window
-  const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+  // Copy all style and link tags from the main document's head to the new window
+  const styles = Array.from(document.head.querySelectorAll('style, link[rel="stylesheet"]'))
     .map(el => el.outerHTML)
     .join('\n');
   
   const invoiceHTML = invoiceElement.innerHTML;
+  
+  // This class determines the paper size and is defined in globals.css
+  const wrapperClass = printFormat === 'a4' ? 'preview-a4-wrapper' : 'preview-80mm-wrapper';
 
   printWindow.document.open();
   printWindow.document.write(`
@@ -29,19 +33,17 @@ export function printFromElementId(elementId: string, printFormat: 'a4' | '80mm'
         ${styles}
       </head>
       <body>
-        ${invoiceHTML}
+        <div class="${wrapperClass}">
+          ${invoiceHTML}
+        </div>
       </body>
     </html>
   `);
-
-  // Add the appropriate class to the html element for print styling
-  printWindow.document.documentElement.classList.add(`printing-${printFormat}`);
-
+  
   printWindow.document.close();
 
-  // Wait for the content to load before printing
   printWindow.onload = () => {
-    setTimeout(() => {
+    setTimeout(() => { // Keep a safe timeout to ensure rendering
       try {
         printWindow.focus();
         printWindow.print();
@@ -50,6 +52,6 @@ export function printFromElementId(elementId: string, printFormat: 'a4' | '80mm'
       } finally {
         printWindow.close();
       }
-    }, 500); // Increased timeout for rendering safety
+    }, 300); // 300ms is a safe buffer
   };
 }
