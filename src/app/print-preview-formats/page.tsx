@@ -10,6 +10,7 @@ import { DEFAULT_COMPANY_ID, TAX_RATE } from "@/lib/types";
 import useLocalStorage from "@/hooks/use-local-storage";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { printFromElementId } from "@/lib/print";
 
 const defaultCompany: CompanyDetails = {
   id: DEFAULT_COMPANY_ID,
@@ -62,7 +63,6 @@ export default function GeneralPrintPreviewPage() {
   const [companyData, setCompanyData] = useLocalStorage<CompanyDetails>("companyDetails", defaultCompany);
   const [invoiceToPreview, setInvoiceToPreview] = useState<Partial<Invoice>>(sampleInvoiceData);
   const [isClient, setIsClient] = useState(false);
-  const [isPrinting, setIsPrinting] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -104,62 +104,6 @@ export default function GeneralPrintPreviewPage() {
     }
   }, [isClient, companyData, setCompanyData]);
 
-
-  const printSpecificFormat = (printFormato: "a4" | "80mm") => {
-    if (typeof window === 'undefined' || isPrinting) return;
-    setIsPrinting(true);
-    
-    const elementId = printFormato === '80mm' ? 'invoice-comparison-80mm' : 'invoice-comparison-a4';
-    const invoiceElement = document.getElementById(elementId);
-     if (!invoiceElement) {
-      console.error("Print Error: Could not find element with ID:", elementId);
-      setIsPrinting(false);
-      return;
-    }
-
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      alert("No se pudo abrir la ventana de impresión. Por favor, deshabilite el bloqueador de pop-ups para este sitio.");
-      setIsPrinting(false);
-      return;
-    }
-
-    const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
-      .map(el => el.outerHTML)
-      .join('\n');
-    
-    const invoiceHTML = invoiceElement.innerHTML;
-
-    printWindow.document.open();
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Factura</title>
-          ${styles}
-        </head>
-        <body>
-          ${invoiceHTML}
-        </body>
-      </html>
-    `);
-
-    printWindow.document.documentElement.classList.add(printFormato === '80mm' ? 'printing-80mm' : 'printing-a4');
-    printWindow.document.close();
-
-    printWindow.onload = () => {
-      setTimeout(() => {
-        try {
-          printWindow.focus();
-          printWindow.print();
-        } catch (e) {
-          console.error("Error during printing:", e);
-        } finally {
-          printWindow.close();
-          setIsPrinting(false);
-        }
-      }, 500); // 500ms delay for rendering safety
-    };
-  };
 
   if (!isClient || !invoiceToPreview.customerDetails) { 
     return (
@@ -232,12 +176,11 @@ export default function GeneralPrintPreviewPage() {
             />
           </div>
           <Button
-            onClick={() => printSpecificFormat("a4")}
-            disabled={isPrinting}
+            onClick={() => printFromElementId("invoice-comparison-a4", "a4")}
             className="w-full mt-4 bg-primary hover:bg-primary/90 text-primary-foreground no-print"
           >
             <FileTextIcon className="mr-2 h-4 w-4" />
-            {isPrinting ? "Imprimiendo A4..." : "Imprimir en A4"}
+            Imprimir en A4
           </Button>
         </div>
         <div>
@@ -253,12 +196,11 @@ export default function GeneralPrintPreviewPage() {
             />
           </div>
           <Button
-            onClick={() => printSpecificFormat("80mm")}
-            disabled={isPrinting}
+            onClick={() => printFromElementId("invoice-comparison-80mm", "80mm")}
             className="w-full mt-4 bg-primary hover:bg-primary/90 text-primary-foreground no-print"
           >
             <PrinterIcon className="mr-2 h-4 w-4" />
-            {isPrinting ? "Imprimiendo Rollo..." : "Imprimir en Rollo"}
+            Imprimir en Rollo
           </Button>
         </div>
       </div>
