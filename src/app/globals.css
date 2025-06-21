@@ -136,15 +136,43 @@ body {
     margin: 0 !important; /* Remove browser default margins */
   }
 
-  /* The JS print function wraps the content in these classes */
-  .preview-a4-wrapper, .preview-80mm-wrapper {
-    margin: 0 !important;
-    padding: 0 !important;
-    border: none !important;
-    box-shadow: none !important;
-    background: white !important;
+  /* A4 Print Format */
+  body > .preview-a4-wrapper {
+    width: 210mm !important;
+    min-height: 297mm !important; /* A4 height */
+    padding: 10mm 15mm !important;
+    display: flex !important;
+    flex-direction: column !important;
+    page-break-after: always !important;
+    box-sizing: border-box !important;
+  }
+  
+  /* The card inside the A4 wrapper should stretch */
+  body > .preview-a4-wrapper > .card {
+    flex-grow: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  
+  body > .preview-a4-wrapper > .card > .card-content {
+      flex-grow: 1 !important;
   }
 
+  /* 80mm Roll Print Format */
+  body > .preview-80mm-wrapper {
+    width: 80mm !important;
+    margin: 0 auto !important;
+    padding: 5mm !important;
+    page-break-after: always !important;
+    box-sizing: border-box !important;
+  }
+
+  body > .preview-80mm-wrapper .receipt-font {
+    font-size: 12pt !important;
+    line-height: 1.4 !important;
+  }
+
+  /* General styles for receipt font inside print */
   .receipt-font {
     font-family: 'PT Sans', sans-serif !important;
     color: black !important;
@@ -255,27 +283,14 @@ body {
 
   .receipt-font .space-y-0\.5 > * + * { margin-top: 0.5mm !important; }
   .receipt-font .space-y-1 > * + * { margin-top: 1mm !important; }
-
-  /* Specific formatting for A4 - defines the size of the wrapper */
-  body > .preview-a4-wrapper {
-    width: 210mm !important;
-    padding: 10mm !important;
-  }
+  
+  /* Overrides for specific formats */
   body > .preview-a4-wrapper .receipt-font {
     font-size: 10pt !important;
     line-height: 1.4 !important;
   }
 
-  /* Specific formatting for 80mm Thermal Roll - defines the size of the wrapper */
-  body > .preview-80mm-wrapper {
-    width: 76mm !important;
-    padding: 2mm !important;
-  }
-  body > .preview-80mm-wrapper .receipt-font {
-    font-size: 9pt !important;
-    line-height: 1.2 !important;
-  }
-   body > .preview-80mm-wrapper .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] {
+  body > .preview-80mm-wrapper .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] {
     grid-template-columns: 2fr 0.7fr 1fr 1fr !important;
   }
   body > .preview-80mm-wrapper .receipt-font [data-company-details-block] > img[data-ai-hint~="company logo"] {
