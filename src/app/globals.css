@@ -112,66 +112,60 @@ body {
 
 /* PRINT STYLES */
 @media print {
-  /* Hide UI elements not meant for printing */
-  .no-print {
-    display: none !important;
-  }
-  
-  /* Global print resets */
-  * {
-    box-shadow: none !important;
-    border-radius: 0 !important;
-    background: none !important;
-    color: black !important;
+  /* --- 1. HIDE EVERYTHING BY DEFAULT --- */
+  body * {
+    visibility: hidden !important;
   }
 
-  body {
+  /* --- 2. REVEAL ONLY THE ELEMENT TO BE PRINTED AND ITS CHILDREN --- */
+  .print-this-one,
+  .print-this-one * {
+    visibility: visible !important;
+  }
+
+  /* --- 3. POSITION THE PRINTED ELEMENT --- */
+  .print-this-one {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* --- 4. RESET THE INVOICE CARD STYLES FOR PRINT --- */
+  .print-this-one .card[data-invoice-preview-container] {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    height: auto !important;
+    box-shadow: none !important;
+    border: none !important;
     margin: 0 !important;
     padding: 0 !important;
-    background: white !important;
-    font-family: 'PT Sans', sans-serif, Arial, sans-serif !important;
+    background-color: white !important;
+    page-break-inside: avoid !important;
   }
-  
+
+  /* Hide the print controls container if it's inside the printed element */
+  .print-this-one .print-controls-container {
+    display: none !important;
+  }
+
+  /* --- 5. GLOBAL PAGE & FONT STYLES FOR PRINT --- */
   @page {
     margin: 0 !important; /* Remove browser default margins */
   }
 
-  /* A4 Print Format */
-  body > .preview-a4-wrapper {
-    width: 210mm !important;
-    min-height: 297mm !important; /* A4 height */
-    padding: 10mm 15mm !important;
-    display: flex !important;
-    flex-direction: column !important;
-    box-sizing: border-box !important;
-  }
-  
-  /* The card inside the A4 wrapper should stretch */
-  body > .preview-a4-wrapper > [data-invoice-preview-container] {
-    flex-grow: 1 !important;
-    display: flex !important;
-    flex-direction: column !important;
-  }
-  
-  /* The content area of the card should be the part that grows */
-  body > .preview-a4-wrapper > [data-invoice-preview-container] > .receipt-font {
-      flex-grow: 1 !important;
+  body, html {
+    background: white !important;
+    color: black !important;
+    font-family: 'PT Sans', sans-serif !important;
+    font-size: 10pt !important;
+    -webkit-font-smoothing: antialiased !important;
+    -moz-osx-font-smoothing: grayscale !important;
   }
 
-  /* 80mm Roll Print Format */
-  body > .preview-80mm-wrapper {
-    width: 80mm !important;
-    margin: 0 auto !important;
-    padding: 5mm !important;
-    box-sizing: border-box !important;
-  }
-
-  body > .preview-80mm-wrapper .receipt-font {
-    font-size: 12pt !important;
-    line-height: 1.4 !important;
-  }
-
-  /* General styles for receipt font inside print */
   .receipt-font {
     font-family: 'PT Sans', sans-serif !important;
     color: black !important;
@@ -282,21 +276,31 @@ body {
 
   .receipt-font .space-y-0\.5 > * + * { margin-top: 0.5mm !important; }
   .receipt-font .space-y-1 > * + * { margin-top: 1mm !important; }
-  
-  /* Overrides for specific formats */
-  body > .preview-a4-wrapper .receipt-font {
+
+  /* --- 6. APPLY PAGE-SPECIFIC FORMATTING (A4 / 80mm) --- */
+  html.printing-a4 .print-this-one .card[data-invoice-preview-container] {
+    width: 190mm !important;
+    padding: 10mm !important;
+  }
+  html.printing-a4 .receipt-font {
     font-size: 10pt !important;
     line-height: 1.4 !important;
   }
-
-  body > .preview-80mm-wrapper .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] {
+  html.printing-80mm .print-this-one .card[data-invoice-preview-container] {
+    width: 76mm !important;
+    padding: 2mm !important;
+  }
+  html.printing-80mm .receipt-font {
+    font-size: 12pt !important;
+    line-height: 1.2 !important;
+  }
+  html.printing-80mm .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] {
     grid-template-columns: 2fr 0.7fr 1fr 1fr !important;
   }
-  body > .preview-80mm-wrapper .receipt-font [data-company-details-block] > img[data-ai-hint~="company logo"] {
+  html.printing-80mm .receipt-font [data-company-details-block] > img[data-ai-hint~="company logo"] {
     max-height: 12mm !important;
   }
 }
-
 
 /* Styles for on-screen preview of print formats (used in /print-preview-formats) */
 .preview-a4-wrapper {
@@ -368,3 +372,10 @@ body {
   color: rgba(0, 0, 0, 0.08) !important;
   transform: rotate(-35deg) !important;
 }
+
+/* Ensure print-specific classes are removed from html tag after printing (JS will handle this) */
+html.printing-a4, html.printing-80mm {
+  /* These are just for triggering print styles, no visual change on screen */
+}
+
+    
