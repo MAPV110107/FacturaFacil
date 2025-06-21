@@ -112,44 +112,41 @@ body {
 
 /* PRINT STYLES */
 @media print {
-  /* Global reset for printing */
-  body, html {
-    background: white !important;
-    color: black !important;
-    font-family: 'PT Sans', sans-serif !important; /* Ensure consistent font */
-    font-size: 10pt !important; /* Base font size for print */
-    -webkit-font-smoothing: antialiased !important;
-    -moz-osx-font-smoothing: grayscale !important;
+  /* Hide elements not meant for printing on the main page */
+  .no-print {
+    display: none !important;
   }
 
-  /* Hide elements not meant for printing */
-  .no-print,
-  header[class*="sticky"], /* SiteHeader */
-  body > div > footer, /* AppLayout footer */
-  div[data-invoice-preview-header], /* Header card above invoice preview in editor */
-  .print-controls-container, /* Container for print buttons */
-  main > div.space-y-8 > div.bg-gradient-to-r.from-primary\/10.to-accent\/10, /* Header card in new invoice page */
-  main > div.space-y-8 > .card.shadow-lg.no-print /* Header card in returns page */
-  {
-    display: none !important;
+  /* This is a fallback in case some elements are still visible */
+  body > *:not(.print-this-one) {
+     /* display: none; */
   }
 
   @page {
     margin: 0 !important; /* Remove browser default margins */
   }
 
-  /* Styles for the main invoice container when printing */
+  /* These styles apply inside the iframe or when a printing class is active */
+  body, html {
+    background: white !important;
+    color: black !important;
+    font-family: 'PT Sans', sans-serif !important;
+    font-size: 10pt !important;
+    -webkit-font-smoothing: antialiased !important;
+    -moz-osx-font-smoothing: grayscale !important;
+  }
+  
   .card[data-invoice-preview-container] {
     display: block !important;
-    position: static !important; /* Override any sticky/fixed positioning */
+    position: static !important;
     width: 100% !important;
     height: auto !important;
     box-shadow: none !important;
     border: none !important;
     margin: 0 !important;
-    padding: 0 !important; /* Margins will be controlled by @page or specific format classes */
+    padding: 0 !important;
     background-color: white !important;
-    page-break-inside: avoid !important; /* Try to keep invoice on one page if possible */
+    page-break-inside: avoid !important;
   }
 
   .receipt-font {
@@ -159,7 +156,7 @@ body {
     word-break: break-word !important;
     box-sizing: border-box !important;
     padding: 0 !important;
-    -webkit-print-color-adjust: exact !important; /* Ensure colors print if any are used (though unlikely for text) */
+    -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
@@ -168,19 +165,19 @@ body {
     background: transparent !important;
     box-shadow: none !important;
     border-width: 0 !important;
-    font-weight: normal !important; /* Reset font weights unless explicitly set below */
+    font-weight: normal !important;
   }
 
   .receipt-font p, .receipt-font div, .receipt-font span {
-    font-weight: normal !important; /* explicit reset */
+    font-weight: normal !important;
   }
 
   .receipt-font .font-semibold, .receipt-font .font-bold, .receipt-font strong {
     font-weight: bold !important;
   }
-  .receipt-font .text-lg { font-size: 1.1em !important; } /* Slightly larger */
-  .receipt-font .text-sm { font-size: 1em !important; }   /* Base */
-  .receipt-font .text-xs { font-size: 0.9em !important; } /* Slightly smaller */
+  .receipt-font .text-lg { font-size: 1.1em !important; }
+  .receipt-font .text-sm { font-size: 1em !important; }
+  .receipt-font .text-xs { font-size: 0.9em !important; }
   .receipt-font .italic { font-style: italic !important; }
 
   .receipt-font > div:not([data-company-details-block]):not(:empty):not(.watermark-container),
@@ -230,7 +227,7 @@ body {
 
   .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] {
     display: grid !important;
-    grid-template-columns: 2fr 0.8fr 1.1fr 1.1fr !important; /* Adjust ratios as needed */
+    grid-template-columns: 2fr 0.8fr 1.1fr 1.1fr !important;
     width: 100% !important;
     gap: 0.5mm 1mm !important;
     padding: 0.5mm 0 !important;
@@ -249,8 +246,8 @@ body {
   }
 
   .receipt-font .watermark-container .watermark-text {
-    font-size: 50pt !important; /* Adjust as needed for print */
-    color: rgba(0, 0, 0, 0.08) !important; /* Lighter for print */
+    font-size: 50pt !important;
+    color: rgba(0, 0, 0, 0.08) !important;
     transform: rotate(-35deg) !important;
   }
 
@@ -265,9 +262,8 @@ body {
 
   /* Specific formatting for A4 */
   html.printing-a4 .card[data-invoice-preview-container] {
-    width: 190mm !important; /* Approx A4 width minus margins */
-    padding: 10mm !important; /* Simulate A4 margins */
-    margin: 0 auto !important;
+    width: 190mm !important;
+    padding: 10mm !important;
   }
   html.printing-a4 .receipt-font {
     font-size: 10pt !important;
@@ -276,12 +272,11 @@ body {
 
   /* Specific formatting for 80mm Thermal Roll */
   html.printing-80mm .card[data-invoice-preview-container] {
-    width: 76mm !important; /* Typical printable width for 80mm roll */
-    padding: 2mm !important; /* Small margins for thermal roll */
-    margin: 0 auto !important;
+    width: 76mm !important;
+    padding: 2mm !important;
   }
   html.printing-80mm .receipt-font {
-    font-size: 9pt !important; /* Often smaller for thermal */
+    font-size: 9pt !important;
     line-height: 1.2 !important;
   }
    html.printing-80mm .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] {
@@ -364,7 +359,7 @@ body {
   transform: rotate(-35deg) !important;
 }
 
-/* Ensure print-specific classes are removed from html tag after printing (JS will handle this) */
+/* These classes are added to the iframe's HTML element to control print layout */
 html.printing-a4, html.printing-80mm {
   /* These are just for triggering print styles, no visual change on screen */
 }
