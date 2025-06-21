@@ -16,8 +16,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
           </p>
         </div>
       </footer>
-      {/* Hidden iframe for robust printing */}
-      <iframe id="printFrame" className="hidden" title="Print Frame"></iframe>
     </div>
   );
 }

@@ -14,55 +14,58 @@ export default function FacturaPrintControls({ invoiceData, containerId }: Factu
   const [isPrinting, setIsPrinting] = useState(false);
   const router = useRouter();
 
-  const printFactura = async (printFormato: "a4" | "80mm") => {
+  const printFactura = (printFormato: "a4" | "80mm") => {
     if (typeof window === 'undefined' || isPrinting) return;
     setIsPrinting(true);
 
     const invoiceElement = document.getElementById(containerId);
     if (!invoiceElement) {
-        console.error("Print Error: Could not find element with ID:", containerId);
+        console.error("Print Error: Could not find the invoice element with ID:", containerId);
         setIsPrinting(false);
         return;
     }
 
-    const iFrame = document.getElementById('printFrame') as HTMLIFrameElement;
-    if (!iFrame || !iFrame.contentWindow) {
-        console.error("Print Error: Iframe not found or not accessible.");
-        setIsPrinting(false);
-        return;
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert("No se pudo abrir la ventana de impresión. Por favor, deshabilite el bloqueador de pop-ups para este sitio.");
+      setIsPrinting(false);
+      return;
     }
 
-    const printDoc = iFrame.contentWindow.document;
-    printDoc.open();
-    printDoc.write('<html><head></head><body></body></html>');
+    const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+      .map(el => el.outerHTML)
+      .join('\n');
     
-    // Copy all style and link tags from the main document to the iframe
-    const styles = document.querySelectorAll('style, link[rel="stylesheet"]');
-    styles.forEach(style => {
-        printDoc.head.appendChild(style.cloneNode(true));
-    });
+    const invoiceHTML = invoiceElement.innerHTML;
 
-    // Set invoice content and apply format class to the iframe's root element
-    printDoc.body.innerHTML = invoiceElement.innerHTML;
-    printDoc.documentElement.classList.add(printFormato === '80mm' ? 'printing-80mm' : 'printing-a4');
-    
-    printDoc.close();
+    printWindow.document.open();
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Factura</title>
+          ${styles}
+        </head>
+        <body>
+          ${invoiceHTML}
+        </body>
+      </html>
+    `);
 
-    // Use iframe's onload to ensure content is ready
-    iFrame.onload = function() {
-      setTimeout(function() {
+    printWindow.document.documentElement.classList.add(printFormato === '80mm' ? 'printing-80mm' : 'printing-a4');
+    printWindow.document.close();
+
+    printWindow.onload = () => {
+      setTimeout(() => {
         try {
-          iFrame.contentWindow?.focus();
-          iFrame.contentWindow?.print();
+          printWindow.focus();
+          printWindow.print();
         } catch (e) {
-          console.error("Error during print:", e);
+          console.error("Error during printing:", e);
         } finally {
+          printWindow.close();
           setIsPrinting(false);
-          // Clean up class and onload to prevent issues
-          printDoc.documentElement.classList.remove('printing-80mm', 'printing-a4');
-          iFrame.onload = null;
         }
-      }, 500); // Increased delay for rendering safety
+      }, 500); // A generous timeout to ensure all styles and fonts are applied
     };
   };
 
