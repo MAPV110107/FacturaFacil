@@ -160,8 +160,25 @@ export default function GeneralPrintPreviewPage() {
         </Button>
       </div>
 
-      <h1 className="text-2xl font-bold mb-8 text-primary text-center print:hidden">Vista Previa General de Formatos de Impresión</h1>
+      <h1 className="text-2xl font-bold mb-4 text-primary text-center print:hidden">Vista Previa General de Formatos de Impresión</h1>
       
+      <div className="w-full max-w-7xl mb-8 flex flex-col sm:flex-row justify-center items-center gap-4 print:hidden">
+        <Button
+            onClick={() => printFromElementId("invoice-comparison-a4", "a4")}
+            className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground"
+        >
+            <FileTextIcon className="mr-2 h-4 w-4" />
+            Imprimir en A4
+        </Button>
+        <Button
+            onClick={() => printFromElementId("invoice-comparison-80mm", "80mm")}
+            className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground"
+        >
+            <PrinterIcon className="mr-2 h-4 w-4" />
+            Imprimir en Rollo
+        </Button>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-7xl">
         <div>
           <h2 className="text-xl font-semibold mb-2 text-center text-muted-foreground print:hidden">Formato A4 (Referencia en Pantalla)</h2>
@@ -175,13 +192,6 @@ export default function GeneralPrintPreviewPage() {
               className="a4-preview-styling" 
             />
           </div>
-          <Button
-            onClick={() => printFromElementId("invoice-comparison-a4", "a4")}
-            className="w-full mt-4 bg-primary hover:bg-primary/90 text-primary-foreground no-print"
-          >
-            <FileTextIcon className="mr-2 h-4 w-4" />
-            Imprimir en A4
-          </Button>
         </div>
         <div>
           <h2 className="text-xl font-semibold mb-2 text-center text-muted-foreground print:hidden">Formato Rollo (Referencia en Pantalla)</h2>
@@ -195,13 +205,6 @@ export default function GeneralPrintPreviewPage() {
               className="thermal-preview-styling" 
             />
           </div>
-          <Button
-            onClick={() => printFromElementId("invoice-comparison-80mm", "80mm")}
-            className="w-full mt-4 bg-primary hover:bg-primary/90 text-primary-foreground no-print"
-          >
-            <PrinterIcon className="mr-2 h-4 w-4" />
-            Imprimir en Rollo
-          </Button>
         </div>
       </div>
     </div>
