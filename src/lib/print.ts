@@ -9,36 +9,29 @@ export function printFromElementId(elementId: string, printFormat: 'a4' | '80mm'
     return;
   }
 
-  const printWindow = window.open('', '_blank');
+  const printWindow = window.open('', '_blank', 'width=1,height=1,left=0,top=0');
   if (!printWindow) {
     alert("No se pudo abrir la ventana de impresión. Por favor, deshabilite el bloqueador de pop-ups para este sitio.");
     return;
   }
 
-  // --- START: CRITICAL FIX ---
-  // Gather all style and link tags from the main document's head.
-  // This is the key to making the print preview look identical to the screen.
   const styles = Array.from(document.head.querySelectorAll('style, link[rel="stylesheet"]'))
     .map(el => el.outerHTML)
     .join('\n');
-  // --- END: CRITICAL FIX ---
   
   const invoiceHTML = invoiceElement.innerHTML;
   
-  // This class determines the paper size and is defined in globals.css
-  const wrapperClass = printFormat === 'a4' ? 'preview-a4-wrapper' : 'preview-80mm-wrapper';
+  const printClass = printFormat === 'a4' ? 'printing-a4' : 'printing-80mm';
 
   printWindow.document.open();
   printWindow.document.write(`
-    <html>
+    <html class="${printClass}">
       <head>
         <title>Imprimir Factura</title>
         ${styles}
       </head>
       <body>
-        <div class="${wrapperClass}">
-          ${invoiceHTML}
-        </div>
+        ${invoiceHTML}
       </body>
     </html>
   `);
@@ -46,7 +39,6 @@ export function printFromElementId(elementId: string, printFormat: 'a4' | '80mm'
   printWindow.document.close();
 
   printWindow.onload = () => {
-    // A small timeout to ensure all assets (like fonts) have time to load in the new window
     setTimeout(() => {
       try {
         printWindow.focus();
@@ -54,9 +46,8 @@ export function printFromElementId(elementId: string, printFormat: 'a4' | '80mm'
       } catch (e) {
         console.error("Error during printing:", e);
       } finally {
-        // We close the window after a short delay to allow the print dialog to fully process.
-        setTimeout(() => printWindow.close(), 500);
+        setTimeout(() => printWindow.close(), 100);
       }
-    }, 300);
+    }, 500); // 500ms delay to ensure styles are applied
   };
 }
