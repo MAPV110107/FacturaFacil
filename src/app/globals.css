@@ -147,13 +147,14 @@ body {
   }
   
   /* The card inside the A4 wrapper should stretch */
-  body > .preview-a4-wrapper > .card {
+  body > .preview-a4-wrapper > [data-invoice-preview-container] {
     flex-grow: 1 !important;
     display: flex !important;
     flex-direction: column !important;
   }
   
-  body > .preview-a4-wrapper > .card > .card-content {
+  /* The content area of the card should be the part that grows */
+  body > .preview-a4-wrapper > [data-invoice-preview-container] > .receipt-font {
       flex-grow: 1 !important;
   }
 
@@ -367,5 +368,3 @@ body {
   color: rgba(0, 0, 0, 0.08) !important;
   transform: rotate(-35deg) !important;
 }
-
-    
