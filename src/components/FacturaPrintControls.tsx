@@ -31,7 +31,7 @@ export default function FacturaPrintControls({ invoiceData, containerId }: Factu
     elementToPrint.classList.add('print-this-one');
 
     // Allow a brief moment for styles to apply before triggering print
-    await new Promise(resolve => setTimeout(resolve, 150));
+    await new Promise(resolve => setTimeout(resolve, 300));
 
     window.print();
 

@@ -121,7 +121,7 @@ export default function GeneralPrintPreviewPage() {
     document.documentElement.classList.add(printClassName);
     elementToPrint.classList.add('print-this-one');
 
-    await new Promise(resolve => setTimeout(resolve, 150));
+    await new Promise(resolve => setTimeout(resolve, 300));
     window.print();
     
     setTimeout(() => {
