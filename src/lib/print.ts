@@ -15,10 +15,13 @@ export function printFromElementId(elementId: string, printFormat: 'a4' | '80mm'
     return;
   }
 
-  // Copy all style and link tags from the main document's head to the new window
+  // --- START: CRITICAL FIX ---
+  // Gather all style and link tags from the main document's head.
+  // This is the key to making the print preview look identical to the screen.
   const styles = Array.from(document.head.querySelectorAll('style, link[rel="stylesheet"]'))
     .map(el => el.outerHTML)
     .join('\n');
+  // --- END: CRITICAL FIX ---
   
   const invoiceHTML = invoiceElement.innerHTML;
   
@@ -29,7 +32,7 @@ export function printFromElementId(elementId: string, printFormat: 'a4' | '80mm'
   printWindow.document.write(`
     <html>
       <head>
-        <title>Factura</title>
+        <title>Imprimir Factura</title>
         ${styles}
       </head>
       <body>
@@ -43,15 +46,17 @@ export function printFromElementId(elementId: string, printFormat: 'a4' | '80mm'
   printWindow.document.close();
 
   printWindow.onload = () => {
-    setTimeout(() => { // Keep a safe timeout to ensure rendering
+    // A small timeout to ensure all assets (like fonts) have time to load in the new window
+    setTimeout(() => {
       try {
         printWindow.focus();
         printWindow.print();
       } catch (e) {
         console.error("Error during printing:", e);
       } finally {
-        printWindow.close();
+        // We close the window after a short delay to allow the print dialog to fully process.
+        setTimeout(() => printWindow.close(), 500);
       }
-    }, 300); // 300ms is a safe buffer
+    }, 300);
   };
 }
