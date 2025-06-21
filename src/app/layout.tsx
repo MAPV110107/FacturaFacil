@@ -25,6 +25,7 @@ export default function RootLayout({
       <body className="font-body antialiased">
         {children}
         <Toaster />
+        <iframe id="printFrame" style={{ display: 'none' }} title="Print Content"></iframe>
       </body>
     </html>
   );
