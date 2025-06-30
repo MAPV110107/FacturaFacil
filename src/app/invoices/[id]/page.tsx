@@ -1,4 +1,7 @@
-// This file is a duplicate and was causing a build error.
-// The correct file is located at src/app/(app)/invoices/[id]/page.tsx
-// This file can be safely deleted.
-export {};
+/*
+  This file is a duplicate that was causing a Next.js build error
+  because it conflicts with /src/app/(app)/invoices/[id]/page.tsx.
+
+  By removing all exports and code, this file is no longer treated as
+  a page component, which resolves the routing conflict.
+*/
