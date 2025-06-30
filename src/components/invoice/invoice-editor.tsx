@@ -23,7 +23,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { InvoicePreview } from "./invoice-preview";
 import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, Trash2, Users, FileText, DollarSign, Settings, Receipt, CalendarDays, Info, Save, Percent, Search, Ban, ArrowRight, HandCoins, PiggyBank, XCircle, WalletCards, RotateCcw, ShieldCheck, Clock, History, FilePlus2 } from "lucide-react";
+import { PlusCircle, Trash2, Users, FileText, DollarSign, Settings, Receipt, CalendarDays, Info, Save, Percent, Search, Ban, ArrowRight, HandCoins, PiggyBank, XCircle, WalletCards, RotateCcw, ShieldCheck, Clock, History, FilePlus2, Printer } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Form, FormField, FormItem, FormControl, FormLabel, FormMessage } from "@/components/ui/form";
@@ -41,6 +41,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
+import FacturaPrintControls from "@/components/FacturaPrintControls";
 
 
 type InvoiceFormData = z.infer<typeof invoiceFormSchema>;
@@ -1069,6 +1070,21 @@ export function InvoiceEditor() {
             invoiceStatus={liveInvoicePreview?.status || 'active'} 
             containerId="invoice-editor-preview-card" 
         />
+        <Card className="shadow-md no-print">
+            <CardHeader>
+                <CardTitle className="text-xl flex items-center text-primary"><Printer className="mr-2 h-5 w-5" />Opciones de Impresión</CardTitle>
+                <CardDescription>
+                    {lastSavedInvoiceId ? 'Imprimir el documento guardado.' : 'Imprimir la previsualización actual.'}
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                <FacturaPrintControls 
+                    invoiceData={liveInvoicePreview} 
+                    containerId="invoice-editor-preview-card" 
+                    companyDetails={previewCompanyDetails}
+                />
+            </CardContent>
+        </Card>
       </div>
        <AlertDialog open={isCancelConfirmOpen} onOpenChange={setIsCancelConfirmOpen}>
         <AlertDialogContent>
