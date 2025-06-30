@@ -270,7 +270,7 @@ export function InvoicePreview({
 
           {showPrintAndCompareControls && (
               <CardFooter className="p-4 border-t no-print flex flex-col items-stretch gap-2">
-                  <FacturaPrintControls containerId={containerId} invoiceData={invoice} companyDetails={companyDetails} />
+                  <FacturaPrintControls containerId={containerId} invoiceData={invoice} companyDetails={companyDetails} isSavedInvoice={isSavedInvoice} />
               </CardFooter>
           )}
         </Card>

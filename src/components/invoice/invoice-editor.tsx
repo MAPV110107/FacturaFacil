@@ -1074,7 +1074,7 @@ export function InvoiceEditor() {
             <CardHeader>
                 <CardTitle className="text-xl flex items-center text-primary"><Printer className="mr-2 h-5 w-5" />Opciones de Impresión</CardTitle>
                 <CardDescription>
-                    {lastSavedInvoiceId ? 'Imprimir el documento guardado.' : 'Imprimir la previsualización actual.'}
+                    {lastSavedInvoiceId ? 'Imprimir el documento guardado.' : 'La impresión se habilita al guardar.'}
                 </CardDescription>
             </CardHeader>
             <CardContent>
@@ -1082,6 +1082,7 @@ export function InvoiceEditor() {
                     invoiceData={liveInvoicePreview} 
                     containerId="invoice-editor-preview-card" 
                     companyDetails={previewCompanyDetails}
+                    isSavedInvoice={!!lastSavedInvoiceId}
                 />
             </CardContent>
         </Card>

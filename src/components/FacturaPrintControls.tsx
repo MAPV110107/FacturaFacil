@@ -7,14 +7,16 @@ import { printFromElementId } from "@/lib/print";
 import { printToFiscalPrinter } from "@/lib/fiscal-print";
 import { useToast } from "@/hooks/use-toast";
 import type { Invoice, CompanyDetails } from "@/lib/types";
+import FiscalPrinterStatus from "./FiscalPrinterStatus";
 
 interface FacturaPrintControlsProps {
   invoiceData?: Partial<Invoice>;
   containerId: string;
   companyDetails?: CompanyDetails | null;
+  isSavedInvoice?: boolean;
 }
 
-export default function FacturaPrintControls({ invoiceData, containerId, companyDetails }: FacturaPrintControlsProps) {
+export default function FacturaPrintControls({ invoiceData, containerId, companyDetails, isSavedInvoice = false }: FacturaPrintControlsProps) {
   const router = useRouter();
   const { toast } = useToast();
 
@@ -32,8 +34,8 @@ export default function FacturaPrintControls({ invoiceData, containerId, company
       toast({ variant: "destructive", title: "Impresora Fiscal no configurada", description: "Habilite y configure la URL de la impresora fiscal en los ajustes de la empresa." });
       return;
     }
-    if (!invoiceData || Object.keys(invoiceData).length === 0) {
-      toast({ variant: "destructive", title: "Sin datos", description: "No hay datos de factura para enviar." });
+    if (!invoiceData || !isSavedInvoice) {
+      toast({ variant: "destructive", title: "Factura no guardada", description: "Debe guardar la factura antes de enviarla a la impresora fiscal." });
       return;
     }
 
@@ -50,19 +52,28 @@ export default function FacturaPrintControls({ invoiceData, containerId, company
   return (
     <div className="flex flex-col gap-2 mt-2 print-controls-container w-full">
       {companyDetails?.fiscalPrinterEnabled && (
-        <Button
-          variant={"default"}
-          onClick={handleFiscalPrint}
-          className="w-full bg-green-600 hover:bg-green-700 text-white"
-        >
-          <Printer className="mr-2 h-4 w-4" />
-          Imprimir Fiscal
-        </Button>
+         <div className="flex items-center justify-between p-2 border rounded-md bg-muted/50">
+            <Button
+              variant={"default"}
+              onClick={handleFiscalPrint}
+              className="w-auto flex-grow bg-green-600 hover:bg-green-700 text-white"
+              disabled={!isSavedInvoice}
+              title={!isSavedInvoice ? "Guarde la factura para habilitar la impresión fiscal" : "Imprimir en impresora fiscal"}
+            >
+              <Printer className="mr-2 h-4 w-4" />
+              Imprimir Fiscal
+            </Button>
+            <div className="pl-4">
+                <FiscalPrinterStatus />
+            </div>
+        </div>
       )}
       <Button
         variant={"outline"}
         onClick={() => printFromElementId(containerId, "a4")}
         className="w-full"
+        disabled={!isSavedInvoice}
+        title={!isSavedInvoice ? "Guarde la factura para imprimir en A4" : "Imprimir en A4"}
       >
         <FileTextIcon className="mr-2 h-4 w-4" />
         Imprimir en A4
@@ -72,6 +83,8 @@ export default function FacturaPrintControls({ invoiceData, containerId, company
         variant={"default"}
         onClick={() => printFromElementId(containerId, "80mm")}
         className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
+        disabled={!isSavedInvoice}
+        title={!isSavedInvoice ? "Guarde la factura para imprimir en rollo" : "Imprimir en Rollo"}
       >
         <Printer className="mr-2 h-4 w-4" />
         Imprimir en Rollo
