@@ -1,7 +1,8 @@
 /*
-  This file is a duplicate that was causing a Next.js build error
-  because it conflicts with /src/app/(app)/invoices/[id]/page.tsx.
+  This file is a duplicate and causes a Next.js build error.
+  The correct page component for this route is located at:
+  /src/app/(app)/invoices/[id]/page.tsx
 
-  By removing all exports and code, this file is no longer treated as
-  a page component, which resolves the routing conflict.
+  This file has been neutralized to resolve the build conflict.
+  It can be safely deleted from the project.
 */
