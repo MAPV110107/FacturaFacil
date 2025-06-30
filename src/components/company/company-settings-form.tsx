@@ -16,14 +16,17 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Save, XCircle, Upload, Trash2 } from "lucide-react";
+import { Save, XCircle, Upload, Trash2, Printer } from "lucide-react";
 import React, { useRef } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
 
 const defaultCompanyDetails: CompanyDetails = {
   id: DEFAULT_COMPANY_ID,
@@ -34,6 +37,8 @@ const defaultCompanyDetails: CompanyDetails = {
   email: "",
   logoUrl: "",
   logoAlignment: "center",
+  fiscalPrinterEnabled: false,
+  fiscalPrinterApiUrl: "",
 };
 
 export function CompanySettingsForm() {
@@ -50,12 +55,11 @@ export function CompanySettingsForm() {
   });
 
   React.useEffect(() => {
-    // Ensure that default values from schema (like logoAlignment) are applied if not present in localStorage
     const currentStoredDetails = companyDetails || {};
     const effectiveDefaults = {
-      ...defaultCompanyDetails, // Global defaults
-      ...currentStoredDetails,  // Stored values (may override some defaults)
-      logoAlignment: currentStoredDetails.logoAlignment || defaultCompanyDetails.logoAlignment, // Explicitly ensure alignment default
+      ...defaultCompanyDetails,
+      ...currentStoredDetails,
+      logoAlignment: currentStoredDetails.logoAlignment || defaultCompanyDetails.logoAlignment,
     };
     form.reset(effectiveDefaults);
   }, [companyDetails, form]);
@@ -70,7 +74,6 @@ export function CompanySettingsForm() {
   }
 
   function handleCancel() {
-    // Re-apply defaults similar to useEffect logic on cancel
     const currentStoredDetails = companyDetails || {};
     const effectiveDefaults = {
       ...defaultCompanyDetails,
@@ -128,6 +131,8 @@ export function CompanySettingsForm() {
       description: "El logo ha sido eliminado de la configuración. Guarde los cambios para aplicarlo.",
     });
   };
+  
+  const fiscalPrinterEnabled = form.watch("fiscalPrinterEnabled");
 
   return (
     <Card className="shadow-lg">
@@ -279,6 +284,54 @@ export function CompanySettingsForm() {
                 </FormItem>
               )}
             />
+            
+            <Separator />
+
+            <div className="space-y-4">
+              <div className="flex items-center space-x-2">
+                <Printer className="h-5 w-5 text-primary" />
+                <h3 className="text-lg font-semibold text-primary">Integración con Impresora Fiscal</h3>
+              </div>
+              <FormField
+                control={form.control}
+                name="fiscalPrinterEnabled"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                    <div className="space-y-0.5">
+                      <FormLabel>Habilitar Impresión Fiscal</FormLabel>
+                      <FormDescription>
+                        Permite enviar documentos a una impresora fiscal a través de una API local.
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              {fiscalPrinterEnabled && (
+                <FormField
+                  control={form.control}
+                  name="fiscalPrinterApiUrl"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>URL del Servicio de Impresora Fiscal</FormLabel>
+                      <FormControl>
+                        <Input placeholder="http://localhost:9876/print" {...field} value={field.value || ""} />
+                      </FormControl>
+                      <FormDescription>
+                        La dirección de la API local que se comunica con su impresora fiscal.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+            </div>
+
 
             <div className="flex flex-col sm:flex-row gap-2 mt-4">
               <Button type="submit" className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground">

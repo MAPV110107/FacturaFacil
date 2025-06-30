@@ -9,6 +9,8 @@ export const companyDetailsSchema = z.object({
   email: z.string().email({ message: "Debe ser un correo electrónico válido." }).optional().or(z.literal('')),
   logoUrl: z.string().url({ message: "Debe ser una URL válida o estar vacío."}).optional().or(z.literal('')),
   logoAlignment: z.enum(['left', 'center', 'right']).optional().default('center'),
+  fiscalPrinterEnabled: z.boolean().optional().default(false),
+  fiscalPrinterApiUrl: z.string().url({ message: "Debe ser una URL válida, ej: http://localhost:9876" }).optional().or(z.literal('')),
 });
 
 export const customerDetailsSchema = z.object({

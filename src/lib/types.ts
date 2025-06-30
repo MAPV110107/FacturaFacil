@@ -8,6 +8,8 @@ export interface CompanyDetails {
   email?: string;
   logoUrl?: string; 
   logoAlignment?: 'left' | 'center' | 'right'; 
+  fiscalPrinterEnabled?: boolean;
+  fiscalPrinterApiUrl?: string;
 }
 
 export interface CustomerDetails {
