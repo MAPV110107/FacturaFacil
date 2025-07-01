@@ -11,6 +11,7 @@ export const companyDetailsSchema = z.object({
   logoAlignment: z.enum(['left', 'center', 'right']).optional().default('center'),
   fiscalPrinterEnabled: z.boolean().optional().default(false),
   fiscalPrinterApiUrl: z.string().url({ message: "Debe ser una URL válida, ej: http://localhost:9876" }).optional().or(z.literal('')),
+  useSimplifiedFiscalData: z.boolean().optional().default(false),
 });
 
 export const customerDetailsSchema = z.object({

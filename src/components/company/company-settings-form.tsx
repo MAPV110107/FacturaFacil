@@ -300,22 +300,44 @@ export function CompanySettingsForm() {
                 )}
               />
               {fiscalPrinterEnabled && (
-                <FormField
-                  control={form.control}
-                  name="fiscalPrinterApiUrl"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>URL del Servicio de Impresora Fiscal</FormLabel>
-                      <FormControl>
-                        <Input placeholder="http://localhost:3000/print" {...field} value={field.value || ""} />
-                      </FormControl>
-                      <FormDescription>
-                        La dirección de la API local que se comunica con su impresora fiscal.
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <>
+                  <FormField
+                    control={form.control}
+                    name="fiscalPrinterApiUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>URL del Servicio de Impresora Fiscal</FormLabel>
+                        <FormControl>
+                          <Input placeholder="http://localhost:3000/print" {...field} value={field.value || ""} />
+                        </FormControl>
+                        <FormDescription>
+                          La dirección de la API local que se comunica con su impresora fiscal.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="useSimplifiedFiscalData"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                        <div className="space-y-0.5">
+                          <FormLabel>Modo Fiscal Simplificado</FormLabel>
+                          <FormDescription>
+                            Enviar solo datos esenciales (ítems, pagos) a una impresora preconfigurada.
+                          </FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </>
               )}
             </div>
 

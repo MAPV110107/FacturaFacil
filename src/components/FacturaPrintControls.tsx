@@ -1,3 +1,4 @@
+
 "use client";
 import { Button } from "@/components/ui/button";
 import { Printer, FileText as FileTextIcon, Eye } from "lucide-react";
@@ -29,8 +30,8 @@ export default function FacturaPrintControls({ invoiceData, containerId, company
   };
 
   const handleFiscalPrint = async () => {
-    if (!companyDetails?.fiscalPrinterEnabled || !companyDetails.fiscalPrinterApiUrl) {
-      toast({ variant: "destructive", title: "Impresora Fiscal no configurada", description: "Habilite y configure la URL de la impresora fiscal en los ajustes de la empresa." });
+    if (!companyDetails?.fiscalPrinterEnabled) {
+      toast({ variant: "destructive", title: "Impresora Fiscal no habilitada", description: "Habilite la impresora fiscal en los ajustes de la empresa." });
       return;
     }
     if (!invoiceData || !isSavedInvoice) {
@@ -39,7 +40,7 @@ export default function FacturaPrintControls({ invoiceData, containerId, company
     }
 
     toast({ title: "Enviando a Impresora Fiscal...", description: `Enviando documento a ${companyDetails.fiscalPrinterApiUrl}` });
-    const result = await printToFiscalPrinter(invoiceData as Invoice, companyDetails.fiscalPrinterApiUrl);
+    const result = await printToFiscalPrinter(invoiceData as Invoice, companyDetails);
 
     if (result.success) {
       toast({ title: "Éxito", description: result.message });

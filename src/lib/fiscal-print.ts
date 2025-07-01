@@ -1,7 +1,7 @@
 
 'use client';
 
-import type { Invoice } from './types';
+import type { Invoice, CompanyDetails } from './types';
 
 /**
  * Sends invoice data to a local fiscal printer service.
@@ -11,26 +11,71 @@ import type { Invoice } from './types';
  */
 export async function printToFiscalPrinter(
   invoice: Invoice,
-  apiUrl: string
+  companyDetails: CompanyDetails | null,
 ): Promise<{ success: boolean; message: string }> {
+  const apiUrl = companyDetails?.fiscalPrinterApiUrl;
+  if (!apiUrl) {
+    return { success: false, message: 'La URL del servicio de impresora fiscal no está configurada.' };
+  }
+
+  let payload: any = invoice;
+
+  // If simplified mode is enabled, create a smaller payload
+  if (companyDetails?.useSimplifiedFiscalData) {
+    payload = {
+      // Document type info
+      type: invoice.type,
+      isDebtPayment: invoice.isDebtPayment,
+      isCreditDeposit: invoice.isCreditDeposit,
+      status: invoice.status,
+      originalInvoiceId: invoice.originalInvoiceId,
+      
+      // Customer info
+      customerDetails: {
+          name: invoice.customerDetails.name,
+          rif: invoice.customerDetails.rif,
+          address: invoice.customerDetails.address,
+      },
+      
+      // Sale details
+      items: invoice.items.map(item => ({
+          description: item.description,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+      })),
+      
+      // Discount info
+      discountValue: invoice.discountValue,
+      discountPercentage: invoice.discountPercentage,
+
+      // Payment info
+      paymentMethods: invoice.paymentMethods,
+      
+      // Other relevant notes that might be printed
+      notes: invoice.notes,
+      warrantyText: invoice.warrantyText,
+      thankYouMessage: invoice.thankYouMessage,
+      
+      // Include overpayment/change details if they exist
+      overpaymentAmount: invoice.overpaymentAmount,
+      overpaymentHandling: invoice.overpaymentHandling,
+      changeRefundPaymentMethods: invoice.changeRefundPaymentMethods,
+    };
+  }
+
+
   try {
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(invoice),
-      // Use 'no-cors' mode if the local service doesn't handle CORS, 
-      // but be aware this makes the response opaque.
-      // mode: 'no-cors', 
+      body: JSON.stringify(payload),
     });
 
-    // If using 'no-cors', you can't check response.ok. We assume success if no network error.
-    // If your local service *does* support CORS, you can use the more robust check below.
     if (!response.ok) {
         try {
             const errorText = await response.text();
-            // Try to parse as JSON if the error is structured
             try {
                 const errorJson = JSON.parse(errorText);
                 return { success: false, message: `Error: ${errorJson.message || errorText}` };

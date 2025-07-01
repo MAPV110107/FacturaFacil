@@ -10,6 +10,7 @@ export interface CompanyDetails {
   logoAlignment?: 'left' | 'center' | 'right'; 
   fiscalPrinterEnabled?: boolean;
   fiscalPrinterApiUrl?: string;
+  useSimplifiedFiscalData?: boolean; // Added for simplified fiscal payload
 }
 
 export interface CustomerDetails {
@@ -90,6 +91,7 @@ export const defaultCompanyDetails: CompanyDetails = {
   logoAlignment: "center",
   fiscalPrinterEnabled: true,
   fiscalPrinterApiUrl: "http://localhost:3000/print",
+  useSimplifiedFiscalData: false, // Default to sending full data
 };
 
 export const defaultCustomer: CustomerDetails = { id: "", name: "", rif: "", address: "", phone: "", email: "", outstandingBalance: 0, creditBalance: 0 };
