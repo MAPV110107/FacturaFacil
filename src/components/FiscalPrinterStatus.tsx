@@ -4,19 +4,16 @@
 import React, { useState, useEffect } from 'react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import useLocalStorage from '@/hooks/use-local-storage';
 import type { CompanyDetails } from '@/lib/types';
-import { DEFAULT_COMPANY_ID } from "@/lib/types";
 
 type Status = 'online' | 'offline' | 'checking';
 
-export default function FiscalPrinterStatus() {
-  const [status, setStatus] = useState<Status>('checking');
-  const [companyDetails] = useLocalStorage<CompanyDetails>(
-    "companyDetails",
-    { id: DEFAULT_COMPANY_ID }
-  );
+interface FiscalPrinterStatusProps {
+  companyDetails: CompanyDetails | null;
+}
 
+export default function FiscalPrinterStatus({ companyDetails }: FiscalPrinterStatusProps) {
+  const [status, setStatus] = useState<Status>('checking');
   const fiscalPrinterApiUrl = companyDetails?.fiscalPrinterApiUrl;
 
   useEffect(() => {

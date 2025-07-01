@@ -1,11 +1,11 @@
 
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import useLocalStorage from "@/hooks/use-local-storage";
 import type { Invoice, CompanyDetails, CustomerDetails } from "@/lib/types";
-import { DEFAULT_COMPANY_ID } from "@/lib/types";
+import { defaultCompanyDetails } from "@/lib/types";
 import { InvoicePreview } from "@/components/invoice/invoice-preview";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,10 +34,15 @@ export default function ViewInvoicePage() {
 
   const [allInvoices, setAllInvoices] = useLocalStorage<Invoice[]>("invoices", []);
   const [customers, setCustomers] = useLocalStorage<CustomerDetails[]>("customers", []);
-  const [companyDetails] = useLocalStorage<CompanyDetails>(
+  const [storedCompanyDetails] = useLocalStorage<CompanyDetails>(
     "companyDetails",
-    { id: DEFAULT_COMPANY_ID, name: "", rif: "", address: "" }
+    defaultCompanyDetails
   );
+
+  const companyDetails = useMemo(() => ({
+    ...defaultCompanyDetails,
+    ...storedCompanyDetails,
+  }), [storedCompanyDetails]);
 
   const [invoice, setInvoice] = useState<Invoice | null | undefined>(undefined);
   const [isClient, setIsClient] = useState(false);

@@ -54,7 +54,7 @@ export default function FacturaPrintControls({ invoiceData, containerId, company
       {companyDetails?.fiscalPrinterEnabled && (
          <div className="flex items-center justify-between p-2 border rounded-md bg-muted/50">
             <p className="text-sm font-medium text-foreground">Estado Impresora Fiscal</p>
-            <FiscalPrinterStatus />
+            <FiscalPrinterStatus companyDetails={companyDetails} />
         </div>
       )}
 
