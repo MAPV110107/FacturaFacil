@@ -33,8 +33,7 @@ app.post('/print', (req, res) => {
                        invoiceData.isDebtPayment ? 'Abono a Deuda' : 
                        invoiceData.isCreditDeposit ? 'Depósito a Cuenta' : 'Factura';
   
-  console.log("\n  *** INICIO DEL DOCUMENTO ***");
-  console.log("  SENIAT");
+  console.log("\n  SENIAT");
 
   console.log("\n  --- Detalles del Negocio ---");
   const c = invoiceData.companyDetails;
@@ -44,7 +43,7 @@ app.post('/print', (req, res) => {
 
   console.log("\n  --- Información del Documento ---");
   console.log("  Tipo:", `${documentType} NRO: ${invoiceData.invoiceNumber}`);
-  console.log("  Fecha:", new Date(invoiceData.date).toLocaleDateString('es-VE'));
+  console.log("  Fecha y Hora:", new Date(invoiceData.date).toLocaleString('es-VE'));
   
   console.log("\n  --- Cliente ---");
   console.log("  Nombre:", invoiceData.customerDetails.name);
