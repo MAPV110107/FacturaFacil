@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { Invoice, CompanyDetails } from "@/lib/types";
