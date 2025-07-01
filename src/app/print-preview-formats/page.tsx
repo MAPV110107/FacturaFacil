@@ -20,7 +20,7 @@ const defaultCompany: CompanyDetails = {
   rif: "J-00000000-0",
   address: "Av. Ejemplo, Edif. Modelo, Piso 1, Ciudad",
   phone: "0212-123-4567",
-  logoUrl: "https://placehold.co/200x100.png",
+  logoUrl: "",
   logoAlignment: "center",
 };
 
