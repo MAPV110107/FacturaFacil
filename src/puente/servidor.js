@@ -4,7 +4,7 @@ const cors = require('cors');
 // const { SerialPort } = require('serialport'); // Descomentar para uso real
 
 const app = express();
-const PUERTO = 9876;
+const PUERTO = 3000;
 
 // Habilita CORS para permitir solicitudes desde el navegador
 app.use(cors());

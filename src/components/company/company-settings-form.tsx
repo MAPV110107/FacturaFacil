@@ -38,7 +38,7 @@ const defaultCompanyDetails: CompanyDetails = {
   logoUrl: "",
   logoAlignment: "center",
   fiscalPrinterEnabled: false,
-  fiscalPrinterApiUrl: "",
+  fiscalPrinterApiUrl: "http://localhost:3000/print",
 };
 
 export function CompanySettingsForm() {
@@ -320,7 +320,7 @@ export function CompanySettingsForm() {
                     <FormItem>
                       <FormLabel>URL del Servicio de Impresora Fiscal</FormLabel>
                       <FormControl>
-                        <Input placeholder="http://localhost:9876/print" {...field} value={field.value || ""} />
+                        <Input placeholder="http://localhost:3000/print" {...field} value={field.value || ""} />
                       </FormControl>
                       <FormDescription>
                         La dirección de la API local que se comunica con su impresora fiscal.
