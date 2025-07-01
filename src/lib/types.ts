@@ -78,5 +78,19 @@ export interface Invoice {
 }
 
 export const DEFAULT_COMPANY_ID = "main_company_details";
+
+export const defaultCompanyDetails: CompanyDetails = {
+  id: DEFAULT_COMPANY_ID,
+  name: "",
+  rif: "",
+  address: "",
+  phone: "",
+  email: "",
+  logoUrl: "",
+  logoAlignment: "center",
+  fiscalPrinterEnabled: true,
+  fiscalPrinterApiUrl: "http://localhost:3000/print",
+};
+
 export const defaultCustomer: CustomerDetails = { id: "", name: "", rif: "", address: "", phone: "", email: "", outstandingBalance: 0, creditBalance: 0 };
 export const TAX_RATE = 0.16;

@@ -10,7 +10,7 @@ import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 
 import useLocalStorage from "@/hooks/use-local-storage";
 import type { Invoice, CompanyDetails, CustomerDetails, InvoiceItem, PaymentDetails } from "@/lib/types";
-import { DEFAULT_COMPANY_ID, defaultCustomer, TAX_RATE } from "@/lib/types";
+import { DEFAULT_COMPANY_ID, defaultCustomer, TAX_RATE, defaultCompanyDetails } from "@/lib/types";
 import { invoiceFormSchema } from "@/lib/schemas";
 import { CURRENCY_SYMBOL, DEFAULT_THANK_YOU_MESSAGE } from "@/lib/constants";
 
@@ -104,9 +104,14 @@ export function InvoiceEditor() {
   const [editorCancellationReasonInput, setEditorCancellationReasonInput] = useState(""); // State for cancellation reason in editor
   const internalNavigationRef = useRef(false);
 
+  const previewCompanyDetails = useMemo(() => ({
+    ...defaultCompanyDetails,
+    ...companyDetails,
+  }), [companyDetails]);
+
   const initialLivePreviewState = useMemo<Partial<Invoice>>(() => ({
     id: '', invoiceNumber: "", date: new Date().toISOString(), type: 'sale', status: 'active',
-    companyDetails: companyDetails || stableDefaultCompany, cashierNumber: "", salesperson: "",
+    companyDetails: previewCompanyDetails || stableDefaultCompany, cashierNumber: "", salesperson: "",
     customerDetails: { ...defaultCustomer },
     items: [{ id: uuidv4(), description: "", quantity: 1, unitPrice: 0, totalPrice: 0}],
     paymentMethods: [{ method: "Efectivo", amount: 0, reference: "" }],
@@ -115,7 +120,7 @@ export function InvoiceEditor() {
     warrantyText: "", isDebtPayment: false, isCreditDeposit: false, overpaymentAmount: 0,
     overpaymentHandling: 'creditToAccount', changeRefundPaymentMethods: [], originalInvoiceId: undefined,
     cancelledAt: undefined, reasonForStatusChange: undefined,
-  }), [companyDetails]);
+  }), [previewCompanyDetails]);
   
   const [liveInvoicePreview, setLiveInvoicePreview] = useState<Partial<Invoice>>(initialLivePreviewState);
 
@@ -411,7 +416,7 @@ export function InvoiceEditor() {
           ...prev, id: lastSavedInvoiceId || prev.id || '', status: prev.status || 'active',
           invoiceNumber: watchedValues.invoiceNumber,
           date: watchedValues.date ? (typeof watchedValues.date === 'string' ? watchedValues.date : (isValid(watchedValues.date) ? watchedValues.date.toISOString() : new Date(0).toISOString())) : (prev.date || new Date(0).toISOString()),
-          companyDetails: companyDetails || stableDefaultCompany, cashierNumber: watchedValues.cashierNumber, salesperson: watchedValues.salesperson,
+          companyDetails: previewCompanyDetails || stableDefaultCompany, cashierNumber: watchedValues.cashierNumber, salesperson: watchedValues.salesperson,
           customerDetails: watchedValues.customerDetails as CustomerDetails, items: currentItems, paymentMethods: watchedValues.paymentMethods as PaymentDetails[],
           subTotal, discountPercentage: currentDiscountPercentage, discountValue: discountAmount,
           taxRate: currentApplyTax ? (currentTaxRatePercent / 100) : 0, taxAmount, totalAmount,
@@ -425,7 +430,7 @@ export function InvoiceEditor() {
       }));
     });
     return () => subscription.unsubscribe();
-  }, [form, lastSavedInvoiceId, isClient, companyDetails, calculateTotals, calculatePaymentSummary, setLiveInvoicePreview]);
+  }, [form, lastSavedInvoiceId, isClient, previewCompanyDetails, calculateTotals, calculatePaymentSummary, setLiveInvoicePreview]);
 
 
   const overpaymentHandlingChoiceValue = form.watch("overpaymentHandlingChoice");
@@ -730,7 +735,7 @@ export function InvoiceEditor() {
     const fullInvoiceData: Invoice = {
       id: newInvoiceId, invoiceNumber: data.invoiceNumber, date: data.date.toISOString(), type: 'sale', status: 'active', 
       isDebtPayment: editorMode === 'debtPayment', isCreditDeposit: editorMode === 'creditDeposit',
-      companyDetails: companyDetails || stableDefaultCompany, customerDetails: customerToSaveOnInvoice,
+      companyDetails: previewCompanyDetails || stableDefaultCompany, customerDetails: customerToSaveOnInvoice,
       cashierNumber: data.cashierNumber, salesperson: data.salesperson, items: finalItems, paymentMethods: finalPaymentMethodsForInvoice,
       subTotal, discountPercentage: data.applyDiscount ? (data.discountPercentage || 0) : undefined,
       discountValue: data.applyDiscount ? (data.discountValue || 0) : undefined,
@@ -844,7 +849,6 @@ export function InvoiceEditor() {
     setEditorCancellationReasonInput(""); // Reset reason input
   };
 
-  const previewCompanyDetails = companyDetails;
   const getEditorTitle = () => {
     if (editorMode === 'debtPayment') return "Registrar Abono a Deuda";
     if (editorMode === 'creditDeposit') return "Registrar Depósito a Cuenta Cliente";

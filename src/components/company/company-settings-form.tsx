@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import type { z } from "zod";
 import useLocalStorage from "@/hooks/use-local-storage";
 import type { CompanyDetails } from "@/lib/types";
-import { DEFAULT_COMPANY_ID } from "@/lib/types";
+import { DEFAULT_COMPANY_ID, defaultCompanyDetails } from "@/lib/types";
 import { companyDetailsSchema } from "@/lib/schemas";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,19 +27,6 @@ import React, { useRef } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-
-const defaultCompanyDetails: CompanyDetails = {
-  id: DEFAULT_COMPANY_ID,
-  name: "",
-  rif: "",
-  address: "",
-  phone: "",
-  email: "",
-  logoUrl: "",
-  logoAlignment: "center",
-  fiscalPrinterEnabled: true,
-  fiscalPrinterApiUrl: "http://localhost:3000/print",
-};
 
 export function CompanySettingsForm() {
   const [companyDetails, setCompanyDetails] = useLocalStorage<CompanyDetails>(
