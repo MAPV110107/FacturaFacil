@@ -1,0 +1,1 @@
+rem Este archivo debe ser eliminado. Usar los scripts de package.json en su lugar.
