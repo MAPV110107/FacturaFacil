@@ -46,6 +46,9 @@ app.post('/print', (req, res) => {
   console.log("  Nombre:", c.name);
   console.log("  RIF:", c.rif);
   console.log("  Dirección:", c.address);
+  if (c.phone) {
+    console.log("  Teléfono:", c.phone);
+  }
   console.log(separator);
 
   console.log("  Tipo:", `${documentType} NRO: ${invoiceData.invoiceNumber}`);
