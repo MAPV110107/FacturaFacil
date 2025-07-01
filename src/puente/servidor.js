@@ -32,10 +32,9 @@ app.post('/print', (req, res) => {
   // Check if it's a simplified payload (lacks companyDetails)
   const isSimplified = !invoiceData.companyDetails;
 
-  console.log("SENIAT");
-  console.log(separator);
-
   if (!isSimplified) {
+    console.log("SENIAT");
+    console.log(separator);
     const c = invoiceData.companyDetails;
     console.log(c.name);
     console.log(`RIF: ${c.rif}`);
@@ -69,8 +68,8 @@ app.post('/print', (req, res) => {
     if (invoiceData.originalInvoiceId) {
         console.log(`Ref. Doc. Original: ${invoiceData.originalInvoiceId}`);
     }
+    console.log(separator);
   }
-  console.log(separator);
   
   const cust = invoiceData.customerDetails;
   console.log(cust.name);
