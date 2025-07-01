@@ -32,13 +32,25 @@ app.post('/print', (req, res) => {
   const documentType = invoiceData.type === 'return' ? 'Nota de Crédito' : 
                        invoiceData.isDebtPayment ? 'Abono a Deuda' : 
                        invoiceData.isCreditDeposit ? 'Depósito a Cuenta' : 'Factura';
+  
+  console.log("\n  *** INICIO DEL DOCUMENTO ***");
+  console.log("  SENIAT");
 
-  console.log("  Documento:", `${invoiceData.invoiceNumber} (${documentType})`);
+  console.log("\n  --- Detalles del Negocio ---");
+  const c = invoiceData.companyDetails;
+  console.log("  Nombre:", c.name);
+  console.log("  RIF:", c.rif);
+  console.log("  Dirección:", c.address);
+
+  console.log("\n  --- Información del Documento ---");
+  console.log("  Tipo:", `${documentType} NRO: ${invoiceData.invoiceNumber}`);
   console.log("  Fecha:", new Date(invoiceData.date).toLocaleDateString('es-VE'));
   
   console.log("\n  --- Cliente ---");
   console.log("  Nombre:", invoiceData.customerDetails.name);
   console.log("  RIF/CI:", invoiceData.customerDetails.rif);
+  console.log("  Dirección:", invoiceData.customerDetails.address);
+
 
   console.log("\n  --- Artículos ---");
   (invoiceData.items || []).forEach(item => {
@@ -59,7 +71,12 @@ app.post('/print', (req, res) => {
     console.log(`  - ${payment.method}: ${(payment.amount || 0).toFixed(2)} ${payment.reference ? `(Ref: ${payment.reference})` : ''}`);
   });
   console.log("  Total Pagado:", (invoiceData.amountPaid || 0).toFixed(2));
-  
+
+  if (invoiceData.warrantyText) {
+    console.log("\n  --- Nota de Garantía ---");
+    console.log(" ", invoiceData.warrantyText);
+  }
+
   // --- LÓGICA DE IMPRESIÓN FISCAL AQUÍ ---
   console.log("\n...Simulando envío de comandos a la impresora fiscal...");
   // Ejemplo: enviarComandosALaImpresora(invoiceData);
