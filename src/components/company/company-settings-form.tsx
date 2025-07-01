@@ -37,7 +37,7 @@ const defaultCompanyDetails: CompanyDetails = {
   email: "",
   logoUrl: "",
   logoAlignment: "center",
-  fiscalPrinterEnabled: false,
+  fiscalPrinterEnabled: true,
   fiscalPrinterApiUrl: "http://localhost:3000/print",
 };
 
