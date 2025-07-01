@@ -278,7 +278,7 @@ body {
   .receipt-font .space-y-0\.5 > * + * { margin-top: 0.5mm !important; }
   .receipt-font .space-y-1 > * + * { margin-top: 1mm !important; }
 
-  /* --- 6. APPLY PAGE-SPECIFIC FORMATTING (A4 / 80mm) --- */
+  /* --- 6. APPLY PAGE-SPECIFIC FORMATTING (A4) --- */
   html.printing-a4 .card[data-invoice-preview-container] {
     width: 190mm !important;
     padding: 10mm !important;
@@ -286,20 +286,6 @@ body {
   html.printing-a4 .receipt-font {
     font-size: 10pt !important;
     line-height: 1.4 !important;
-  }
-  html.printing-80mm .card[data-invoice-preview-container] {
-    width: 76mm !important;
-    padding: 2mm !important;
-  }
-  html.printing-80mm .receipt-font {
-    font-size: 9pt !important;
-    line-height: 1.2 !important;
-  }
-  html.printing-80mm .receipt-font .grid.grid-cols-\[2fr_1fr_1fr_1fr\] {
-    grid-template-columns: 2fr 0.7fr 1fr 1fr !important;
-  }
-  html.printing-80mm .receipt-font [data-company-details-block] > img[data-ai-hint~="company logo"] {
-    max-height: 12mm !important;
   }
 }
 
@@ -375,6 +361,6 @@ body {
 }
 
 /* Ensure print-specific classes are removed from html tag after printing (JS will handle this) */
-html.printing-a4, html.printing-80mm {
-  /* These are just for triggering print styles, no visual change on screen */
+html.printing-a4 {
+  /* This is just for triggering print styles, no visual change on screen */
 }

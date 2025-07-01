@@ -1,7 +1,7 @@
 
 'use client';
 
-export function printFromElementId(elementId: string, printFormat: 'a4' | '80mm' = 'a4') {
+export function printFromElementId(elementId: string) {
   const invoiceElement = document.getElementById(elementId);
   if (!invoiceElement) {
     console.error("Print Error: Could not find the invoice element with ID:", elementId);
@@ -21,7 +21,7 @@ export function printFromElementId(elementId: string, printFormat: 'a4' | '80mm'
     .join('\n');
   
   const invoiceHTML = invoiceElement.innerHTML;
-  const printClass = printFormat === 'a4' ? 'printing-a4' : 'printing-80mm';
+  const printClass = 'printing-a4'; // Always use A4 format for this function now
 
   const frameDoc = printFrame.contentWindow?.document;
   if (!frameDoc) {

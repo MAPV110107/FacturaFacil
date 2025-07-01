@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, LayoutDashboard, Printer as PrinterIcon, FileText as FileTextIcon } from "lucide-react";
+import { ArrowLeft, LayoutDashboard, Printer as FiscalPrinterIcon, FileText as FileTextIcon } from "lucide-react";
 import { InvoicePreview } from "@/components/invoice/invoice-preview";
 import type { Invoice, CompanyDetails, CustomerDetails } from "@/lib/types";
 import { DEFAULT_COMPANY_ID, TAX_RATE } from "@/lib/types";
@@ -11,6 +11,8 @@ import useLocalStorage from "@/hooks/use-local-storage";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { printFromElementId } from "@/lib/print";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+
 
 const defaultCompany: CompanyDetails = {
   id: DEFAULT_COMPANY_ID,
@@ -163,19 +165,32 @@ export default function GeneralPrintPreviewPage() {
       <h1 className="text-2xl font-bold mb-4 text-primary text-center print:hidden">Vista Previa General de Formatos de Impresión</h1>
       
       <div className="w-full max-w-7xl mb-8 flex flex-col sm:flex-row justify-center items-center gap-4 print:hidden">
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span tabIndex={0} className="w-full sm:w-auto">
+                <Button
+                    onClick={() => { /* Fiscal print logic would go here if enabled */ }}
+                    className="w-full bg-green-600 hover:bg-green-700 text-white"
+                    disabled={true}
+                >
+                    <FiscalPrinterIcon className="mr-2 h-4 w-4" />
+                    Imprimir Fiscal
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>La impresión fiscal solo está disponible para facturas guardadas.</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+        
         <Button
-            onClick={() => printFromElementId("invoice-comparison-a4", "a4")}
+            onClick={() => printFromElementId("invoice-comparison-a4")}
             className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground"
         >
             <FileTextIcon className="mr-2 h-4 w-4" />
             Imprimir en A4
-        </Button>
-        <Button
-            onClick={() => printFromElementId("invoice-comparison-80mm", "80mm")}
-            className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground"
-        >
-            <PrinterIcon className="mr-2 h-4 w-4" />
-            Imprimir en Rollo
         </Button>
       </div>
 
@@ -194,7 +209,7 @@ export default function GeneralPrintPreviewPage() {
           </div>
         </div>
         <div>
-          <h2 className="text-xl font-semibold mb-2 text-center text-muted-foreground print:hidden">Formato Rollo (Referencia en Pantalla)</h2>
+          <h2 className="text-xl font-semibold mb-2 text-center text-muted-foreground print:hidden">Formato Fiscal (Referencia en Pantalla)</h2>
           <div className="preview-80mm-wrapper" id="preview-80mm-wrapper-id"> 
             <InvoicePreview 
               invoice={finalInvoiceForPreview} 

@@ -73,7 +73,7 @@ export default function FacturaPrintControls({ invoiceData, containerId, company
       
       <Button
         variant={"outline"}
-        onClick={() => printFromElementId(containerId, "a4")}
+        onClick={() => printFromElementId(containerId)}
         className="w-full"
         disabled={!isSavedInvoice}
         title={!isSavedInvoice ? "Guarde la factura para imprimir en A4" : "Imprimir en A4"}
