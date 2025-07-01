@@ -19,7 +19,8 @@ app.get('/status', (req, res) => {
 
 // Endpoint principal para recibir los datos de la factura e imprimir
 app.post('/print', (req, res) => {
-  console.log("\n--- Solicitud de Impresión Recibida ---");
+  const timestamp = new Date().toLocaleString('es-VE', { timeZone: 'America/Caracas' });
+  console.log(`\n--- Solicitud de Impresión Recibida [${timestamp}] ---`);
   const invoiceData = req.body;
 
   if (!invoiceData || !invoiceData.invoiceNumber) {
@@ -27,14 +28,40 @@ app.post('/print', (req, res) => {
     return res.status(400).json({ success: false, message: "Datos de factura inválidos." });
   }
 
-  console.log("Factura Nro:", invoiceData.invoiceNumber);
-  console.log("Cliente:", invoiceData.customerDetails.name);
-  console.log("Total:", invoiceData.totalAmount);
+  // Log de detalles de la factura
+  const documentType = invoiceData.type === 'return' ? 'Nota de Crédito' : 
+                       invoiceData.isDebtPayment ? 'Abono a Deuda' : 
+                       invoiceData.isCreditDeposit ? 'Depósito a Cuenta' : 'Factura';
+
+  console.log("  Documento:", `${invoiceData.invoiceNumber} (${documentType})`);
+  console.log("  Fecha:", new Date(invoiceData.date).toLocaleDateString('es-VE'));
+  
+  console.log("\n  --- Cliente ---");
+  console.log("  Nombre:", invoiceData.customerDetails.name);
+  console.log("  RIF/CI:", invoiceData.customerDetails.rif);
+
+  console.log("\n  --- Artículos ---");
+  (invoiceData.items || []).forEach(item => {
+    const itemTotal = (item.quantity * item.unitPrice).toFixed(2);
+    console.log(`  - ${item.description} (Cant: ${item.quantity}, P.Unit: ${item.unitPrice.toFixed(2)}, Total: ${itemTotal})`);
+  });
+
+  console.log("\n  --- Totales ---");
+  console.log("  Subtotal:", (invoiceData.subTotal || 0).toFixed(2));
+  if (invoiceData.discountValue > 0) {
+    console.log("  Descuento:", `-${(invoiceData.discountValue || 0).toFixed(2)}`);
+  }
+  console.log("  IVA:", (invoiceData.taxAmount || 0).toFixed(2));
+  console.log("  TOTAL:", (invoiceData.totalAmount || 0).toFixed(2));
+
+  console.log("\n  --- Pagos ---");
+  (invoiceData.paymentMethods || []).forEach(payment => {
+    console.log(`  - ${payment.method}: ${(payment.amount || 0).toFixed(2)} ${payment.reference ? `(Ref: ${payment.reference})` : ''}`);
+  });
+  console.log("  Total Pagado:", (invoiceData.amountPaid || 0).toFixed(2));
   
   // --- LÓGICA DE IMPRESIÓN FISCAL AQUÍ ---
-  // Este es el lugar para "traducir" invoiceData a los comandos
-  // específicos de tu modelo de impresora fiscal.
-  console.log("...Simulando envío de comandos a la impresora...");
+  console.log("\n...Simulando envío de comandos a la impresora fiscal...");
   // Ejemplo: enviarComandosALaImpresora(invoiceData);
 
   console.log("--- Impresión Simulada con Éxito ---\n");
